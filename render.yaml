@@ -2,7 +2,7 @@ services:
   - type: web
     name: qrs-backend
     env: docker
-    repo: https://github.com/YOUR_USERNAME/qrs2
+    repo: https://github.com/Ova-Klik/qrs2
     branch: main
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -12,12 +12,11 @@ services:
           name: qrs-mongo
           property: connectionString
       - key: JWT_SECRET
-        generateValue:
-          length: 64
+        value: change_this_to_a_random_64_char_string_in_dashboard
       - key: JWT_EXPIRY_MS
         value: "86400000"
       - key: ALLOWED_ORIGINS
-        value: https://your-frontend.vercel.app
+        value: https://your-site.netlify.app
       - key: SEED_DATA
         value: "true"
       - key: QR_WINDOW_START
