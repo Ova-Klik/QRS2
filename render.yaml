@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: qrs-backend
+    env: docker
+    repo: https://github.com/YOUR_USERNAME/qrs2
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: SPRING_DATA_MONGODB_URI
+        fromDatabase:
+          name: qrs-mongo
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue:
+          length: 64
+      - key: JWT_EXPIRY_MS
+        value: "86400000"
+      - key: ALLOWED_ORIGINS
+        value: https://your-frontend.vercel.app
+      - key: SEED_DATA
+        value: "true"
+      - key: QR_WINDOW_START
+        value: "07:00"
+      - key: QR_WINDOW_END
+        value: "12:00"
+      - key: LATE_THRESHOLD
+        value: "08:31"
+
+databases:
+  - name: qrs-mongo
+    databaseName: qrs_db
+    plan: free

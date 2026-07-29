@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.vite/
+backend/target/
+backend/.idea/
+backend/*.iml
+nginx/ssl/
+.DS_Store
