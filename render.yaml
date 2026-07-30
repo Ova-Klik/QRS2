@@ -3,7 +3,7 @@ services:
     name: qrs-attendance-api
     env: docker
     repo: https://github.com/Ova-Klik/qrs2
-    branch: main
+    branch: master
     dockerfilePath: ./Dockerfile.render
     envVars:
       - key: SPRING_DATA_MONGODB_URI
