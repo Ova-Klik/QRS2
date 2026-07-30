@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { publicApi } from '../../api/client'
 import { useSchool } from '../../context/SchoolContext'
@@ -13,6 +13,15 @@ export function ProjectionPage() {
   const [loading, setLoading]       = useState(true)
   const [totpCountdown, setTotpCountdown] = useState(10)
   const [liveRemaining, setLiveRemaining] = useState(0)
+  const [isMobile, setIsMobile]     = useState(false)
+  const expiresAtRef = useRef(null)
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Load cohorts on mount
   useEffect(() => {
@@ -36,9 +45,12 @@ export function ProjectionPage() {
         if (r.data?.expiresAt) {
           const rem = Math.max(0, Math.floor((new Date(r.data.expiresAt).getTime() - Date.now()) / 1000))
           setLiveRemaining(rem)
+          expiresAtRef.current = r.data.expiresAt
+        } else {
+          setLiveRemaining(0)
         }
       })
-      .catch(() => setSession(null))
+      .catch(() => { setSession(null); setLiveRemaining(0) })
 
     publicApi.getTodaySummary(cohortId)
       .then(r => setSummary(r.data))
@@ -47,15 +59,15 @@ export function ProjectionPage() {
 
   // Live seconds countdown ticker
   useEffect(() => {
-    if (!session || session.state === 'EXPIRED') {
+    if (!session || session.state !== 'ACTIVE') {
       setLiveRemaining(0)
       return
     }
     const tick = () => {
-      if (session.expiresAt) {
-        const rem = Math.max(0, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000))
+      if (expiresAtRef.current) {
+        const rem = Math.max(0, Math.floor((new Date(expiresAtRef.current).getTime() - Date.now()) / 1000))
         setLiveRemaining(rem)
-        if (rem === 0 && session.state === 'ACTIVE') {
+        if (rem <= 0) {
           setSession(prev => prev ? { ...prev, state: 'EXPIRED' } : null)
         }
       }
@@ -63,7 +75,7 @@ export function ProjectionPage() {
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [session])
+  }, [session?.sessionId, session?.state])
 
   // Initial load when cohort changes
   useEffect(() => {
@@ -119,28 +131,28 @@ export function ProjectionPage() {
       fontFamily: 'Inter, system-ui, sans-serif',
       display: 'flex',
       flexDirection: 'column',
-      padding: '24px 36px',
+      padding: isMobile ? '12px 16px' : '24px 36px',
       boxSizing: 'border-box'
     }}>
       {/* Top Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ background: '#ef4444', color: '#fff', fontWeight: 800, padding: '8px 16px', borderRadius: 10, fontSize: 16, letterSpacing: '.05em' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12, gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: '#ef4444', color: '#fff', fontWeight: 800, padding: '6px 12px', borderRadius: 10, fontSize: 14, letterSpacing: '.05em', flexShrink: 0 }}>
             QRS
           </div>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#fff' }}>Classroom Projection Screen</h1>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{settings?.school_name || 'Tech School'} — Scan dynamic QR code before activity starts</p>
+            <h1 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, margin: 0, color: '#fff' }}>Classroom Projection</h1>
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{settings?.school_name || 'Tech School'} — Scan dynamic QR code</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <select
             value={selectedCohort}
             onChange={e => setSelected(e.target.value)}
             style={{
               background: '#334155', color: '#fff', border: '1px solid #475569',
-              padding: '10px 16px', borderRadius: 8, fontSize: 14, fontWeight: 600, outline: 'none', cursor: 'pointer'
+              padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: isMobile ? 1 : 'none',
             }}
           >
             {cohorts.map(c => (
@@ -152,7 +164,7 @@ export function ProjectionPage() {
             onClick={toggleFullscreen}
             style={{
               background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
-              padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .15s'
+              padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s'
             }}
           >
             ⛶ Fullscreen
@@ -161,31 +173,31 @@ export function ProjectionPage() {
           <Link
             to="/login"
             style={{
-              color: '#94a3b8', fontSize: 13, textDecoration: 'none', padding: '10px 14px', borderRadius: 8,
+              color: '#94a3b8', fontSize: 12, textDecoration: 'none', padding: '8px 12px', borderRadius: 8,
               border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)'
             }}
           >
-            ← Back to Login
+            ← Back
           </Link>
         </div>
       </div>
 
       {/* Main Content Display */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32, alignItems: 'center' }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, alignItems: 'start' }}>
         {/* Center Projection Card */}
         <div style={{
           background: 'rgba(30, 41, 59, 0.7)',
           backdropFilter: 'blur(16px)',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: 24,
-          padding: 40,
+          padding: isMobile ? 24 : 40,
           textAlign: 'center',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: 480
+          minHeight: isMobile ? 320 : 480
         }}>
           {session && !isExpired ? (
             <>
@@ -207,7 +219,7 @@ export function ProjectionPage() {
                 <img
                   src={`data:image/png;base64,${session.qrImageBase64}`}
                   alt="Live Session QR"
-                  style={{ width: 260, height: 260, display: 'block', borderRadius: 8 }}
+                  style={{ width: isMobile ? 180 : 260, height: isMobile ? 180 : 260, display: 'block', borderRadius: 8 }}
                 />
               </div>
 

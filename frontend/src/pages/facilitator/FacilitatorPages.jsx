@@ -26,7 +26,7 @@ export function FacilitatorDashboard() {
           ? <Alert type="success"><strong>QR Session is active</strong> — Students can scan until the session expires.</Alert>
           : <Alert type="warning"><strong>No active QR session.</strong> Go to QR Generator to open today's session.</Alert>
         }
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           <StatCard label="Total Students" value={d.totalStudents || 0} />
           <StatCard label="Present"  value={d.presentToday || 0} badgeColor="green" badge="On time" />
           <StatCard label="Late"     value={d.lateToday    || 0} badgeColor="yellow" badge="After 7:30" />
@@ -74,24 +74,31 @@ export function FacilitatorQR() {
   useEffect(() => {
     if (!selectedCohort) return
     facilitatorApi.getActiveQr(selectedCohort)
-      .then(r => setSession(r.data))
+      .then(r => {
+        setSession(r.data)
+        if (r.data?.remainingSeconds !== undefined) {
+          setRemaining(r.data.remainingSeconds)
+        }
+      })
       .catch(() => setSession(null))
   }, [selectedCohort])
 
   // Timer for active session countdown
   useEffect(() => {
-    if (!session) return
+    if (!session || session.state !== 'ACTIVE') return
     const tick = () => {
       const rem = Math.max(0, Math.floor((new Date(session.expiresAt) - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem === 0) setSession(prev => prev ? { ...prev, state: 'EXPIRED' } : null)
+      if (rem <= 0) {
+        setSession(prev => prev ? { ...prev, state: 'EXPIRED' } : null)
+      }
     }
     tick()
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
-  }, [session])
+  }, [session?.sessionId, session?.state])
 
-  // Timer for daily window countdown (always runs when no active session)
+  // Timer for daily window countdown
   useEffect(() => {
     const tick = () => {
       const now = new Date()
@@ -112,6 +119,7 @@ export function FacilitatorQR() {
       const parsedDuration = durationMinutes ? parseInt(durationMinutes) : null
       const { data } = await facilitatorApi.generateQr(selectedCohort, parsedDuration)
       setSession(data)
+      setRemaining(data.remainingSeconds ?? 0)
       toast.success('QR session generated and active!')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to generate QR')
@@ -125,6 +133,7 @@ export function FacilitatorQR() {
     try {
       await facilitatorApi.expireQr(session.sessionId)
       setSession(prev => ({ ...prev, state: 'EXPIRED' }))
+      setRemaining(0)
       toast.success('QR session stopped')
     } catch { toast.error('Failed to stop QR session') }
   }
@@ -137,8 +146,8 @@ export function FacilitatorQR() {
   return (
     <>
       <PageHeader title="QR Generator" subtitle="Generate or stop daily attendance QR codes with custom session durations" />
-      <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, maxWidth: 800 }}>
+        <div style={{ padding: 24 }} className="fade-in">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, maxWidth: 800 }}>
             {/* Controls */}
           <Card>
             <div style={{ fontWeight: 600, marginBottom: 16 }}>Manage QR Session</div>

@@ -59,7 +59,7 @@ export default function LoginPage() {
         )}
       </button>
 
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 24px', zIndex: 1 }}>
+      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', zIndex: 1 }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
           <div style={{ width: 44, height: 44, background: 'var(--red)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
