@@ -7,15 +7,13 @@ services:
     dockerfilePath: ./Dockerfile.render
     envVars:
       - key: SPRING_DATA_MONGODB_URI
-        fromDatabase:
-          name: qrs-mongo
-          property: connectionString
+        value: mongodb+srv://olaomovictor1_db_user:Mongopassword@qrs2.jns1ejm.mongodb.net/qrs_db?retryWrites=true&w=majority
       - key: JWT_SECRET
-        value: change_this_to_a_random_64_char_string_in_dashboard
+        value: 74fbcbe8c50925d6e570c3d802d4c318687c97b527a0eeddf440e93469f08423716549a035d4d99b654c86a32cfbfeddb5b9cb6d17ea51cc0cffc4958e35cb75
       - key: JWT_EXPIRY_MS
         value: "86400000"
       - key: ALLOWED_ORIGINS
-        value: https://your-site.netlify.app
+        value: https://qrsattendance.netlify.app
       - key: SEED_DATA
         value: "true"
       - key: QR_WINDOW_START
