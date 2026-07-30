@@ -68,7 +68,6 @@ export async function registerBiometric(userId) {
         { alg: -257, type: 'public-key' },  // RS256
       ],
       authenticatorSelection: {
-        authenticatorAttachment: 'platform',
         userVerification: 'required',
         residentKey: 'preferred',
       },
@@ -102,7 +101,7 @@ export async function authenticateBiometric(credentialId) {
       allowCredentials: credentialId ? [{
         id: base64ToBuffer(credentialId),
         type: 'public-key',
-        transports: ['internal'],
+        transports: ['internal', 'usb', 'nfc', 'ble'],
       }] : [],
       userVerification: 'required',
       timeout: 60000,

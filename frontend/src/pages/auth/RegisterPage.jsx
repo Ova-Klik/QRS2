@@ -29,8 +29,9 @@ export default function RegisterPage() {
     if (tab === 'student' && !form.cohortNumber.trim()) { setError('Please enter your cohort number'); return }
     setLoading(true)
     try {
+      const cohortNumber = form.cohortNumber.match(/\d+/)
       const payload = { name: form.name, email: form.email, phone: form.phone, password: form.password }
-      if (tab === 'student') payload.cohortNumber = form.cohortNumber.trim()
+      if (tab === 'student') payload.cohortNumber = cohortNumber ? cohortNumber[0] : form.cohortNumber.trim()
 
       const { data } = tab === 'student'
         ? await authApi.registerStudent(payload)
@@ -89,15 +90,18 @@ export default function RegisterPage() {
           <Input label="Phone Number" type="tel" placeholder="+234 800 000 0000" value={form.phone} onChange={e => update('phone', e.target.value)} />
           {tab === 'student' && (
             <>
-              <Input label="Cohort Number" placeholder="e.g. 29" value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)} />
-              {cohorts.length > 0 && (
-                <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: -8, marginBottom: 16 }}>
-                  Available cohorts: {cohorts.map(c => {
-                    const match = c.name.match(/\d+/)
-                    return match ? match[0] : c.name
-                  }).join(', ')}
-                </p>
-              )}
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--gray-600)', marginBottom: 4 }}>Cohort</label>
+              <select value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid var(--gray-100)',
+                  borderRadius: 10, background: 'white', color: 'var(--gray-700)', outline: 'none',
+                  marginBottom: 16, appearance: 'auto'
+                }}>
+                <option value="">Select a cohort</option>
+                {cohorts.map(c => (
+                  <option key={c._id || c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
             </>
           )}
           <Input label="Password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />

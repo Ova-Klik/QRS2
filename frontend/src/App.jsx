@@ -9,6 +9,8 @@ import { FacilitatorDashboard, FacilitatorQR, FacilitatorManual, FacilitatorRepo
 import { AdminDashboard, AdminStudents, AdminFacilitators, AdminCohorts, AdminDevices, AdminAudit, AdminAnalytics } from './pages/admin/AdminPages'
 import { StudentSettings, FacilitatorSettings, AdminSettings } from './pages/settings/SettingsPages'
 import { ProjectionPage } from './pages/public/ProjectionPage'
+import LandingPage from './pages/public/LandingPage'
+import TesterPage from './pages/public/TesterPage'
 
 function RequireAuth({ children, roles }) {
   const { user, loading } = useAuth()
@@ -44,7 +46,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/project" element={<ProjectionPage />} />
-        <Route path="/" element={<RoleRedirect />} />
+        <Route path="/tester" element={<TesterPage />} />
+        <Route path="/" element={<LandingPage />} />
 
         {/* Student */}
         <Route path="/student" element={

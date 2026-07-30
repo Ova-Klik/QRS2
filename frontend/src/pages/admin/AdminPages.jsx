@@ -125,7 +125,7 @@ export function AdminStudents() {
   return (
     <>
       <PageHeader title="Students" subtitle={`${students.length} registered students`}
-        actions={<Button size="sm" onClick={() => { setModal('add'); setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '' }) }}>+ Add Student</Button>} />
+        actions={<Button onClick={() => { setModal('add'); setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '' }) }}>+ Add Student</Button>} />
       <div style={{ padding: 24 }} className="fade-in">
         <Card>
           <Table
