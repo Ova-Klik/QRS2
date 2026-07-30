@@ -29,16 +29,18 @@ public class FacilitatorController {
     @PostMapping("/qr/generate")
     public ResponseEntity<QrDto.QrResponse> generateQr(
             @AuthenticationPrincipal String facId,
-            @Valid @RequestBody QrDto.GenerateRequest request) throws Exception {
+            @Valid @RequestBody QrDto.GenerateRequest request,
+            @RequestParam(required = false) String origin) throws Exception {
         var fac = userService.getById(facId);
         return ResponseEntity.ok(
-                qrService.generateSession(facId, fac.getName(), request.getCohortId(), request.getDurationMinutes()));
+                qrService.generateSession(facId, fac.getName(), request.getCohortId(), request.getDurationMinutes(), origin));
     }
 
     @GetMapping("/qr/active/{cohortId}")
     public ResponseEntity<QrDto.QrResponse> getActiveQr(
-            @PathVariable String cohortId) throws Exception {
-        return ResponseEntity.ok(qrService.getActiveSession(cohortId));
+            @PathVariable String cohortId,
+            @RequestParam(required = false) String origin) throws Exception {
+        return ResponseEntity.ok(qrService.getActiveSession(cohortId, origin));
     }
 
     @PostMapping("/qr/expire/{sessionId}")

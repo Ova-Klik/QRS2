@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { studentApi } from '../../api/client'
 import { authApi } from '../../api/client'
 import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Input, Modal, Select, Textarea } from '../../components/common/UI'
@@ -62,9 +63,10 @@ export function StudentDashboard() {
 
 // ── Scan QR ──────────────────────────────────────────────
 export function StudentScan() {
+  const [searchParams] = useSearchParams()
   const [loading, setLoading]   = useState(false)
   const [result, setResult]     = useState(null)
-  const [token, setToken]       = useState('')
+  const [token, setToken]       = useState(searchParams.get('token') || '')
   const [dashboard, setDash]    = useState(null)
   const [biometricRegistered, setBiometricRegistered] = useState(false)
   const [biometricAvailable, setBiometricAvailable] = useState(false)
@@ -110,7 +112,10 @@ export function StudentScan() {
         { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
         (decodedText) => {
           let scanned = decodedText.trim()
-          if (scanned.startsWith('QRS:')) {
+          const qrsMatch = scanned.match(/[?&]qrs=([^&]+)/)
+          if (qrsMatch) {
+            scanned = qrsMatch[1]
+          } else if (scanned.startsWith('QRS:')) {
             scanned = scanned.substring(4)
           }
           if (scanned && !loading) {
@@ -238,7 +243,7 @@ export function StudentScan() {
 
   const checks = [
     { label: 'Device registered',          pass: !!dashboard?.deviceStatus?.registered },
-    { label: 'Not yet marked today',        pass: !dashboard?.markedToday },
+    { label: dashboard?.markedToday ? 'Marked for today' : 'Not yet marked today', pass: dashboard?.markedToday || !dashboard?.markedToday, green: !!dashboard?.markedToday },
     { label: 'School network connected',    pass: networkInfo.online },
     { label: 'Biometric verified',          pass: biometricRegistered ? false : true, optional: !biometricRegistered },
   ]
@@ -362,10 +367,10 @@ export function StudentScan() {
           <div style={{ fontWeight: 600, marginBottom: 12 }}>Validation Checklist</div>
           {checks.map((c, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < checks.length - 1 ? '1px solid var(--gray-50)' : 'none' }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: c.pass ? 'var(--green-light)' : 'var(--red-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 10, color: c.pass ? 'var(--green-dark)' : 'var(--red)' }}>{c.pass ? '\u2713' : '\u2717'}</span>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: c.green ? 'var(--green-light)' : c.pass ? 'var(--green-light)' : 'var(--red-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 10, color: c.green ? 'var(--green-dark)' : c.pass ? 'var(--green-dark)' : 'var(--red)' }}>{c.pass ? '\u2713' : '\u2717'}</span>
               </div>
-              <span style={{ fontSize: 13, color: c.pass ? 'var(--gray-900)' : 'var(--gray-400)' }}>
+              <span style={{ fontSize: 13, fontWeight: c.green ? 600 : 400, color: c.green ? 'var(--green-dark)' : c.pass ? 'var(--gray-900)' : 'var(--gray-400)' }}>
                 {c.label}
                 {c.optional && <span style={{ fontSize: 10, color: 'var(--gray-300)', marginLeft: 6 }}>(recommended)</span>}
               </span>

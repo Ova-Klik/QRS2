@@ -39,7 +39,7 @@ export function ProjectionPage() {
   // Fetch QR session & summary for selected cohort
   const fetchSession = useCallback((cohortId) => {
     if (!cohortId) return
-    publicApi.getQrSession(cohortId)
+    publicApi.getQrSession(cohortId, window.location.origin)
       .then(r => {
         setSession(r.data)
         if (r.data?.expiresAt) {
@@ -177,13 +177,13 @@ export function ProjectionPage() {
               border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)'
             }}
           >
-            ← Back
+            ← Back to Login
           </Link>
         </div>
       </div>
 
       {/* Main Content Display */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, alignItems: 'start' }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2.5fr 1fr', gap: 20, alignItems: 'center', justifyItems: 'center' }}>
         {/* Center Projection Card */}
         <div style={{
           background: 'rgba(30, 41, 59, 0.7)',
@@ -235,7 +235,7 @@ export function ProjectionPage() {
               </div>
 
               <div style={{ fontSize: 14, color: '#cbd5e1' }}>
-                Cohort: <strong style={{ color: '#fff' }}>{session.cohortName}</strong>
+                Cohort: <strong style={{ color: '#fff' }}>{(session.cohortName || '').match(/\d+/)?.[0] || session.cohortName}</strong>
               </div>
             </>
           ) : (

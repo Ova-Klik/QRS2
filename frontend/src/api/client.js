@@ -64,8 +64,8 @@ export const adminApi = {
 }
 
 export const facilitatorApi = {
-  generateQr:     (cohortId, durationMinutes) => api.post('/facilitator/qr/generate', { cohortId, durationMinutes }),
-  getActiveQr:    (cohortId)          => api.get(`/facilitator/qr/active/${cohortId}`),
+  generateQr:     (cohortId, durationMinutes, origin) => api.post(`/facilitator/qr/generate?origin=${encodeURIComponent(origin || '')}`, { cohortId, durationMinutes }),
+  getActiveQr:    (cohortId, origin)  => api.get(`/facilitator/qr/active/${cohortId}?origin=${encodeURIComponent(origin || '')}`),
   expireQr:       (sessionId)         => api.post(`/facilitator/qr/expire/${sessionId}`),
   manualAttend:   (body)              => api.post('/facilitator/attendance/manual', body),
   todaySummary:   (cohortId)          => api.get(`/facilitator/attendance/today/${cohortId}`),
@@ -88,7 +88,7 @@ export const studentApi = {
 
 export const publicApi = {
   listCohorts:    ()                  => api.get('/public/cohorts'),
-  getQrSession:   (cohortId)          => api.get(`/public/qr-session/${cohortId}`),
+  getQrSession:   (cohortId, origin)  => api.get(`/public/qr-session/${cohortId}?origin=${encodeURIComponent(origin || '')}`),
   getTodaySummary:(cohortId)          => api.get(`/public/today-summary/${cohortId}`),
   getSettings:    ()                  => api.get('/public/settings'),
 }

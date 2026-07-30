@@ -35,8 +35,10 @@ public class PublicController {
     }
 
     @GetMapping("/qr-session/{cohortId}")
-    public ResponseEntity<QrDto.QrResponse> getPublicQrSession(@PathVariable String cohortId) throws WriterException, IOException {
-        return ResponseEntity.ok(qrService.getOrGeneratePublicSession(cohortId));
+    public ResponseEntity<QrDto.QrResponse> getPublicQrSession(
+            @PathVariable String cohortId,
+            @RequestParam(required = false) String origin) throws WriterException, IOException {
+        return ResponseEntity.ok(qrService.getOrGeneratePublicSession(cohortId, origin));
     }
 
     @GetMapping("/today-summary/{cohortId}")

@@ -73,7 +73,7 @@ export function FacilitatorQR() {
 
   useEffect(() => {
     if (!selectedCohort) return
-    facilitatorApi.getActiveQr(selectedCohort)
+    facilitatorApi.getActiveQr(selectedCohort, window.location.origin)
       .then(r => {
         setSession(r.data)
         if (r.data?.remainingSeconds !== undefined) {
@@ -117,7 +117,7 @@ export function FacilitatorQR() {
     setGenerating(true)
     try {
       const parsedDuration = durationMinutes ? parseInt(durationMinutes) : null
-      const { data } = await facilitatorApi.generateQr(selectedCohort, parsedDuration)
+      const { data } = await facilitatorApi.generateQr(selectedCohort, parsedDuration, window.location.origin)
       setSession(data)
       setRemaining(data.remainingSeconds ?? 0)
       toast.success('QR session generated and active!')

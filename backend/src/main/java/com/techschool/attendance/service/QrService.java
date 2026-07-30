@@ -47,6 +47,11 @@ public class QrService {
 
     public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
                                              String cohortId, Integer durationMinutes) throws WriterException, IOException {
+        return generateSession(facilitatorId, facilitatorName, cohortId, durationMinutes, null);
+    }
+
+    public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
+                                             String cohortId, Integer durationMinutes, String origin) throws WriterException, IOException {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
 
@@ -97,7 +102,9 @@ public class QrService {
 
         // Generate 20-second dynamic TOTP rolling payload
         String rollingPayload = generateRollingTokenPayload(masterToken);
-        String qrContent = "QRS:" + rollingPayload;
+        String qrContent = (origin != null && !origin.isEmpty())
+                ? origin + "/login?qrs=" + rollingPayload
+                : "QRS:" + rollingPayload;
         String qrBase64 = generateQrImage(qrContent, 300);
 
         auditService.log(facilitatorId, facilitatorName, "FACILITATOR",
@@ -116,6 +123,10 @@ public class QrService {
     }
 
     public QrDto.QrResponse getActiveSession(String cohortId) throws WriterException, IOException {
+        return getActiveSession(cohortId, null);
+    }
+
+    public QrDto.QrResponse getActiveSession(String cohortId, String origin) throws WriterException, IOException {
         QrSession session = qrSessionRepository.findActiveSessionByCohortId(cohortId)
                 .orElseThrow(() -> AppException.notFound("No active QR session for this cohort"));
 
@@ -123,7 +134,10 @@ public class QrService {
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
 
         String rollingPayload = generateRollingTokenPayload(session.getToken());
-        String qrBase64 = generateQrImage("QRS:" + rollingPayload, 300);
+        String qrContent = (origin != null && !origin.isEmpty())
+                ? origin + "/login?qrs=" + rollingPayload
+                : "QRS:" + rollingPayload;
+        String qrBase64 = generateQrImage(qrContent, 300);
         long remaining = Duration.between(Instant.now(), session.getExpiresAt()).getSeconds();
 
         return new QrDto.QrResponse(
@@ -135,11 +149,15 @@ public class QrService {
     }
 
     public QrDto.QrResponse getOrGeneratePublicSession(String cohortId) throws WriterException, IOException {
+        return getOrGeneratePublicSession(cohortId, null);
+    }
+
+    public QrDto.QrResponse getOrGeneratePublicSession(String cohortId, String origin) throws WriterException, IOException {
         Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
         if (existing.isPresent()) {
-            return getActiveSession(cohortId);
+            return getActiveSession(cohortId, origin);
         }
-        return generateSession("SYSTEM", "Automated Projection System", cohortId, null);
+        return generateSession("SYSTEM", "Automated Projection System", cohortId, null, origin);
     }
 
     public void expireSession(String sessionId, String actorId, String actorName) {
@@ -157,6 +175,11 @@ public class QrService {
         }
 
         String cleanedToken = rawToken.trim();
+        // Handle URL format: http://origin/login?qrs=TOKEN
+        int qrsIdx = cleanedToken.indexOf("/login?qrs=");
+        if (qrsIdx >= 0) {
+            cleanedToken = cleanedToken.substring(qrsIdx + "/login?qrs=".length());
+        }
         if (cleanedToken.startsWith("QRS:")) {
             cleanedToken = cleanedToken.substring(4);
         }
