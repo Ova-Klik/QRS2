@@ -5,7 +5,7 @@ const SchoolContext = createContext()
 
 export function SchoolProvider({ children }) {
   const [settings, setSettings] = useState({
-    school_name: 'Tech School',
+    school_name: 'My School',
     school_address: 'Lagos, Nigeria',
     school_email: 'admin@techschool.edu.ng',
     school_website: 'https://techschool.edu.ng',
@@ -44,7 +44,7 @@ export function SchoolProvider({ children }) {
 export function useSchool() {
   return useContext(SchoolContext) || {
     settings: {
-      school_name: 'Tech School',
+      school_name: 'My School',
       school_address: 'Lagos, Nigeria',
       school_email: 'admin@techschool.edu.ng',
       school_website: 'https://techschool.edu.ng',

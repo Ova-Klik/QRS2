@@ -25,6 +25,7 @@ public class UserDto {
         @NotNull
         private User.Role role;
         private String cohortId;
+        private String registrationNumber;
         private List<String> assignedCohortIds;
     }
 
@@ -36,12 +37,15 @@ public class UserDto {
         private String phone;
         private String role;
         private String cohortId;
+        private String cohortName;
+        private String registrationNumber;
         private List<String> assignedCohortIds;
         private boolean active;
         private boolean biometricRegistered;
         private Instant createdAt;
         private DeviceInfo device;
         private AttendanceSummary attendanceSummary;
+        private AnalyticsDto.StudentAnalytics analytics;
 
         @Data @AllArgsConstructor @NoArgsConstructor
         public static class DeviceInfo {
@@ -66,6 +70,7 @@ public class UserDto {
     public static class UpdateUserRequest {
         private String name;
         private String cohortId;
+        private String registrationNumber;
         private List<String> assignedCohortIds;
         private Boolean active;
     }

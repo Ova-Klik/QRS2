@@ -74,7 +74,14 @@ public class CohortService {
 
     // ── Dashboard Stats ──────────────────────────────────
     public DashboardDto.AdminStats buildAdminStats() {
-        List<User> students = userRepository.findByRole(User.Role.STUDENT);
+        return buildAdminStats(null);
+    }
+
+    public DashboardDto.AdminStats buildAdminStats(String cohortId) {
+        boolean scoped = cohortId != null && !cohortId.isBlank();
+        List<User> students = scoped
+                ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
+                : userRepository.findByRole(User.Role.STUDENT);
         List<User> facilitators = userRepository.findByRole(User.Role.FACILITATOR);
         List<Cohort> activeCohorts = cohortRepository.findByActive(true);
         Map<String, String> cohortNameMap = cohortRepository.findAll().stream()
@@ -82,7 +89,9 @@ public class CohortService {
 
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
-        List<Attendance> allAtt = attendanceRepository.findAll();
+        List<Attendance> allAtt = scoped
+                ? attendanceRepository.findByCohortId(cohortId)
+                : attendanceRepository.findAll();
 
         List<Attendance> todayAtt = allAtt.stream()
                 .filter(a -> today.equals(a.getDate())).collect(Collectors.toList());
@@ -90,6 +99,7 @@ public class CohortService {
         int present = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
         int late = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
         int excused = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+        int holidayToday = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
         int absent = Math.max(0, students.size() - (present + late + excused));
         double rate = students.size() > 0 ? (double)(present + late + excused) / students.size() * 100 : 0;
 
@@ -137,7 +147,7 @@ public class CohortService {
         Map<String, Map<String, Integer>> dayOfWeekMap = new java.util.HashMap<>();
         String[] days = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"};
         for (String day : days) {
-            dayOfWeekMap.put(day, new java.util.HashMap<>(Map.of("PRESENT", 0, "LATE", 0, "ABSENT", 0, "EXCUSED", 0)));
+            dayOfWeekMap.put(day, new java.util.HashMap<>(Map.of("PRESENT", 0, "LATE", 0, "ABSENT", 0, "EXCUSED", 0, "HOLIDAY", 0)));
         }
 
         for (Attendance a : allAtt) {
@@ -161,7 +171,7 @@ public class CohortService {
 
         return new DashboardDto.AdminStats(
                 students.size(), facilitators.size(), activeCohorts.size(),
-                present, late, absent, excused, totalExcusedAllTime, rate,
+                present, late, absent, excused, holidayToday, totalExcusedAllTime, rate,
                 activeCohorts.stream().map(this::toResponse).collect(Collectors.toList()),
                 recentActivity, behaviourList, dayOfWeekMap);
     }
@@ -197,11 +207,13 @@ public class CohortService {
                 .map(a -> {
                     User s = userRepository.findById(a.getStudentId()).orElse(null);
                     Cohort co = a.getCohortId() != null ? cohortRepository.findById(a.getCohortId()).orElse(null) : null;
+                    Device d = a.getDeviceId() != null ? deviceRepository.findById(a.getDeviceId()).orElse(null) : null;
                     return new AttendanceDto.AttendanceRecord(
                             a.getId(), a.getStudentId(), s != null ? s.getName() : "",
                             a.getCohortId(), co != null ? co.getName() : "",
                             a.getDate(), a.getMarkedAt(), a.getStatus() != null ? a.getStatus().name() : null,
-                            a.isManual(), a.getManualReason());
+                            a.isManual(), a.getManualReason(),
+                            d != null ? (d.getFingerprint() != null ? d.getFingerprint() : d.getImei()) : null);
                 }).collect(Collectors.toList());
 
         return new DashboardDto.FacilitatorStats(myStudents.size(), present, late, absent, excused,
@@ -231,7 +243,7 @@ public class CohortService {
                         a.getId(), a.getStudentId(), student.getName(),
                         a.getCohortId(), null, a.getDate(), a.getMarkedAt(),
                         a.getStatus() != null ? a.getStatus().name() : null,
-                        a.isManual(), a.getManualReason()))
+                        a.isManual(), a.getManualReason(), null))
                 .collect(Collectors.toList());
 
         Device device = deviceRepository.findByStudentId(studentId).orElse(null);
@@ -246,10 +258,11 @@ public class CohortService {
 
     private CohortDto.CohortResponse toResponse(Cohort c) {
         User fac = userRepository.findById(c.getFacilitatorId()).orElse(null);
-        int count = userRepository.findByCohortId(c.getId()).size();
+        long count = userRepository.countByCohortIdAndRole(c.getId(), User.Role.STUDENT);
         List<Attendance> att = attendanceRepository.findByCohortId(c.getId());
+        long distinctStudents = att.stream().map(Attendance::getStudentId).distinct().count();
         double rate = count > 0 ? (double) att.stream().filter(a -> a.getStatus() != Attendance.AttendanceStatus.ABSENT).count() / count * 100 : 0;
         return new CohortDto.CohortResponse(c.getId(), c.getName(), c.getFacilitatorId(),
-                fac != null ? fac.getName() : null, c.getSchedule(), c.isActive(), count, rate, c.getCreatedAt());
+                fac != null ? fac.getName() : null, c.getSchedule(), c.isActive(), (int) count, rate, c.getCreatedAt());
     }
 }

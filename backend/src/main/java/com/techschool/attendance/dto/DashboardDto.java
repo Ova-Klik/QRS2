@@ -19,6 +19,7 @@ public class DashboardDto {
         private int lateToday;
         private int absentToday;
         private int excusedToday;
+        private int holidayToday;
         private int totalExcusedAllTime;
         private double schoolAttendanceRate;
         private List<CohortDto.CohortResponse> cohorts;

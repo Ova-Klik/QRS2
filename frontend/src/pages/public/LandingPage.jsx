@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSchool } from '../../context/SchoolContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -9,9 +9,15 @@ import toast from 'react-hot-toast'
 export default function LandingPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { dark, toggle } = useTheme()
   const { settings } = useSchool()
   const [form, setForm] = useState({ email: '', password: '' })
+
+  useEffect(() => {
+    const qrs = searchParams.get('qrs')
+    if (qrs) localStorage.setItem('qrs_scan_token', qrs)
+  }, [searchParams])
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,6 +29,13 @@ export default function LandingPage() {
     try {
       const data = await login(form.email, form.password)
       toast.success(`Welcome back, ${data.name}!`)
+      const scanToken = localStorage.getItem('qrs_scan_token')
+      if (scanToken && data.role === 'STUDENT') {
+        localStorage.removeItem('qrs_scan_token')
+        navigate('/student/scan?token=' + encodeURIComponent(scanToken))
+        return
+      }
+      if (scanToken) localStorage.removeItem('qrs_scan_token')
       const routes = { STUDENT: '/student', FACILITATOR: '/facilitator', SUPER_ADMIN: '/admin' }
       navigate(routes[data.role] || '/')
     } catch (err) {
@@ -91,7 +104,7 @@ export default function LandingPage() {
 
           {/* Right — Login */}
           <div style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: 28, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: 'var(--gray-900)' }}>Sign in</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 4, color: 'var(--gray-900)' }}>Sign in</h2>
             <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 24 }}>Sign in to your account to continue.</p>
             {error && <Alert type="error">{error}</Alert>}
             <form onSubmit={handleSubmit}>

@@ -27,6 +27,21 @@ api.interceptors.response.use(
 
 export default api
 
+// Trigger a browser download for an export blob response.
+export function downloadBlob(res, fallbackName = 'download') {
+  const disposition = res.headers?.['content-disposition'] || ''
+  const match = disposition.match(/filename="?([^"]+)"?/)
+  const filename = match ? match[1] : fallbackName
+  const url = window.URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
 // ── Typed API calls ──────────────────────────────────────
 
 export const authApi = {
@@ -54,10 +69,28 @@ export const adminApi = {
   listCohorts:    ()                  => api.get('/admin/cohorts'),
   createCohort:   (body)              => api.post('/admin/cohorts', body),
   toggleCohort:   (id)                => api.patch(`/admin/cohorts/${id}/toggle`),
+  cohortStudents: (id)                => api.get(`/admin/cohorts/${id}/students`),
+  cohortStudentsPage: (id, params)    => api.get(`/admin/cohorts/${id}/students/page`, { params }),
+  exportCohort:   (id, format)        => api.get(`/admin/cohorts/${id}/export?format=${format}`, { responseType: 'blob' }),
+  // Students
+  searchStudents: (params)            => api.get('/admin/students/search', { params }),
   // Audit
   auditLogs:      ()                  => api.get('/admin/audit'),
   // Stats
-  schoolStats:    ()                  => api.get('/admin/analytics/school'),
+  schoolStats:    (cohortId)          => api.get('/admin/analytics/school', { params: { cohortId } }),
+  calendarMonth:  (params)            => api.get('/admin/analytics/calendar', { params }),
+  studentAnalytics: (studentId)       => api.get(`/admin/analytics/students/${studentId}`),
+  exportStudentAttendance: (studentId, params) => api.get(`/admin/analytics/students/${studentId}/export`, { params, responseType: 'blob' }),
+  exportStudentSummary: (studentId, params)   => api.get(`/admin/analytics/students/${studentId}/summary/export`, { params, responseType: 'blob' }),
+  // Attendance
+  searchAttendance: (params)          => api.get('/admin/attendance/search', { params }),
+  exportAttendance: (params)          => api.get('/admin/attendance/export', { params, responseType: 'blob' }),
+  // Holidays
+  listHolidays:   ()                  => api.get('/admin/holidays'),
+  createHoliday:  (body)              => api.post('/admin/holidays', body),
+  updateHoliday:  (id, body)          => api.put(`/admin/holidays/${id}`, body),
+  toggleHoliday:  (id)                => api.patch(`/admin/holidays/${id}/toggle`),
+  deleteHoliday:  (id)                => api.delete(`/admin/holidays/${id}`),
   // Network Settings
   getNetworkSettings:  ()             => api.get('/admin/settings/network'),
   updateNetworkSettings: (body)       => api.put('/admin/settings/network', body),
@@ -69,6 +102,9 @@ export const facilitatorApi = {
   expireQr:       (sessionId)         => api.post(`/facilitator/qr/expire/${sessionId}`),
   manualAttend:   (body)              => api.post('/facilitator/attendance/manual', body),
   todaySummary:   (cohortId)          => api.get(`/facilitator/attendance/today/${cohortId}`),
+  searchAttendance: (params)          => api.get('/facilitator/attendance/search', { params }),
+  calendarMonth:  (params)            => api.get('/facilitator/attendance/calendar', { params }),
+  exportAttendance: (params)          => api.get('/facilitator/attendance/export', { params, responseType: 'blob' }),
   myCohorts:      ()                  => api.get('/facilitator/cohorts'),
   dashboard:      ()                  => api.get('/facilitator/dashboard'),
   cohortExcuses:  (cohortId)          => api.get(`/facilitator/excuse-requests/${cohortId}`),
@@ -80,6 +116,10 @@ export const facilitatorApi = {
 export const studentApi = {
   scan:           (body)              => api.post('/student/attendance/scan', body),
   history:        ()                  => api.get('/student/attendance/history'),
+  historyPage:    (params)            => api.get('/student/attendance/history/page', { params }),
+  analytics:      ()                  => api.get('/student/attendance/analytics'),
+  myCalendar:     (params)            => api.get('/student/attendance/calendar', { params }),
+  exportMyAttendance: (params)        => api.get('/student/attendance/export', { params, responseType: 'blob' }),
   dashboard:      ()                  => api.get('/student/dashboard'),
   registerDevice: (body)              => api.post('/student/device/register', body),
   submitExcuse:   (body)              => api.post('/student/excuse-request', body),

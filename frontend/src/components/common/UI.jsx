@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 /* ── Button ─────────────────────────────────────────── */
 export function Button({ children, variant = 'primary', size = 'md', loading, className = '', ...props }) {
@@ -190,6 +190,7 @@ export function Badge({ status, label }) {
     ACTIVE:   { bg: 'var(--green-light)', color: 'var(--green-dark)', border: '#a8dbb8', label: 'Active' },
     INACTIVE: { bg: 'var(--gray-50)', color: 'var(--gray-600)', border: 'var(--gray-200)', label: 'Inactive' },
     MANUAL:   { bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe', label: 'Manual' },
+    HOLIDAY:  { bg: '#fef3c7', color: '#92400e', border: '#fde68a', label: 'Holiday' },
   }
   const s = map[status?.toUpperCase()] || { bg: 'var(--gray-50)', color: 'var(--gray-600)', border: 'var(--gray-200)', label: status || '—' }
   return (
@@ -266,4 +267,79 @@ export function Empty({ message = 'Nothing here yet' }) {
       <p style={{ fontSize: 13 }}>{message}</p>
     </div>
   )
+}
+
+/* ── Skeleton loading rows ──────────────────────────── */
+export function Skeleton({ rows = 4, height = 18 }) {
+  return (
+    <div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="skeleton" style={{ height, marginBottom: 10, borderRadius: 6 }} />
+      ))}
+    </div>
+  )
+}
+
+/* ── Pagination ─────────────────────────────────────── */
+export function Pagination({ page, totalPages, totalElements, size, onChange, pageSizeOptions = [10, 20, 50, 100] }) {
+  if (totalPages <= 1 && totalElements <= size) return null
+  const pages = Array.from({ length: Math.max(1, totalPages) }, (_, i) => i)
+  const visible = pages.length <= 7 ? pages : page <= 3 ? pages.slice(0, 5).concat(-1, pages.slice(-1)) : page >= totalPages - 3 ? [pages[0], -1].concat(pages.slice(-5)) : [pages[0], -1].concat(pages.slice(page - 1, page + 2), -1, pages.slice(-1))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+      <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+        {totalElements === 0 ? 'No results' : `Showing ${page * size + 1}–${Math.min((page + 1) * size, totalElements)} of ${totalElements}`}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <select
+          value={size}
+          onChange={e => onChange(0, Number(e.target.value))}
+          style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--gray-200)', background: 'var(--white)', color: 'var(--gray-600)' }}
+        >
+          {pageSizeOptions.map(s => <option key={s} value={s}>{s} / page</option>)}
+        </select>
+        <button onClick={() => onChange(page - 1, size)} disabled={page === 0}
+          style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-200)', background: 'var(--white)', color: page === 0 ? 'var(--gray-300)' : 'var(--gray-600)', cursor: page === 0 ? 'not-allowed' : 'pointer' }}>
+          Prev
+        </button>
+        {visible.map((p, i) => p === -1
+          ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--gray-400)', padding: '0 4px' }}>…</span>
+          : <button key={p} onClick={() => onChange(p, size)}
+              style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-200)', background: p === page ? 'var(--red)' : 'var(--white)', color: p === page ? '#fff' : 'var(--gray-600)', cursor: 'pointer', fontWeight: p === page ? 600 : 400 }}>
+              {p + 1}
+            </button>)}
+        <button onClick={() => onChange(page + 1, size)} disabled={page >= totalPages - 1}
+          style={{ padding: '5px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-200)', background: 'var(--white)', color: page >= totalPages - 1 ? 'var(--gray-300)' : 'var(--gray-600)', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>
+          Next
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── Rating chip (EXCELLENT/GOOD/FAIR/POOR) ─────────── */
+export function RatingChip({ rating }) {
+  const map = {
+    EXCELLENT: { bg: 'var(--green-light)', color: 'var(--green-dark)', border: '#a8dbb8' },
+    GOOD:      { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+    FAIR:      { bg: 'var(--yellow-light)', color: 'var(--yellow-dark)', border: '#f3dfa8' },
+    POOR:      { bg: 'var(--red-light)', color: 'var(--red)', border: 'var(--red-mid)' },
+  }
+  const s = map[rating] || { bg: 'var(--gray-50)', color: 'var(--gray-600)', border: 'var(--gray-200)' }
+  return (
+    <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: s.bg, color: s.color, border: `1px solid ${s.border}`, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+      {rating || '—'}
+    </span>
+  )
+}
+
+/* ── Debounced value hook ───────────────────────────── */
+export function useDebounce(value, delay = 350) {
+  const [debounced, setDebounced] = useState(value)
+  const timer = useRef()
+  useEffect(() => {
+    timer.current = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer.current)
+  }, [value, delay])
+  return debounced
 }

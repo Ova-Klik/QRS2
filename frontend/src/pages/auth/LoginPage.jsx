@@ -35,6 +35,7 @@ export default function LoginPage() {
         navigate('/student/scan?token=' + encodeURIComponent(scanToken))
         return
       }
+      if (scanToken) localStorage.removeItem('qrs_scan_token')
       const routes = { STUDENT: '/student', FACILITATOR: '/facilitator', SUPER_ADMIN: '/admin' }
       navigate(routes[data.role] || '/')
     } catch (err) {

@@ -7,6 +7,7 @@ import RegisterPage from './pages/auth/RegisterPage'
 import { StudentDashboard, StudentScan, StudentHistory, StudentExcuse } from './pages/student/StudentPages'
 import { FacilitatorDashboard, FacilitatorQR, FacilitatorManual, FacilitatorReports, FacilitatorExcuses } from './pages/facilitator/FacilitatorPages'
 import { AdminDashboard, AdminStudents, AdminFacilitators, AdminCohorts, AdminDevices, AdminAudit, AdminAnalytics } from './pages/admin/AdminPages'
+import { AdminCalendar } from './pages/admin/AdminCalendar'
 import { StudentSettings, FacilitatorSettings, AdminSettings } from './pages/settings/SettingsPages'
 import { ProjectionPage } from './pages/public/ProjectionPage'
 import LandingPage from './pages/public/LandingPage'
@@ -142,6 +143,11 @@ export default function App() {
         <Route path="/admin/analytics" element={
           <RequireAuth roles={['SUPER_ADMIN']}>
             <AppLayout><AdminAnalytics /></AppLayout>
+          </RequireAuth>
+        } />
+        <Route path="/admin/calendar" element={
+          <RequireAuth roles={['SUPER_ADMIN']}>
+            <AppLayout><AdminCalendar /></AppLayout>
           </RequireAuth>
         } />
         <Route path="/admin/settings" element={

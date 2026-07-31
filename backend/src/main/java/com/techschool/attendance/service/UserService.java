@@ -1,5 +1,6 @@
 package com.techschool.attendance.service;
 
+import com.techschool.attendance.dto.AnalyticsDto;
 import com.techschool.attendance.dto.UserDto;
 import com.techschool.attendance.exception.AppException;
 import com.techschool.attendance.model.*;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ public class UserService {
     private final SystemSettingRepository systemSettingRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final AttendanceService attendanceService;
 
     public UserDto.UserResponse createUser(String actorId, String actorName, String actorRole,
                                             UserDto.CreateUserRequest request) {
@@ -36,6 +39,7 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(request.getRole());
         user.setCohortId(request.getCohortId());
+        user.setRegistrationNumber(request.getRegistrationNumber());
         user.setAssignedCohortIds(request.getAssignedCohortIds());
         user.setActive(true);
         User saved = userRepository.save(user);
@@ -52,6 +56,85 @@ public class UserService {
                 .map(this::toResponse).collect(Collectors.toList());
     }
 
+    // ── Student Search & Pagination ─────────────────────
+    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchStudents(String cohortId, String query,
+                                                                           int page, int size) {
+        return searchStudents(cohortId, query, page, size, "name", "asc");
+    }
+
+    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchStudents(String cohortId, String query,
+                                                                           int page, int size,
+                                                                           String sort, String order) {
+        List<User> candidates = (cohortId != null && !cohortId.isBlank())
+                ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
+                : userRepository.findByRole(User.Role.STUDENT);
+
+        String q = query == null ? "" : query.trim().toLowerCase();
+        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
+                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
+                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q))
+                        || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
+                .collect(Collectors.toList());
+
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        filtered.sort(comparatorFor(sort, filtered, cohortId, asc));
+
+        int total = filtered.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<UserDto.UserResponse> content = filtered.subList(from, to).stream()
+                .map(u -> toResponse(u, true)).collect(Collectors.toList());
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    /**
+     * Builds a comparator for the requested sort key. Attendance-rate sorting is
+     * resolved in one batched query rather than one query per student.
+     */
+    private Comparator<User> comparatorFor(String sort, List<User> users, String cohortId, boolean asc) {
+        String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
+        Comparator<User> cmp;
+        switch (sortKey) {
+            case "email":
+                cmp = Comparator.comparing(User::getEmail,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "registrationnumber":
+            case "registration":
+                cmp = Comparator.comparing(User::getRegistrationNumber,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "rate":
+            case "attendanceRate":
+            case "attendance":
+                Map<String, Double> rates = new java.util.HashMap<>();
+                List<Attendance> all = (cohortId != null && !cohortId.isBlank())
+                        ? attendanceRepository.findByCohortId(cohortId)
+                        : attendanceRepository.findAll();
+                all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
+                    int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+                    int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+                    rates.put(id, att.isEmpty() ? 0 : (double) (present + late) / att.size() * 100);
+                });
+                cmp = Comparator.comparing((User u) -> rates.getOrDefault(u.getId(), 0.0));
+                break;
+            default:
+                cmp = Comparator.comparing(User::getName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+        return asc ? cmp : cmp.reversed();
+    }
+
+    public List<UserDto.UserResponse> getStudentsByCohort(String cohortId) {
+        return userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT).stream()
+                .map(this::toResponse).collect(Collectors.toList());
+    }
+
     public UserDto.UserResponse getById(String id) {
         return toResponse(userRepository.findById(id)
                 .orElseThrow(() -> AppException.notFound("User not found")));
@@ -63,6 +146,7 @@ public class UserService {
                 .orElseThrow(() -> AppException.notFound("User not found"));
         if (request.getName() != null) user.setName(request.getName());
         if (request.getCohortId() != null) user.setCohortId(request.getCohortId());
+        if (request.getRegistrationNumber() != null) user.setRegistrationNumber(request.getRegistrationNumber());
         if (request.getAssignedCohortIds() != null) user.setAssignedCohortIds(request.getAssignedCohortIds());
         if (request.getActive() != null) user.setActive(request.getActive());
         User saved = userRepository.save(user);
@@ -118,6 +202,10 @@ public class UserService {
 
     // ── Helpers ──────────────────────────────────────────
     public UserDto.UserResponse toResponse(User user) {
+        return toResponse(user, false);
+    }
+
+    public UserDto.UserResponse toResponse(User user, boolean includeAnalytics) {
         UserDto.UserResponse resp = new UserDto.UserResponse();
         resp.setId(user.getId());
         resp.setName(user.getName());
@@ -125,6 +213,9 @@ public class UserService {
         resp.setPhone(user.getPhone());
         resp.setRole(user.getRole().name());
         resp.setCohortId(user.getCohortId());
+        resp.setCohortName(user.getCohortId() != null
+                ? cohortRepository.findById(user.getCohortId()).map(Cohort::getName).orElse(null) : null);
+        resp.setRegistrationNumber(user.getRegistrationNumber());
         resp.setAssignedCohortIds(user.getAssignedCohortIds());
         resp.setActive(user.isActive());
         resp.setCreatedAt(user.getCreatedAt());
@@ -146,6 +237,9 @@ public class UserService {
             double rate = att.size() > 0 ? (double)(present + late) / att.size() * 100 : 0;
             resp.setAttendanceSummary(new UserDto.UserResponse.AttendanceSummary(
                     att.size(), present, late, absent, excused, rate));
+            if (includeAnalytics) {
+                resp.setAnalytics(attendanceService.buildStudentAnalytics(user.getId()));
+            }
         }
         return resp;
     }

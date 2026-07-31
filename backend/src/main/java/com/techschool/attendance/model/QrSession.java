@@ -5,6 +5,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.Instant;
@@ -13,6 +15,9 @@ import java.time.LocalDate;
 @Data
 @NoArgsConstructor
 @Document(collection = "qr_sessions")
+@CompoundIndexes({
+    @CompoundIndex(name = "cohort_state_expires", def = "{'cohortId': 1, 'state': 1, 'expiresAt': 1}"),
+})
 public class QrSession {
 
     @Id

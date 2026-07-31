@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '../../api/client'
 import { Input, Button, Alert } from '../../components/common/UI'
 import toast from 'react-hot-toast'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [tab, setTab] = useState('student')
   const [cohorts, setCohorts] = useState([])
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '', cohortNumber: '' })
@@ -19,6 +20,11 @@ export default function RegisterPage() {
       api.get('/auth/cohorts').then(r => setCohorts(r.data)).catch(() => {})
     })
   }, [])
+
+  useEffect(() => {
+    const qrs = searchParams.get('qrs')
+    if (qrs) localStorage.setItem('qrs_scan_token', qrs)
+  }, [searchParams])
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -41,6 +47,13 @@ export default function RegisterPage() {
 
       localStorage.setItem('qrs_token', data.token)
       toast.success(`Welcome, ${data.name}! Account created.`)
+      const scanToken = localStorage.getItem('qrs_scan_token')
+      if (scanToken && data.role === 'STUDENT') {
+        localStorage.removeItem('qrs_scan_token')
+        navigate('/student/scan?token=' + encodeURIComponent(scanToken))
+        return
+      }
+      if (scanToken) localStorage.removeItem('qrs_scan_token')
       const route = data.role === 'STUDENT' ? '/student' : '/facilitator'
       navigate(route)
     } catch (err) {

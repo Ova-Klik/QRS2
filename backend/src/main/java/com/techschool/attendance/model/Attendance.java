@@ -16,7 +16,9 @@ import java.time.LocalDate;
 @Document(collection = "attendance")
 @CompoundIndexes({
     @CompoundIndex(name = "student_date_unique", def = "{'studentId': 1, 'date': 1}", unique = true),
-    @CompoundIndex(name = "cohort_date", def = "{'cohortId': 1, 'date': 1}")
+    @CompoundIndex(name = "cohort_date", def = "{'cohortId': 1, 'date': 1}"),
+    @CompoundIndex(name = "date_status", def = "{'date': 1, 'status': 1}"),
+    @CompoundIndex(name = "student_date_range", def = "{'studentId': 1, 'date': 1, 'status': 1}")
 })
 public class Attendance {
 
@@ -43,6 +45,6 @@ public class Attendance {
     private Instant createdAt;
 
     public enum AttendanceStatus {
-        PRESENT, LATE, ABSENT, EXCUSED
+        PRESENT, LATE, ABSENT, EXCUSED, HOLIDAY
     }
 }

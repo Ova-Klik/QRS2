@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -23,6 +24,7 @@ public class FacilitatorController {
     private final CohortService cohortService;
     private final UserService userService;
     private final ExcuseService excuseService;
+    private final ExportService exportService;
 
     // ── QR ────────────────────────────────────────────────
 
@@ -68,6 +70,54 @@ public class FacilitatorController {
     public ResponseEntity<AttendanceDto.DailySummary> todaySummary(
             @PathVariable String cohortId) {
         return ResponseEntity.ok(attendanceService.getCohortSummaryToday(cohortId));
+    }
+
+    @GetMapping("/attendance/search")
+    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> searchAttendance(
+            @RequestParam String cohortId,
+            @RequestParam(required = false) LocalDate start,
+            @RequestParam(required = false) LocalDate end,
+            @RequestParam(required = false) Integer lastNDays,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "50") int size) {
+        return ResponseEntity.ok(attendanceService.searchByDate(cohortId, start, end, lastNDays, page, size));
+    }
+
+    @GetMapping("/attendance/calendar")
+    public ResponseEntity<AnalyticsDto.CalendarMonth> calendar(
+            @RequestParam String cohortId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+        java.time.YearMonth ym = (year == null || month == null)
+                ? java.time.YearMonth.now() : java.time.YearMonth.of(year, month);
+        return ResponseEntity.ok(attendanceService.buildCalendarMonth(cohortId, ym.getYear(), ym.getMonthValue()));
+    }
+
+    @GetMapping("/attendance/export")
+    public ResponseEntity<byte[]> exportAttendance(
+            @RequestParam String cohortId,
+            @RequestParam(required = false) LocalDate start,
+            @RequestParam(required = false) LocalDate end,
+            @RequestParam(required = false) Integer lastNDays,
+            @RequestParam(required = false, defaultValue = "csv") String format) {
+        LocalDate[] range = attendanceService.resolveDateRange(start, end, lastNDays);
+        LocalDate effStart = range[0];
+        LocalDate effEnd = range[1];
+        List<AttendanceDto.AttendanceRecord> rows =
+                attendanceService.findRecordsInRange(cohortId, effStart, effEnd);
+        List<List<Object>> table = new java.util.ArrayList<>();
+        for (AttendanceDto.AttendanceRecord r : rows) {
+            table.add(List.of(
+                    r.getStudentName() != null ? r.getStudentName() : "",
+                    r.getStudentId() != null ? r.getStudentId() : "",
+                    r.getDate() != null ? r.getDate().toString() : "",
+                    r.getStatus() != null ? r.getStatus() : "",
+                    r.isManual() ? "MANUAL" : "QR",
+                    r.getDeviceUsed() != null ? r.getDeviceUsed() : ""));
+        }
+        return exportService.export(
+                List.of("Student Name", "Student ID", "Date", "Status", "Source", "Device"),
+                table, format, "cohort_" + cohortId + "_attendance");
     }
 
     // ── Excuse Requests ───────────────────────────────────

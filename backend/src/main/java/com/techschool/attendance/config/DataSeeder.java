@@ -22,6 +22,7 @@ public class DataSeeder implements CommandLineRunner {
     private final CohortRepository cohortRepository;
     private final DeviceRepository deviceRepository;
     private final AttendanceRepository attendanceRepository;
+    private final HolidayRepository holidayRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.seed-data:true}")
@@ -86,12 +87,12 @@ public class DataSeeder implements CommandLineRunner {
 
         // ── Students ──
         String[][] students = {
-            {"Ada Okafor",    "ada.okafor@techschool.edu",    "+234 803 111 2222", c29.getId()},
-            {"Emeka Nwosu",   "emeka.nwosu@techschool.edu",   "+234 804 222 3333", c29.getId()},
-            {"Tunde Adeyemi", "tunde.adeyemi@techschool.edu", "+234 805 333 4444", c29.getId()},
-            {"Chioma Eze",    "chioma.eze@techschool.edu",    "+234 806 444 5555", c30.getId()},
-            {"Kemi Abiola",   "kemi.abiola@techschool.edu",   "+234 807 555 6666", c30.getId()},
-            {"Dayo Bello",    "dayo.bello@techschool.edu",    "+234 808 666 7777", c29.getId()},
+            {"Ada Okafor",    "ada.okafor@techschool.edu",    "+234 803 111 2222", c29.getId(), "TS-2024-0001"},
+            {"Emeka Nwosu",   "emeka.nwosu@techschool.edu",   "+234 804 222 3333", c29.getId(), "TS-2024-0002"},
+            {"Tunde Adeyemi", "tunde.adeyemi@techschool.edu", "+234 805 333 4444", c29.getId(), "TS-2024-0003"},
+            {"Chioma Eze",    "chioma.eze@techschool.edu",    "+234 806 444 5555", c30.getId(), "TS-2024-0004"},
+            {"Kemi Abiola",   "kemi.abiola@techschool.edu",   "+234 807 555 6666", c30.getId(), "TS-2024-0005"},
+            {"Dayo Bello",    "dayo.bello@techschool.edu",    "+234 808 666 7777", c29.getId(), "TS-2024-0006"},
         };
 
         for (String[] s : students) {
@@ -101,7 +102,8 @@ public class DataSeeder implements CommandLineRunner {
             student.setPhone(s[2]);
             student.setPasswordHash(passwordEncoder.encode("Student@1234"));
             student.setRole(User.Role.STUDENT);
-            student.setCohortId(s[2]);
+            student.setCohortId(s[3]);
+            student.setRegistrationNumber(s[4]);
             User saved = userRepository.save(student);
 
             // Register device for each student
@@ -157,6 +159,18 @@ public class DataSeeder implements CommandLineRunner {
                 attendanceRepository.save(att);
             }
         }
+
+        // ── Sample custom holiday (applies to all cohorts) ──
+        Holiday holiday = new Holiday();
+        holiday.setName("School Founders' Day");
+        holiday.setStartDate(LocalDate.now().plusDays(30));
+        holiday.setEndDate(LocalDate.now().plusDays(30));
+        holiday.setReason("Annual founders' day celebration — no classes");
+        holiday.setAppliesToAll(true);
+        holiday.setActive(true);
+        holiday.setCreatedById(admin.getId());
+        holiday.setCreatedByName(admin.getName());
+        holidayRepository.save(holiday);
 
         log.info("✓ Demo data seeded successfully");
         log.info("  Admin: admin@techschool.edu / Admin@1234");

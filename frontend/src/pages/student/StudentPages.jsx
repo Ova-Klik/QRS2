@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { studentApi } from '../../api/client'
 import { authApi } from '../../api/client'
-import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Input, Modal, Select, Textarea } from '../../components/common/UI'
+import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Input, Modal, Select, Textarea, Pagination } from '../../components/common/UI'
 import { isWebAuthnSupported, isPlatformAuthenticatorAvailable, registerBiometric, authenticateBiometric, getNetworkInfo } from '../../utils/webauthn'
 import { Html5Qrcode } from 'html5-qrcode'
 import toast from 'react-hot-toast'
@@ -74,8 +74,12 @@ export function StudentScan() {
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [scannerError, setScannerError] = useState(null)
+  const [autoScanning, setAutoScanning] = useState(false)
   const scannerRef = useRef(null)
   const html5QrRef = useRef(null)
+  const autoScanDoneRef = useRef(false)
+
+  const scanTokenFromUrl = searchParams.get('token')
 
   useEffect(() => {
     studentApi.dashboard().then(r => {
@@ -100,6 +104,19 @@ export function StudentScan() {
       stopCamera()
     }
   }, [])
+
+  useEffect(() => {
+    if (scanTokenFromUrl && !autoScanDoneRef.current) {
+      autoScanDoneRef.current = true
+      setAutoScanning(true)
+      setToken(scanTokenFromUrl)
+      const t = setTimeout(() => {
+        submitScan(scanTokenFromUrl)
+        setAutoScanning(false)
+      }, 600)
+      return () => clearTimeout(t)
+    }
+  }, [scanTokenFromUrl])
 
   const startCamera = async () => {
     setScannerError(null)
@@ -302,19 +319,22 @@ export function StudentScan() {
 
           <div id="qr-reader" ref={scannerRef} style={{ width: '100%', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 12 }} />
 
+          {autoScanning && (
+            <Alert type="info" ><strong>QR detected — marking your attendance...</strong></Alert>
+          )}
           {!cameraActive && !result && !dashboard?.markedToday && (
             <div style={{ textAlign: 'center' }}>
               <div
                 style={{
-                  width: 80, height: 80, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', margin: '0 auto 14px', cursor: 'pointer',
+                  width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', margin: '0 auto 16px', cursor: 'pointer',
                   background: 'var(--red-light)', transition: 'transform .15s',
                 }}
                 onClick={startCamera}
                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
               >
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
@@ -323,8 +343,8 @@ export function StudentScan() {
               <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>
                 Point your camera at the facilitator's QR code to mark attendance
               </p>
-              <Button onClick={startCamera} style={{ width: '100%', justifyContent: 'center' }}>
-                Open Camera
+              <Button onClick={startCamera} className="btn-sign" style={{ width: '100%', justifyContent: 'center' }}>
+                Open Camera &amp; Sign Attendance
               </Button>
               {scannerError && (
                 <p style={{ fontSize: 11, color: 'var(--red)', marginTop: 8 }}>{scannerError}</p>
@@ -352,8 +372,8 @@ export function StudentScan() {
               placeholder="Paste QR token here..."
               style={{ flex: 1, padding: '10px 14px', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'var(--mono)' }}
             />
-            <Button loading={loading || biometricLoading} onClick={() => submitScan()} disabled={dashboard?.markedToday || biometricLoading}>
-              {biometricRegistered ? 'Verify & Mark' : 'Mark'}
+            <Button loading={loading || biometricLoading} onClick={() => submitScan()} disabled={dashboard?.markedToday || biometricLoading} className="btn-sign">
+              {biometricRegistered ? 'Verify & Sign Attendance' : 'Sign Attendance'}
             </Button>
           </div>
           {biometricRegistered && (
@@ -386,10 +406,19 @@ export function StudentScan() {
 export function StudentHistory() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage]       = useState(0)
+  const [size, setSize]       = useState(20)
+  const [total, setTotal]     = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
-    studentApi.history().then(r => setRecords(r.data)).catch(() => toast.error('Failed to load history')).finally(() => setLoading(false))
-  }, [])
+    setLoading(true)
+    studentApi.historyPage({ page, size }).then(r => {
+      setRecords(r.data.content || [])
+      setTotal(r.data.totalElements || 0)
+      setTotalPages(Math.max(r.data.totalPages || 1, 1))
+    }).catch(() => toast.error('Failed to load history')).finally(() => setLoading(false))
+  }, [page, size])
 
   if (loading) return <LoadingPage />
 
@@ -397,7 +426,6 @@ export function StudentHistory() {
   const late    = records.filter(r => r.status === 'LATE').length
   const absent  = records.filter(r => r.status === 'ABSENT').length
   const excused = records.filter(r => r.status === 'EXCUSED').length
-  const rate    = records.length ? Math.round((present + late) / records.length * 100) : 0
 
   const cols = [
     { key: 'date',         label: 'Date',     strong: true, render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
@@ -410,7 +438,7 @@ export function StudentHistory() {
 
   return (
     <>
-      <PageHeader title="My Attendance" subtitle={`${rate}% attendance rate · ${records.length} records`} />
+      <PageHeader title="My Attendance" subtitle={`${total} records`} />
       <div style={{ padding: 24 }} className="fade-in">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
           <StatCard label="Present" value={present} badgeColor="green" />
@@ -419,7 +447,8 @@ export function StudentHistory() {
           <StatCard label="Excused" value={excused} />
         </div>
         <Card>
-          <Table columns={cols} rows={[...records].reverse()} emptyMessage="No attendance records yet" />
+          <Table columns={cols} rows={records} emptyMessage="No attendance records yet" />
+          <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
       </div>
     </>

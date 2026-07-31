@@ -1,16 +1,31 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { adminApi } from '../../api/client'
-import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Modal, Input, Select, Textarea } from '../../components/common/UI'
+import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Modal, Input, Select, Textarea, Pagination, Skeleton, useDebounce } from '../../components/common/UI'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 // ── Dashboard ────────────────────────────────────────────
 export function AdminDashboard() {
-  const [data, setData]     = useState(null)
-  const [loading, setLoading] = useState(true)
-  useEffect(() => { adminApi.schoolStats().then(r => setData(r.data)).catch(() => toast.error('Failed to load')).finally(() => setLoading(false)) }, [])
-  if (loading) return <LoadingPage />
+  const [cohorts, setCohorts]   = useState([])
+  const [cohortId, setCohortId] = useState('')
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
+
+  useEffect(() => {
+    adminApi.listCohorts().then(r => setCohorts(r.data || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    adminApi.schoolStats(cohortId || undefined)
+      .then(r => { if (alive) setData(r.data) })
+      .catch(() => alive && toast.error('Failed to load dashboard'))
+      .finally(() => alive && setLoading(false))
+    return () => { alive = false }
+  }, [cohortId])
+
   const d = data || {}
   const pieData = [
     { name: 'Present', value: d.presentToday || 0, color: '#22c55e' },
@@ -18,15 +33,42 @@ export function AdminDashboard() {
     { name: 'Excused', value: d.excusedToday || 0, color: '#1d4ed8' },
     { name: 'Absent',  value: d.absentToday  || 0, color: '#C0392B' },
   ]
+  const chartData = (d.cohorts || []).map(c => ({
+    name: c.name,
+    rate: Math.round(c.attendanceRate),
+    isSelected: cohortId ? c.id === cohortId : false,
+  }))
+
+  if (loading && !data) return <LoadingPage />
+
   return (
     <>
       <PageHeader title="Admin Dashboard" subtitle={`School-wide overview — ${format(new Date(), 'EEEE, dd MMM yyyy')}`} />
       <div style={{ padding: 24 }} className="fade-in">
+        <Card style={{ marginBottom: 20, padding: '14px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-600)' }}>Cohort Filter</div>
+            <Select
+              value={cohortId}
+              onChange={e => setCohortId(e.target.value)}
+              style={{ marginBottom: 0, minWidth: 220, flex: 1, maxWidth: 320 }}
+            >
+              <option value="">All Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+            <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+              {cohortId ? (cohorts.find(c => c.id === cohortId)?.name || 'Selected cohort') : 'All cohorts'} · {d.totalStudents || 0} students
+            </span>
+          </div>
+        </Card>
+
+        {loading && <Card style={{ marginBottom: 20 }}><Skeleton rows={3} height={26} /></Card>}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
           <StatCard label="Total Students"    value={d.totalStudents    || 0} />
-          <StatCard label="Facilitators"      value={d.totalFacilitators || 0} />
-          <StatCard label="Active Cohorts"    value={d.activeCohorts    || 0} />
           <StatCard label="Present Today"     value={(d.presentToday || 0) + (d.lateToday || 0)} badge="incl. late" badgeColor="green" />
+          <StatCard label="Absent Today"      value={d.absentToday      || 0} badgeColor="red" />
+          <StatCard label="Late Today"        value={d.lateToday        || 0} badgeColor="yellow" />
           <StatCard label="Excused Today"     value={d.excusedToday     || 0} badge="approved" badgeColor="gray" />
           <StatCard label="Attendance Rate"   value={`${Math.round(d.schoolAttendanceRate || 0)}%`} progress={d.schoolAttendanceRate} />
         </div>
@@ -34,11 +76,15 @@ export function AdminDashboard() {
           <Card>
             <div style={{ fontWeight: 600, marginBottom: 16 }}>Cohort Performance</div>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={(d.cohorts || []).map(c => ({ name: c.name, rate: Math.round(c.attendanceRate) }))}>
+              <BarChart data={chartData}>
                 <XAxis dataKey="name" style={{ fontSize: 11 }} />
                 <YAxis domain={[0,100]} style={{ fontSize: 11 }} />
                 <Tooltip formatter={v => `${v}%`} />
-                <Bar dataKey="rate" fill="var(--red)" radius={[4,4,0,0]} />
+                <Bar dataKey="rate" radius={[4,4,0,0]}>
+                  {chartData.map((c, i) => (
+                    <Cell key={i} fill={c.isSelected ? 'var(--red)' : (c.rate >= 75 ? '#22c55e' : c.rate >= 60 ? '#f59e0b' : '#C0392B')} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -84,10 +130,31 @@ export function AdminStudents() {
   const [cohorts, setCohorts]   = useState([])
   const [saving, setSaving]     = useState(false)
   const [resetPass, setResetPass] = useState('')
+  const [q, setQ]               = useState('')
+  const [cohortFilter, setCohortFilter] = useState('')
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(20)
+  const [total, setTotal]       = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const debouncedQ = useDebounce(q, 350)
 
   const load = useCallback(() => {
-    Promise.all([adminApi.listUsers('student'), adminApi.listCohorts()]).then(([u, c]) => { setStudents(u.data); setCohorts(c.data) }).finally(() => setLoading(false))
-  }, [])
+    Promise.all([
+      adminApi.searchStudents({
+        q: debouncedQ,
+        cohortId: cohortFilter || undefined,
+        page,
+        size,
+        sort: 'name',
+        order: 'asc',
+      }),
+      adminApi.listCohorts(),
+    ]).then(([u, c]) => {
+      setStudents(u.data.content); setTotal(u.data.totalElements); setTotalPages(Math.max(u.data.totalPages, 1))
+      setCohorts(c.data)
+    }).finally(() => setLoading(false))
+  }, [debouncedQ, cohortFilter, page, size])
+  useEffect(() => { setPage(0) }, [debouncedQ, cohortFilter])
   useEffect(() => { load() }, [load])
 
   const addStudent = async () => {
@@ -124,10 +191,22 @@ export function AdminStudents() {
 
   return (
     <>
-      <PageHeader title="Students" subtitle={`${students.length} registered students`}
+      <PageHeader title="Students" subtitle={`${total} registered students`}
         actions={<Button onClick={() => { setModal('add'); setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '' }) }}>+ Add Student</Button>} />
       <div style={{ padding: 24 }} className="fade-in">
         <Card>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input
+              placeholder="Search by name, email or registration number..."
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              style={{ flex: 1, minWidth: 220 }}
+            />
+            <Select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} style={{ marginBottom: 0, minWidth: 180 }}>
+              <option value="">All Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </div>
           <Table
             columns={[
               { key: 'name',         label: 'Name',      strong: true },
@@ -146,6 +225,7 @@ export function AdminStudents() {
             ]}
             rows={students}
           />
+          <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
       </div>
 
@@ -239,11 +319,42 @@ export function AdminCohorts() {
   const [modal, setModal]           = useState(false)
   const [form, setForm]             = useState({ name: '', facilitatorId: '' })
   const [saving, setSaving]         = useState(false)
+  const [viewCohort, setViewCohort] = useState(null)   // { id, name }
+  const [members, setMembers]       = useState({ content: [], totalElements: 0, totalPages: 1 })
+  const [memQ, setMemQ]             = useState('')
+  const [memSort, setMemSort]       = useState('name')
+  const [memOrder, setMemOrder]     = useState('asc')
+  const [memPage, setMemPage]       = useState(0)
+  const [memSize, setMemSize]       = useState(10)
+  const [memLoading, setMemLoading] = useState(false)
+  const debouncedMemQ = useDebounce(memQ, 350)
 
   const load = useCallback(() => {
     Promise.all([adminApi.listCohorts(), adminApi.listUsers('facilitator')]).then(([c, f]) => { setCohorts(c.data); setFacs(f.data) }).finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+
+  const loadMembers = useCallback(() => {
+    if (!viewCohort) return
+    setMemLoading(true)
+    adminApi.cohortStudentsPage(viewCohort.id, {
+      q: debouncedMemQ || undefined,
+      page: memPage,
+      size: memSize,
+      sort: memSort,
+      order: memOrder,
+    }).then(r => setMembers(r.data)).catch(() => toast.error('Failed to load students'))
+      .finally(() => setMemLoading(false))
+  }, [viewCohort, debouncedMemQ, memPage, memSize, memSort, memOrder])
+
+  useEffect(() => { setMemPage(0) }, [debouncedMemQ, memSort, memOrder])
+  useEffect(() => { loadMembers() }, [loadMembers])
+
+  const toggleSort = (key) => {
+    if (memSort === key) setMemOrder(o => (o === 'asc' ? 'desc' : 'asc'))
+    else { setMemSort(key); setMemOrder('asc') }
+  }
+  const sortArrow = (key) => memSort === key ? (memOrder === 'asc' ? ' ▲' : ' ▼') : ''
 
   const add = async () => {
     if (!form.name || !form.facilitatorId) { toast.error('Fill all fields'); return }
@@ -271,7 +382,12 @@ export function AdminCohorts() {
               { key: 'schedule',         label: 'Schedule',    render: v => <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--gray-400)' }}>{v}</span> },
               { key: 'attendanceRate',   label: 'Att. Rate',   render: v => `${Math.round(v)}%` },
               { key: 'active',           label: 'Status',      render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
-              { key: 'actions',          label: '',            render: (_, row) => <Button size="sm" variant="outline" onClick={() => toggle(row.id)}>{row.active ? 'Deactivate' : 'Activate'}</Button> },
+              { key: 'actions',          label: '',            render: (_, row) => (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Button size="sm" variant="outline" onClick={() => { setViewCohort({ id: row.id, name: row.name }); setMemQ(''); setMemPage(0) }}>View</Button>
+                  <Button size="sm" variant="outline" onClick={() => toggle(row.id)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
+                </div>
+              ) },
             ]}
             rows={cohorts}
           />
@@ -286,6 +402,36 @@ export function AdminCohorts() {
           <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
           <Button loading={saving} onClick={add}>Create Cohort</Button>
         </div>
+      </Modal>
+
+      {/* Cohort members drill-down */}
+      <Modal open={!!viewCohort} onClose={() => setViewCohort(null)} title={`${viewCohort?.name || ''} — Students`}>
+        <Input
+          placeholder="Search students..."
+          value={memQ}
+          onChange={e => setMemQ(e.target.value)}
+          style={{ marginBottom: 12 }}
+        />
+        {memLoading && <Skeleton rows={3} height={22} />}
+        {!memLoading && (
+          <>
+            <Table
+              columns={[
+                { key: 'name', label: `Name${sortArrow('name')}`, strong: true, render: (_, row) => <button className="sortable" onClick={() => toggleSort('name')}>{row.name}</button> },
+                { key: 'email', label: 'Email', render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> },
+                { key: 'registrationNumber', label: 'Reg. No.', render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{v || '—'}</span> },
+                { key: 'rate', label: `Rate${sortArrow('rate')}`, render: (_, row) => {
+                  const r = Math.round(row.attendanceSummary?.rate ?? row.analytics?.attendanceRate ?? 0)
+                  return <button className="sortable" onClick={() => toggleSort('rate')}>{r ? `${r}%` : '—'}</button>
+                } },
+                { key: 'active', label: 'Status', render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
+              ]}
+              rows={members.content || []}
+              emptyMessage="No students in this cohort"
+            />
+            <Pagination page={memPage} totalPages={Math.max(members.totalPages || 1, 1)} totalElements={members.totalElements || 0} size={memSize} onChange={(p, s) => { setMemPage(p); if (s) setMemSize(s) }} pageSizeOptions={[5, 10, 20]} />
+          </>
+        )}
       </Modal>
     </>
   )

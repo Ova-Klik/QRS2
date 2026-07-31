@@ -36,6 +36,7 @@ public class AttendanceDto {
         private String status;
         private boolean manual;
         private String manualReason;
+        private String deviceUsed;
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
@@ -48,6 +49,7 @@ public class AttendanceDto {
         private int late;
         private int absent;
         private int excused;
+        private int holiday;
         private int manual;
         private double rate;
         private List<AttendanceRecord> records;

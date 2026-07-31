@@ -21,6 +21,7 @@ public class User {
     @Id
     private String id;
 
+    @Indexed
     private String name;
 
     @Indexed(unique = true)
@@ -33,8 +34,12 @@ public class User {
     private Role role;
 
     // Student fields
+    @Indexed
     private String cohortId;
     private String deviceId;
+
+    @Indexed
+    private String registrationNumber; // optional student registration number
 
     // Facilitator fields
     private List<String> assignedCohortIds;
