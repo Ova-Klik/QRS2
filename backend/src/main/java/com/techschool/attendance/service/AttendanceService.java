@@ -364,9 +364,10 @@ public class AttendanceService {
             int late = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
             int excused = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
             int holidayCount = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
+            int absentMarked = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
             int absent = weekend || holiday.isPresent()
                     ? 0
-                    : Math.max(0, totalStudents - dayRecs.size());
+                    : Math.max(0, totalStudents - dayRecs.size()) + absentMarked;
 
             days.add(new AnalyticsDto.CalendarDay(
                     d, weekend, holiday.isPresent(),
@@ -402,7 +403,7 @@ public class AttendanceService {
             int late = st == Attendance.AttendanceStatus.LATE ? 1 : 0;
             int excused = st == Attendance.AttendanceStatus.EXCUSED ? 1 : 0;
             int holidayCount = st == Attendance.AttendanceStatus.HOLIDAY ? 1 : 0;
-            int absent = (!weekend && holiday.isEmpty() && st == null) ? 1 : 0;
+            int absent = (!weekend && holiday.isEmpty() && (st == null || st == Attendance.AttendanceStatus.ABSENT)) ? 1 : 0;
 
             days.add(new AnalyticsDto.CalendarDay(
                     d, weekend, holiday.isPresent(),

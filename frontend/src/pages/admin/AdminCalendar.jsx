@@ -70,6 +70,7 @@ export function AdminCalendar() {
   const monthNav = delta => {
     const next = delta < 0 ? subMonths(new Date(ym.year, ym.month - 1), 1) : addMonths(new Date(ym.year, ym.month - 1), 1)
     setYm({ year: next.getFullYear(), month: next.getMonth() + 1 })
+    setSelectedDay(format(next, 'yyyy-MM-dd'))
   }
 
   const range = resolveRange(preset, customStart, customEnd)
@@ -110,6 +111,7 @@ export function AdminCalendar() {
   eachDayOfInterval({ start: monthStart, end: monthEnd }).forEach(d => cells.push(d))
 
   const statusBadge = d => {
+    if (!d) return <span className="cal-dot" style={{ background: 'transparent' }} />
     const n = (d.present || 0) + (d.late || 0) + (d.excused || 0) + (d.absent || 0)
     if (d.holiday) return <span className="cal-dot" style={{ background: 'var(--gray-400)' }} title={`Holiday: ${d.holidayName}`} />
     if (n === 0) return <span className="cal-dot" style={{ background: 'transparent' }} />
