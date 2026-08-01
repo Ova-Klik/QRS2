@@ -3,7 +3,7 @@ import { publicApi } from '../../api/client'
 import { useSchool } from '../../context/SchoolContext'
 import toast from 'react-hot-toast'
 import { useTheme } from '../../context/ThemeContext'
-f
+
 export function ProjectionPage() {
   const { settings } = useSchool()
   const { dark, toggle } = useTheme()
