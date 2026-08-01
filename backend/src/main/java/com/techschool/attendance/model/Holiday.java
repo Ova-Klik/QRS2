@@ -38,6 +38,7 @@ public class Holiday {
     @Indexed
     private String cohortId;
 
+    @Indexed
     private boolean active = true;
 
     private String createdById;

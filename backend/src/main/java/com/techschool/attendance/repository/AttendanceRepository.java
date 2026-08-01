@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,9 +16,11 @@ import java.util.Optional;
 public interface AttendanceRepository extends MongoRepository<Attendance, String> {
     Optional<Attendance> findByStudentIdAndDate(String studentId, LocalDate date);
     List<Attendance> findByStudentId(String studentId);
+    List<Attendance> findByStudentIdIn(Collection<String> studentIds);
     List<Attendance> findByStudentIdOrderByDateAsc(String studentId);
     List<Attendance> findByCohortIdAndDate(String cohortId, LocalDate date);
     List<Attendance> findByCohortId(String cohortId);
+    List<Attendance> findByCohortIdIn(Collection<String> cohortIds);
     List<Attendance> findByDate(LocalDate date);
     @Query("{'date': {'$gte': ?1, '$lte': ?2}}")
     List<Attendance> findByCohortIdAndDateBetween(String cohortId, LocalDate start, LocalDate end);
@@ -34,5 +37,7 @@ public interface AttendanceRepository extends MongoRepository<Attendance, String
     @Query("{'date': {'$gte': ?0, '$lte': ?1}}")
     Page<Attendance> findByDateBetween(LocalDate start, LocalDate end, Pageable pageable);
     long countByCohortIdAndDateAndStatus(String cohortId, LocalDate date, Attendance.AttendanceStatus status);
+    long countByStatus(Attendance.AttendanceStatus status);
+    long countByCohortIdAndStatus(String cohortId, Attendance.AttendanceStatus status);
     boolean existsByStudentIdAndDate(String studentId, LocalDate date);
 }

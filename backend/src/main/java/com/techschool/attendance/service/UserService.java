@@ -10,9 +10,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,8 +56,15 @@ public class UserService {
     }
 
     public List<UserDto.UserResponse> getUsersByRole(User.Role role) {
-        return userRepository.findByRole(role).stream()
-                .map(this::toResponse).collect(Collectors.toList());
+        List<User> users = userRepository.findByRole(role);
+        if (users.isEmpty()) return List.of();
+        Map<String, Cohort> cohortsById = loadCohortsById(users);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(users);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent =
+                role == User.Role.STUDENT ? loadSummariesByStudent(users) : Map.of();
+        return users.stream()
+                .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
+                .collect(Collectors.toList());
     }
 
     // ── Student Search & Pagination ─────────────────────
@@ -76,8 +87,13 @@ public class UserService {
                         || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
                 .collect(Collectors.toList());
 
+        // Batched lookups — replaces per-student N+1 queries.
+        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(filtered);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(filtered);
+
         boolean asc = !"desc".equalsIgnoreCase(order);
-        filtered.sort(comparatorFor(sort, filtered, cohortId, asc));
+        filtered.sort(comparatorFor(sort, filtered, asc, summariesByStudent));
 
         int total = filtered.size();
         int safeSize = Math.min(200, Math.max(1, size));
@@ -86,17 +102,19 @@ public class UserService {
         int to = Math.min(from + safeSize, total);
 
         List<UserDto.UserResponse> content = filtered.subList(from, to).stream()
-                .map(u -> toResponse(u, true)).collect(Collectors.toList());
+                .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
+                .collect(Collectors.toList());
 
         return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
     /**
-     * Builds a comparator for the requested sort key. Attendance-rate sorting is
-     * resolved in one batched query rather than one query per student.
+     * Builds a comparator for the requested sort key. Attendance-rate sorting uses
+     * the already-batched summary map rather than one query per student.
      */
-    private Comparator<User> comparatorFor(String sort, List<User> users, String cohortId, boolean asc) {
+    private Comparator<User> comparatorFor(String sort, List<User> users, boolean asc,
+                                           Map<String, UserDto.UserResponse.AttendanceSummary> summaries) {
         String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
         Comparator<User> cmp;
         switch (sortKey) {
@@ -112,16 +130,10 @@ public class UserService {
             case "rate":
             case "attendanceRate":
             case "attendance":
-                Map<String, Double> rates = new java.util.HashMap<>();
-                List<Attendance> all = (cohortId != null && !cohortId.isBlank())
-                        ? attendanceRepository.findByCohortId(cohortId)
-                        : attendanceRepository.findAll();
-                all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
-                    int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-                    int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-                    rates.put(id, att.isEmpty() ? 0 : (double) (present + late) / att.size() * 100);
+                cmp = Comparator.comparing((User u) -> {
+                    UserDto.UserResponse.AttendanceSummary s = summaries.get(u.getId());
+                    return s != null ? s.getRate() : 0.0;
                 });
-                cmp = Comparator.comparing((User u) -> rates.getOrDefault(u.getId(), 0.0));
                 break;
             default:
                 cmp = Comparator.comparing(User::getName,
@@ -130,9 +142,84 @@ public class UserService {
         return asc ? cmp : cmp.reversed();
     }
 
+    // ── Batched lookups ──────────────────────────────────
+
+    private Map<String, Cohort> loadCohortsById(List<User> users) {
+        Set<String> ids = users.stream().map(User::getCohortId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        return cohortRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Cohort::getId, Function.identity()));
+    }
+
+    private Map<String, Device> loadDevicesByStudent(List<User> users) {
+        Set<String> ids = users.stream().map(User::getId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        return deviceRepository.findByStudentIdIn(ids).stream()
+                .collect(Collectors.toMap(Device::getStudentId, Function.identity(), (a, b) -> a));
+    }
+
+    private Map<String, UserDto.UserResponse.AttendanceSummary> loadSummariesByStudent(List<User> users) {
+        Set<String> ids = users.stream().map(User::getId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        List<Attendance> all = attendanceRepository.findByStudentIdIn(ids);
+        Map<String, UserDto.UserResponse.AttendanceSummary> out = new HashMap<>();
+        all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
+            int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+            int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+            int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
+            int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+            double rate = att.size() > 0 ? (double) (present + late) / att.size() * 100 : 0;
+            out.put(id, new UserDto.UserResponse.AttendanceSummary(att.size(), present, late, absent, excused, rate));
+        });
+        return out;
+    }
+
+    /** Batched response builder — zero per-student queries. */
+    private UserDto.UserResponse toResponse(User user,
+                                            Map<String, Cohort> cohortsById,
+                                            Map<String, Device> devicesByStudent,
+                                            Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent) {
+        UserDto.UserResponse resp = new UserDto.UserResponse();
+        resp.setId(user.getId());
+        resp.setName(user.getName());
+        resp.setEmail(user.getEmail());
+        resp.setPhone(user.getPhone());
+        resp.setRole(user.getRole().name());
+        resp.setCohortId(user.getCohortId());
+        Cohort cohort = user.getCohortId() != null ? cohortsById.get(user.getCohortId()) : null;
+        resp.setCohortName(cohort != null ? cohort.getName() : null);
+        resp.setRegistrationNumber(user.getRegistrationNumber());
+        resp.setAssignedCohortIds(user.getAssignedCohortIds());
+        resp.setActive(user.isActive());
+        resp.setCreatedAt(user.getCreatedAt());
+        resp.setBiometricRegistered(user.getWebAuthnCredentialId() != null && !user.getWebAuthnCredentialId().isEmpty());
+
+        Device device = devicesByStudent.get(user.getId());
+        if (device != null) {
+            resp.setDevice(new UserDto.UserResponse.DeviceInfo(
+                    device.getId(), device.getFingerprint(), device.isLocked(), device.getRegisteredAt()));
+        }
+
+        if (user.getRole() == User.Role.STUDENT) {
+            UserDto.UserResponse.AttendanceSummary s = summariesByStudent.get(user.getId());
+            if (s == null) s = new UserDto.UserResponse.AttendanceSummary(0, 0, 0, 0, 0, 0.0);
+            resp.setAttendanceSummary(s);
+        }
+        return resp;
+    }
+
     public List<UserDto.UserResponse> getStudentsByCohort(String cohortId) {
-        return userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT).stream()
-                .map(this::toResponse).collect(Collectors.toList());
+        List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
+        if (students.isEmpty()) return List.of();
+        Map<String, Cohort> cohortsById = loadCohortsById(students);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(students);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(students);
+        return students.stream()
+                .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
+                .collect(Collectors.toList());
     }
 
     public UserDto.UserResponse getById(String id) {

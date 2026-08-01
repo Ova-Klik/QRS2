@@ -19,6 +19,18 @@ public class AnalyticsDto {
         private int totalPages;
     }
 
+    /** Per-student attendance aggregates produced by a single MongoDB aggregation. */
+    @Data @NoArgsConstructor @AllArgsConstructor
+    public static class StudentAttendanceStats {
+        private String studentId;
+        private long total;
+        private long present;
+        private long late;
+        private long absent;
+        private long excused;
+        private long holiday;
+    }
+
     /** Per-student behaviour analytics: streaks, counts, trend and overall rating. */
     @Data @NoArgsConstructor @AllArgsConstructor
     public static class StudentAnalytics {

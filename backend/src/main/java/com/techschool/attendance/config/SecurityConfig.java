@@ -1,6 +1,7 @@
 package com.techschool.attendance.config;
 
 import com.techschool.attendance.security.JwtAuthFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -50,8 +51,25 @@ public class SecurityConfig {
                         .requestMatchers("/student/**").hasAnyRole("STUDENT", "FACILITATOR", "SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex
+                        // Missing/invalid/expired token on a protected route -> 401 so clients can
+                        // clear the session and redirect to login. 403 is reserved for authenticated
+                        // users lacking the required role.
+                        .authenticationEntryPoint((req, res, e) ->
+                                writeError(res, HttpServletResponse.SC_UNAUTHORIZED, "Authentication required or session expired"))
+                        .accessDeniedHandler((req, res, e) ->
+                                writeError(res, HttpServletResponse.SC_FORBIDDEN, "Access denied"))
+                )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    private static void writeError(HttpServletResponse res, int status, String message) throws java.io.IOException {
+        res.setStatus(status);
+        res.setContentType("application/json");
+        res.getWriter().write("{\"status\":" + status + ",\"error\":\""
+                + (status == 401 ? "Unauthorized" : "Forbidden")
+                + "\",\"message\":\"" + message + "\"}");
     }
 
     @Bean

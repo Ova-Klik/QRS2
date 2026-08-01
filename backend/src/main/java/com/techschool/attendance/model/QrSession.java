@@ -17,6 +17,7 @@ import java.time.LocalDate;
 @Document(collection = "qr_sessions")
 @CompoundIndexes({
     @CompoundIndex(name = "cohort_state_expires", def = "{'cohortId': 1, 'state': 1, 'expiresAt': 1}"),
+    @CompoundIndex(name = "state_expires", def = "{'state': 1, 'expiresAt': 1}"),
 })
 public class QrSession {
 

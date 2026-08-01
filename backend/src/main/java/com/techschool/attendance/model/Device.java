@@ -21,10 +21,13 @@ public class Device {
     @Indexed
     private String studentId;
 
+    @Indexed
     private String fingerprint;   // Browser fingerprint hash
     private String userAgent;
+    @Indexed
     private String imei;          // Optional hardware ID
 
+    @Indexed
     private boolean locked = true; // true = registered and in use
 
     @CreatedDate

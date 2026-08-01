@@ -13,6 +13,7 @@ public interface UserRepository extends MongoRepository<User, String> {
     List<User> findByRole(User.Role role);
     List<User> findByCohortId(String cohortId);
     List<User> findByCohortIdAndRole(String cohortId, User.Role role);
+    List<User> findByCohortIdIn(List<String> cohortIds);
     long countByCohortIdAndRole(String cohortId, User.Role role);
     long countByRole(User.Role role);
     boolean existsByEmail(String email);

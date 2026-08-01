@@ -352,12 +352,14 @@ public class AttendanceService {
         Map<LocalDate, List<Attendance>> byDay = records.stream()
                 .collect(Collectors.groupingBy(Attendance::getDate));
         int totalStudents = students.size();
+        Map<LocalDate, String> holidays = holidayService.holidayNamesBetween(first, last,
+                cohortId != null && !cohortId.isBlank() ? cohortId : null);
 
         List<AnalyticsDto.CalendarDay> days = new ArrayList<>();
         for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
             boolean weekend = d.getDayOfWeek().getValue() >= 6;
-            Optional<HolidayService.HolidayInfo> holiday =
-                    holidayService.findHoliday(d, cohortId != null && !cohortId.isBlank() ? cohortId : null);
+            boolean isHoliday = holidays.containsKey(d);
+            String holidayName = holidays.get(d);
 
             List<Attendance> dayRecs = byDay.getOrDefault(d, List.of());
             int present = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
@@ -365,13 +367,12 @@ public class AttendanceService {
             int excused = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
             int holidayCount = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
             int absentMarked = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int absent = weekend || holiday.isPresent()
+            int absent = weekend || isHoliday
                     ? 0
                     : Math.max(0, totalStudents - dayRecs.size()) + absentMarked;
 
             days.add(new AnalyticsDto.CalendarDay(
-                    d, weekend, holiday.isPresent(),
-                    holiday.map(HolidayService.HolidayInfo::name).orElse(null),
+                    d, weekend, isHoliday, holidayName,
                     present, late, absent, excused, holidayCount, totalStudents));
         }
 
@@ -391,11 +392,12 @@ public class AttendanceService {
         List<Attendance> records = attendanceRepository.findByStudentIdAndDateBetween(studentId, first, last);
         Map<LocalDate, Attendance> byDay = records.stream()
                 .collect(Collectors.toMap(Attendance::getDate, Function.identity()));
+        Map<LocalDate, String> holidays = holidayService.holidayNamesBetween(first, last, cohortId);
 
         List<AnalyticsDto.CalendarDay> days = new ArrayList<>();
         for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
             boolean weekend = d.getDayOfWeek().getValue() >= 6;
-            Optional<HolidayService.HolidayInfo> holiday = holidayService.findHoliday(d, cohortId);
+            boolean isHoliday = holidays.containsKey(d);
             Attendance rec = byDay.get(d);
             Attendance.AttendanceStatus st = rec != null ? rec.getStatus() : null;
 
@@ -403,11 +405,10 @@ public class AttendanceService {
             int late = st == Attendance.AttendanceStatus.LATE ? 1 : 0;
             int excused = st == Attendance.AttendanceStatus.EXCUSED ? 1 : 0;
             int holidayCount = st == Attendance.AttendanceStatus.HOLIDAY ? 1 : 0;
-            int absent = (!weekend && holiday.isEmpty() && (st == null || st == Attendance.AttendanceStatus.ABSENT)) ? 1 : 0;
+            int absent = (!weekend && !isHoliday && (st == null || st == Attendance.AttendanceStatus.ABSENT)) ? 1 : 0;
 
             days.add(new AnalyticsDto.CalendarDay(
-                    d, weekend, holiday.isPresent(),
-                    holiday.map(HolidayService.HolidayInfo::name).orElse(null),
+                    d, weekend, isHoliday, holidays.get(d),
                     present, late, absent, excused, holidayCount, 1));
         }
 
@@ -497,10 +498,11 @@ public class AttendanceService {
         int absent = count(all, Attendance.AttendanceStatus.ABSENT);
 
         LocalDate startDate = all.isEmpty() ? today : all.get(0).getDate();
+        Set<LocalDate> holidays = holidayService.holidayDatesBetween(startDate, today, cohortId);
 
         int schoolDays = 0, attended = 0, curAtt = 0, maxAtt = 0, curAbs = 0, maxAbs = 0;
         for (LocalDate d = startDate; !d.isAfter(today); d = d.plusDays(1)) {
-            if (!holidayService.isSchoolDay(d, cohortId)) continue;
+            if (!holidayService.isSchoolDay(d, holidays)) continue;
             schoolDays++;
             Attendance.AttendanceStatus st = statusByDate.get(d);
             if (st == Attendance.AttendanceStatus.PRESENT || st == Attendance.AttendanceStatus.LATE) {
@@ -517,7 +519,7 @@ public class AttendanceService {
         double rate = schoolDays > 0 ? (double) attended / schoolDays * 100 : 0;
         String rating = rate >= 90 ? "EXCELLENT" : rate >= 75 ? "GOOD" : rate >= 50 ? "FAIR" : "POOR";
 
-        List<AnalyticsDto.StudentAnalytics.MonthlyTrend> trend = buildMonthlyTrend(cohortId, today, statusByDate);
+        List<AnalyticsDto.StudentAnalytics.MonthlyTrend> trend = buildMonthlyTrend(today, statusByDate, holidays);
 
         return new AnalyticsDto.StudentAnalytics(
                 studentId, student.getName(), cohortId, cohortName,
@@ -526,7 +528,7 @@ public class AttendanceService {
     }
 
     private List<AnalyticsDto.StudentAnalytics.MonthlyTrend> buildMonthlyTrend(
-            String cohortId, LocalDate today, Map<LocalDate, Attendance.AttendanceStatus> statusByDate) {
+            LocalDate today, Map<LocalDate, Attendance.AttendanceStatus> statusByDate, Set<LocalDate> holidays) {
         List<AnalyticsDto.StudentAnalytics.MonthlyTrend> trend = new ArrayList<>();
         LocalDate monthStart = today.withDayOfMonth(1).minusMonths(5);
         for (int i = 0; i < 6; i++) {
@@ -534,7 +536,7 @@ public class AttendanceService {
             LocalDate me = ms.withDayOfMonth(ms.lengthOfMonth());
             int schoolDays = 0, attended = 0;
             for (LocalDate d = ms; !d.isAfter(me); d = d.plusDays(1)) {
-                if (!holidayService.isSchoolDay(d, cohortId)) continue;
+                if (!holidayService.isSchoolDay(d, holidays)) continue;
                 schoolDays++;
                 Attendance.AttendanceStatus st = statusByDate.get(d);
                 if (st == Attendance.AttendanceStatus.PRESENT || st == Attendance.AttendanceStatus.LATE) attended++;
@@ -562,6 +564,14 @@ public class AttendanceService {
         Map<String, List<Attendance>> byStudent = all.stream()
                 .collect(Collectors.groupingBy(Attendance::getStudentId));
 
+        LocalDate globalStart = today;
+        for (List<Attendance> recs : byStudent.values()) {
+            for (Attendance a : recs) {
+                if (a.getDate().isBefore(globalStart)) globalStart = a.getDate();
+            }
+        }
+        Set<LocalDate> holidays = holidayService.holidayDatesBetween(globalStart, today, cohortId);
+
         List<AnalyticsDto.CohortExportRow> rows = new ArrayList<>();
         for (User s : students) {
             List<Attendance> recs = byStudent.getOrDefault(s.getId(), List.of());
@@ -572,7 +582,7 @@ public class AttendanceService {
 
             int schoolDays = 0, attended = 0, present = 0, late = 0, excused = 0, holidayDays = 0;
             for (LocalDate d = startDate; !d.isAfter(today); d = d.plusDays(1)) {
-                if (holidayService.findHoliday(d, cohortId).isPresent()) { holidayDays++; continue; }
+                if (holidays.contains(d)) { holidayDays++; continue; }
                 if (d.getDayOfWeek().getValue() >= 6) continue;
                 schoolDays++;
                 Attendance.AttendanceStatus st = statusByDate.get(d);

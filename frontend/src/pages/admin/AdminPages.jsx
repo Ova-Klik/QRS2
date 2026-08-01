@@ -38,12 +38,38 @@ export function AdminDashboard() {
     rate: Math.round(c.attendanceRate),
     isSelected: cohortId ? c.id === cohortId : false,
   }))
+  const weeklyData = Object.entries(d.dayOfWeekBreakdown || {}).map(([day, map]) => ({
+    day: day.charAt(0) + day.slice(1, 3).toLowerCase(),
+    Present: map.PRESENT || 0,
+    Late: map.LATE || 0,
+    Absent: map.ABSENT || 0,
+  }))
+  const behaviourList = (d.studentBehaviour || []).slice(0, 10)
+  const tagBadge = (tag) => {
+    switch (tag) {
+      case 'EXCELLENT':      return <Badge status="PRESENT" label="Model" />
+      case 'GOOD_STANDING':  return <Badge status="ACTIVE" label="Good Standing" />
+      case 'CHRONIC_LATE':   return <Badge status="LATE" label="Frequent Late" />
+      case 'HIGH_EXCUSES':   return <Badge status="EXCUSED" label="High Excuses" />
+      case 'CHRONIC_ABSENT': return <Badge status="ABSENT" label="At-Risk" />
+      default:               return <Badge status="INACTIVE" label={tag} />
+    }
+  }
+
+  const exportCSV = () => {
+    const rows = [['Cohort', 'Attendance Rate %', 'Present Today', 'Late Today', 'Excused Today', 'Absent Today', 'Students']]
+    ;(d.cohorts || []).forEach(c => rows.push([c.name, Math.round(c.attendanceRate || 0), d.presentToday || 0, d.lateToday || 0, d.excusedToday || 0, d.absentToday || 0, c.studentCount]))
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `dashboard_${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click()
+    toast.success('Dashboard CSV exported')
+  }
 
   if (loading && !data) return <LoadingPage />
 
   return (
     <>
-      <PageHeader title="Admin Dashboard" subtitle={`School-wide overview — ${format(new Date(), 'EEEE, dd MMM yyyy')}`} />
+      <PageHeader title="Admin Dashboard" subtitle={`School-wide overview — ${format(new Date(), 'EEEE, dd MMM yyyy')}`}
+        actions={<Button variant="outline" size="sm" onClick={exportCSV}>↓ Export CSV</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card className="mb-5 !p-3.5">
           <div className="flex items-center gap-3 flex-wrap">
@@ -105,6 +131,45 @@ export function AdminDashboard() {
             </div>
           </Card>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+          <Card className="lg:col-span-2">
+            <div className="font-semibold mb-1">Weekly Attendance Pattern</div>
+            <p className="text-xs text-gray-400 mb-4">Status breakdown per weekday across all recorded days</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={weeklyData}>
+                <XAxis dataKey="day" style={{ fontSize: 11 }} />
+                <YAxis style={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="Present" stackId="w" fill="#22c55e" radius={[0,0,0,0]} />
+                <Bar dataKey="Late" stackId="w" fill="#f59e0b" radius={[0,0,0,0]} />
+                <Bar dataKey="Absent" stackId="w" fill="#C0392B" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          <Card>
+            <div className="font-semibold mb-3">Student Behaviour Highlights</div>
+            {behaviourList.length === 0 ? (
+              <p className="text-xs text-gray-400 py-6 text-center">No behaviour data yet</p>
+            ) : (
+              <div className="space-y-2.5">
+                {behaviourList.map(b => (
+                  <div key={b.studentId} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-gray-700 truncate">{b.studentName}</div>
+                      <div className="text-[10px] text-gray-400">{b.cohortName} · {b.totalRecords} records</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-gray-400">{Math.round(b.attendanceRate)}%</span>
+                      {tagBadge(b.behaviorTag)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
         <Card>
           <div className="font-semibold mb-4">Recent Activity</div>
           {(d.recentActivity || []).map((a, i) => (
@@ -284,7 +349,7 @@ export function AdminFacilitators() {
   return (
     <>
       <PageHeader title="Facilitators" subtitle={`${facilitators.length} facilitators`}
-        actions={<Button size="sm" onClick={() => setModal(true)}>+ Add Facilitator</Button>} />
+        actions={<Button size="sm" onClick={() => { setModal(true); setForm({ name: '', email: '', password: 'Fac@1234', assignedCohortIds: [] }) }}>+ Add Facilitator</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <Table
@@ -302,6 +367,32 @@ export function AdminFacilitators() {
         <Input label="Full Name *"  value={form.name}     onChange={e => setForm(p => ({...p, name: e.target.value}))} />
         <Input label="Email *"      value={form.email}    onChange={e => setForm(p => ({...p, email: e.target.value}))} type="email" />
         <Input label="Password *"   value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} type="password" />
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-500 mb-2">Assigned Cohorts</label>
+          {cohorts.length === 0 ? (
+            <p className="text-xs text-gray-400">No cohorts available yet. Create cohorts first.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto">
+              {cohorts.map(c => {
+                const checked = (form.assignedCohortIds || []).includes(c.id)
+                return (
+                  <label key={c.id} className="flex items-center gap-2 cursor-pointer text-[13px] text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => {
+                        const ids = form.assignedCohortIds || []
+                        setForm(p => ({ ...p, assignedCohortIds: e.target.checked ? [...ids, c.id] : ids.filter(id => id !== c.id) }))
+                      }}
+                      className="w-4 h-4 accent-red"
+                    />
+                    {c.name}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </div>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
           <Button loading={saving} onClick={addFac}>Add Facilitator</Button>
@@ -491,26 +582,86 @@ export function AdminDevices() {
 }
 
 // ── Audit Logs ───────────────────────────────────────────
+const AUDIT_ACTIONS = ['LOGIN','LOGOUT','PASSWORD_RESET','QR_GENERATED','QR_EXPIRED','ATTENDANCE_MARKED','ATTENDANCE_MANUAL_OVERRIDE','DEVICE_REGISTERED','DEVICE_UNLOCKED','DEVICE_LOCKED','USER_CREATED','USER_UPDATED','USER_DEACTIVATED','COHORT_CREATED','COHORT_UPDATED','COHORT_TOGGLED','EXCUSE_SUBMITTED','EXCUSE_REVIEWED']
+
 export function AdminAudit() {
-  const [logs, setLogs]     = useState([])
-  const [loading, setLoading] = useState(true)
-  useEffect(() => { adminApi.auditLogs().then(r => setLogs(r.data)).finally(() => setLoading(false)) }, [])
-  if (loading) return <LoadingPage />
+  const [logs, setLogs]         = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [action, setAction]     = useState('')
+  const [actor, setActor]       = useState('')
+  const [detail, setDetail]     = useState('')
+  const [from, setFrom]         = useState('')
+  const [to, setTo]             = useState('')
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(50)
+  const [total, setTotal]       = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [sort, setSort]         = useState('createdAt')
+  const [order, setOrder]       = useState('desc')
+  const debouncedActor = useDebounce(actor, 350)
+  const debouncedDetail = useDebounce(detail, 350)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    adminApi.auditLogs({
+      action: action || undefined,
+      actorName: debouncedActor || undefined,
+      detail: debouncedDetail || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      page,
+      size,
+      sort,
+      order,
+    }).then(r => {
+      setLogs(r.data.content || [])
+      setTotal(r.data.totalElements || 0)
+      setTotalPages(Math.max(r.data.totalPages || 1, 1))
+    }).catch(() => toast.error('Failed to load audit logs')).finally(() => setLoading(false))
+  }, [action, debouncedActor, debouncedDetail, from, to, page, size, sort, order])
+  useEffect(() => { setPage(0) }, [action, debouncedActor, debouncedDetail, from, to, size, sort, order])
+  useEffect(() => { load() }, [load])
+
+  const toggleSort = key => {
+    if (sort === key) setOrder(o => o === 'asc' ? 'desc' : 'asc')
+    else { setSort(key); setOrder('asc') }
+  }
+  const arrow = key => sort === key ? (order === 'asc' ? ' ▲' : ' ▼') : ''
+
+  if (loading && logs.length === 0) return <LoadingPage />
+
   return (
     <>
       <PageHeader title="Audit Logs" subtitle="Full system activity trail" />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
-          <Table
-            columns={[
-              { key: 'action',      label: 'Action',    strong: true, render: v => v?.replace(/_/g,' ') },
-              { key: 'actorName',   label: 'Actor' },
-              { key: 'targetName',  label: 'Target' },
-              { key: 'detail',      label: 'Detail',    render: v => <span className="text-xs text-gray-400">{v}</span> },
-              { key: 'createdAt',   label: 'Timestamp', render: v => v ? <span className="font-mono text-[11px] text-gray-400">{format(new Date(v), 'dd MMM HH:mm:ss')}</span> : '—' },
-            ]}
-            rows={logs}
-          />
+          <div className="flex gap-3 mb-4 flex-wrap">
+            <Input placeholder="Search actor..." value={actor} onChange={e => setActor(e.target.value)} className="!mb-0 min-w-[160px] flex-1 max-w-[220px]" />
+            <Select value={action} onChange={e => setAction(e.target.value)} className="!mb-0 min-w-[200px] flex-1 max-w-[240px]">
+              <option value="">All Actions</option>
+              {AUDIT_ACTIONS.map(a => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
+            </Select>
+            <Input placeholder="Search details..." value={detail} onChange={e => setDetail(e.target.value)} className="!mb-0 min-w-[160px] flex-1 max-w-[220px]" />
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="!mb-0 w-[150px]" />
+            <span className="self-center text-gray-400 text-xs">to</span>
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="!mb-0 w-[150px]" />
+          </div>
+          {loading && <Skeleton rows={4} height={24} />}
+          {!loading && (
+            <>
+              <Table
+                columns={[
+                  { key: 'action',    label: `Action${arrow('action')}`,    strong: true, render: (v) => <button className="bg-transparent border-0 p-0 text-left font-[inherit] cursor-pointer" onClick={() => toggleSort('action')}>{v?.replace(/_/g,' ')}</button> },
+                  { key: 'actorName', label: `Actor${arrow('actorName')}`,  render: v => v || '—' },
+                  { key: 'targetName',label: `Target${arrow('targetName')}`,render: v => v || '—' },
+                  { key: 'detail',    label: 'Detail', render: v => <span className="text-xs text-gray-400">{v}</span> },
+                  { key: 'createdAt', label: `Timestamp${arrow('createdAt')}`, render: v => v ? <button className="bg-transparent border-0 p-0 text-left font-mono text-[11px] text-gray-400 cursor-pointer" onClick={() => toggleSort('createdAt')}>{format(new Date(v), 'dd MMM HH:mm:ss')}</button> : '—' },
+                ]}
+                rows={logs}
+              />
+              <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} pageSizeOptions={[20, 50, 100]} />
+            </>
+          )}
         </Card>
       </div>
     </>
@@ -521,11 +672,13 @@ export function AdminAudit() {
 export function AdminAnalytics() {
   const [data, setData]     = useState(null)
   const [students, setStudents] = useState([])
+  const [cohorts, setCohorts] = useState([])
+  const [cohortId, setCohortId] = useState('')
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    Promise.all([adminApi.schoolStats(), adminApi.listUsers('student')]).then(([s, u]) => { setData(s.data); setStudents(u.data) }).finally(() => setLoading(false))
-  }, [])
-  if (loading) return <LoadingPage />
+    Promise.all([adminApi.schoolStats(cohortId || undefined), adminApi.listUsers('student'), adminApi.listCohorts()]).then(([s, u, c]) => { setData(s.data); setStudents(u.data); setCohorts(c.data) }).finally(() => setLoading(false))
+  }, [cohortId])
+  if (loading && !data) return <LoadingPage />
   const d = data || {}
   const behaviourList = d.studentBehaviour || []
 
@@ -563,6 +716,16 @@ export function AdminAnalytics() {
       <PageHeader title="Analytics & Behaviour Insights" subtitle="School-wide attendance metrics, day-of-week trends, and student behavior risk patterns"
         actions={<Button variant="outline" size="sm" onClick={exportCSV}>↓ Export Behaviour CSV</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
+        <Card className="mb-5 !p-3.5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-[13px] font-semibold text-gray-600">Cohort Filter</div>
+            <Select value={cohortId} onChange={e => setCohortId(e.target.value)} className="!mb-0 min-w-[220px] flex-1 max-w-[320px]">
+              <option value="">All Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+            {loading && <span className="text-xs text-gray-400">Refreshing…</span>}
+          </div>
+        </Card>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard label="School Rate"      value={`${Math.round(d.schoolAttendanceRate||0)}%`} progress={d.schoolAttendanceRate} />
           <StatCard label="Present Today"   value={d.presentToday||0} badgeColor="green" />

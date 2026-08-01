@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,12 +31,20 @@ public class HolidayService {
     // ── Admin CRUD ─────────────────────────────────────────
 
     public List<HolidayDto.Response> getAll() {
-        return holidayRepository.findAll().stream()
+        List<Holiday> holidays = holidayRepository.findAll();
+        Set<String> cohortIds = holidays.stream()
+                .filter(h -> !h.isAppliesToAll() && h.getCohortId() != null)
+                .map(Holiday::getCohortId)
+                .collect(Collectors.toSet());
+        Map<String, String> cohortNames = cohortIds.isEmpty() ? Map.of()
+                : cohortRepository.findAllById(cohortIds).stream()
+                        .collect(Collectors.toMap(Cohort::getId, Cohort::getName));
+        return holidays.stream()
                 .sorted((a, b) -> {
                     int byDate = b.getStartDate().compareTo(a.getStartDate());
                     return byDate != 0 ? byDate : b.getCreatedAt().compareTo(a.getCreatedAt());
                 })
-                .map(this::toResponse)
+                .map(h -> toResponse(h, cohortNames))
                 .collect(Collectors.toList());
     }
 
@@ -139,6 +149,43 @@ public class HolidayService {
         return !isHoliday(date, cohortId);
     }
 
+    /**
+     * Every holiday date (custom + public) in {@code [start, end]} for the cohort,
+     * resolved with a single database query so day-by-day analytics don't hit the DB.
+     */
+    public Set<LocalDate> holidayDatesBetween(LocalDate start, LocalDate end, String cohortId) {
+        return holidayNamesBetween(start, end, cohortId).keySet();
+    }
+
+    /**
+     * Maps every holiday date in {@code [start, end]} for the cohort to its name,
+     * resolved with a single database query.
+     */
+    public Map<LocalDate, String> holidayNamesBetween(LocalDate start, LocalDate end, String cohortId) {
+        Map<LocalDate, String> map = new java.util.LinkedHashMap<>();
+        if (start == null || end == null || end.isBefore(start)) return map;
+        for (Holiday h : holidayRepository.findByActive(true)) {
+            if (!h.isAppliesToAll() && (h.getCohortId() == null || !h.getCohortId().equals(cohortId))) continue;
+            LocalDate d = h.getStartDate();
+            while (!d.isAfter(h.getEndDate())) {
+                if (!d.isBefore(start) && !d.isAfter(end)) map.putIfAbsent(d, h.getName());
+                d = d.plusDays(1);
+            }
+        }
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            String ph = publicHolidayName(d);
+            if (ph != null) map.putIfAbsent(d, ph);
+        }
+        return map;
+    }
+
+    /** A school day is a weekday that is not in the preloaded holiday set. */
+    public boolean isSchoolDay(LocalDate date, Set<LocalDate> holidays) {
+        if (date == null) return false;
+        if (date.getDayOfWeek().getValue() >= 6) return false; // Saturday/Sunday
+        return !holidays.contains(date);
+    }
+
     /** All holidays overlapping the given range for the cohort (custom + public). */
     public List<HolidayInfo> holidaysInRange(LocalDate start, LocalDate end, String cohortId) {
         List<HolidayInfo> result = new ArrayList<>();
@@ -192,9 +239,13 @@ public class HolidayService {
     }
 
     private HolidayDto.Response toResponse(Holiday h) {
+        return toResponse(h, Map.of());
+    }
+
+    private HolidayDto.Response toResponse(Holiday h, Map<String, String> cohortNames) {
         String cohortName = null;
         if (!h.isAppliesToAll() && h.getCohortId() != null) {
-            cohortName = cohortRepository.findById(h.getCohortId()).map(Cohort::getName).orElse(null);
+            cohortName = cohortNames.get(h.getCohortId());
         }
         return new HolidayDto.Response(
                 h.getId(), h.getName(), h.getStartDate(), h.getEndDate(), h.getReason(),

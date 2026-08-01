@@ -19,4 +19,7 @@ public interface QrSessionRepository extends MongoRepository<QrSession, String> 
 
     @Query("{ 'cohortId': ?0, 'state': 'ACTIVE' }")
     Optional<QrSession> findActiveSessionByCohortId(String cohortId);
+
+    @Query("{ 'cohortId': { $in: ?0 }, 'state': 'ACTIVE' }")
+    List<QrSession> findActiveSessionsByCohortIds(List<String> cohortIds);
 }

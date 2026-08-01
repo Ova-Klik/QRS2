@@ -5,11 +5,20 @@ import com.techschool.attendance.exception.AppException;
 import com.techschool.attendance.model.*;
 import com.techschool.attendance.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,6 +31,8 @@ public class CohortService {
     private final DeviceRepository deviceRepository;
     private final QrSessionRepository qrSessionRepository;
     private final AuditService auditService;
+    private final MongoTemplate mongoTemplate;
+    private final AttendanceService attendanceService;
 
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone}")
     private String timezone;
@@ -49,16 +60,52 @@ public class CohortService {
     }
 
     public List<CohortDto.CohortResponse> getAllCohorts() {
-        return cohortRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
+        return toResponses(cohortRepository.findAll());
     }
 
     public List<CohortDto.CohortResponse> getActiveCohorts() {
-        return cohortRepository.findByActive(true).stream().map(this::toResponse).collect(Collectors.toList());
+        return toResponses(cohortRepository.findByActive(true));
     }
 
     public List<CohortDto.CohortResponse> getCohortsByFacilitator(String facId) {
-        return cohortRepository.findByFacilitatorId(facId).stream()
-                .map(this::toResponse).collect(Collectors.toList());
+        return toResponses(cohortRepository.findByFacilitatorId(facId));
+    }
+
+    /** Batched cohort mapping — zero per-cohort queries. */
+    private List<CohortDto.CohortResponse> toResponses(List<Cohort> cohorts) {
+        if (cohorts.isEmpty()) return List.of();
+
+        Set<String> facilitatorIds = cohorts.stream()
+                .map(Cohort::getFacilitatorId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, User> facById = facilitatorIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(facilitatorIds).stream()
+                        .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        Map<String, Long> studentCountByCohort = userRepository.findByRole(User.Role.STUDENT).stream()
+                .filter(u -> u.getCohortId() != null)
+                .collect(Collectors.groupingBy(User::getCohortId, Collectors.counting()));
+
+        Map<String, List<Attendance>> attendanceByCohort = attendanceRepository
+                .findByCohortIdIn(cohorts.stream().map(Cohort::getId).collect(Collectors.toList()))
+                .stream().collect(Collectors.groupingBy(Attendance::getCohortId));
+
+        return cohorts.stream().map(c -> toResponse(c, facById, studentCountByCohort, attendanceByCohort))
+                .collect(Collectors.toList());
+    }
+
+    private CohortDto.CohortResponse toResponse(Cohort c,
+                                                Map<String, User> facById,
+                                                Map<String, Long> studentCountByCohort,
+                                                Map<String, List<Attendance>> attendanceByCohort) {
+        User fac = c.getFacilitatorId() != null ? facById.get(c.getFacilitatorId()) : null;
+        long count = studentCountByCohort.getOrDefault(c.getId(), 0L);
+        List<Attendance> att = attendanceByCohort.getOrDefault(c.getId(), List.of());
+        long distinctStudents = att.stream().map(Attendance::getStudentId).distinct().count();
+        double rate = count > 0 ? (double) att.stream().filter(a -> a.getStatus() != Attendance.AttendanceStatus.ABSENT).count() / count * 100 : 0;
+        return new CohortDto.CohortResponse(c.getId(), c.getName(), c.getFacilitatorId(),
+                fac != null ? fac.getName() : null, c.getSchedule(), c.isActive(), (int) count, rate, c.getCreatedAt());
     }
 
     public CohortDto.CohortResponse toggleCohort(String actorId, String actorName, String cohortId) {
@@ -82,19 +129,17 @@ public class CohortService {
         List<User> students = scoped
                 ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
                 : userRepository.findByRole(User.Role.STUDENT);
-        List<User> facilitators = userRepository.findByRole(User.Role.FACILITATOR);
+        long facilitators = userRepository.countByRole(User.Role.FACILITATOR);
         List<Cohort> activeCohorts = cohortRepository.findByActive(true);
         Map<String, String> cohortNameMap = cohortRepository.findAll().stream()
                 .collect(Collectors.toMap(Cohort::getId, Cohort::getName, (a, b) -> a));
 
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
-        List<Attendance> allAtt = scoped
-                ? attendanceRepository.findByCohortId(cohortId)
-                : attendanceRepository.findAll();
-
-        List<Attendance> todayAtt = allAtt.stream()
-                .filter(a -> today.equals(a.getDate())).collect(Collectors.toList());
+        // Today's counts (indexed, small)
+        List<Attendance> todayAtt = scoped
+                ? attendanceRepository.findByCohortIdAndDate(cohortId, today)
+                : attendanceRepository.findByDate(today);
 
         int present = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
         int late = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
@@ -103,17 +148,20 @@ public class CohortService {
         int absent = Math.max(0, students.size() - (present + late + excused));
         double rate = students.size() > 0 ? (double)(present + late + excused) / students.size() * 100 : 0;
 
-        int totalExcusedAllTime = (int) allAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+        long totalExcusedAllTime = scoped
+                ? attendanceRepository.countByCohortIdAndStatus(cohortId, Attendance.AttendanceStatus.EXCUSED)
+                : attendanceRepository.countByStatus(Attendance.AttendanceStatus.EXCUSED);
 
-        // ── Student Behaviour Analytics ────────────────────────
+        // Per-student all-time aggregates (single aggregation, no full-collection fetch)
+        Map<String, AnalyticsDto.StudentAttendanceStats> statsByStudent = aggregateStudentStats(scoped ? cohortId : null);
+
         List<DashboardDto.BehaviourInsight> behaviourList = students.stream().map(student -> {
-            List<Attendance> sAtt = allAtt.stream()
-                    .filter(a -> student.getId().equals(a.getStudentId())).collect(Collectors.toList());
-            int total = sAtt.size();
-            int pCount = (int) sAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-            int lCount = (int) sAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-            int eCount = (int) sAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-            int aCount = (int) sAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
+            AnalyticsDto.StudentAttendanceStats s = statsByStudent.get(student.getId());
+            long total = s != null ? s.getTotal() : 0;
+            long pCount = s != null ? s.getPresent() : 0;
+            long lCount = s != null ? s.getLate() : 0;
+            long eCount = s != null ? s.getExcused() : 0;
+            long aCount = s != null ? s.getAbsent() : 0;
 
             double sRate = total > 0 ? (double)(pCount + lCount + eCount) / total * 100 : 100.0;
             double lRate = total > 0 ? (double) lCount / total * 100 : 0.0;
@@ -138,28 +186,12 @@ public class CohortService {
             String cName = student.getCohortId() != null ? cohortNameMap.getOrDefault(student.getCohortId(), "Unassigned") : "Unassigned";
 
             return new DashboardDto.BehaviourInsight(
-                    student.getId(), student.getName(), cName, total, pCount, lCount, aCount, eCount,
+                    student.getId(), student.getName(), cName, (int) total, (int) pCount, (int) lCount, (int) aCount, (int) eCount,
                     sRate, lRate, tag, text
             );
         }).collect(Collectors.toList());
 
-        // ── Day of Week Breakdown ──────────────────────────────
-        Map<String, Map<String, Integer>> dayOfWeekMap = new java.util.HashMap<>();
-        String[] days = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"};
-        for (String day : days) {
-            dayOfWeekMap.put(day, new java.util.HashMap<>(Map.of("PRESENT", 0, "LATE", 0, "ABSENT", 0, "EXCUSED", 0, "HOLIDAY", 0)));
-        }
-
-        for (Attendance a : allAtt) {
-            if (a.getDate() != null) {
-                String dayName = a.getDate().getDayOfWeek().name();
-                if (dayOfWeekMap.containsKey(dayName)) {
-                    Map<String, Integer> counts = dayOfWeekMap.get(dayName);
-                    String st = a.getStatus() != null ? a.getStatus().name() : "ABSENT";
-                    counts.put(st, counts.getOrDefault(st, 0) + 1);
-                }
-            }
-        }
+        Map<String, Map<String, Integer>> dayOfWeekMap = aggregateDayOfWeek(scoped ? cohortId : null);
 
         List<Map<String, Object>> recentActivity = auditService.getRecent().stream()
                 .limit(10).map(l -> Map.<String, Object>of(
@@ -170,22 +202,107 @@ public class CohortService {
                 .collect(Collectors.toList());
 
         return new DashboardDto.AdminStats(
-                students.size(), facilitators.size(), activeCohorts.size(),
-                present, late, absent, excused, holidayToday, totalExcusedAllTime, rate,
-                activeCohorts.stream().map(this::toResponse).collect(Collectors.toList()),
+                students.size(), (int) facilitators, activeCohorts.size(),
+                present, late, absent, excused, holidayToday, (int) totalExcusedAllTime, rate,
+                toResponses(activeCohorts),
                 recentActivity, behaviourList, dayOfWeekMap);
+    }
+
+    // ── Aggregations ─────────────────────────────────────
+
+    /**
+     * Per-student all-time attendance counts via a single MongoDB aggregation,
+     * replacing a full-collection fetch + per-student Java loops.
+     */
+    private Map<String, AnalyticsDto.StudentAttendanceStats> aggregateStudentStats(String cohortId) {
+        List<AggregationOperation> ops = new ArrayList<>();
+        if (cohortId != null && !cohortId.isBlank()) {
+            ops.add(context -> new Document("$match", new Document("cohortId", cohortId)));
+        }
+        Document group = new Document("_id", "$studentId")
+                .append("total", new Document("$sum", 1))
+                .append("present", new Document("$sum", statusCond("PRESENT")))
+                .append("late", new Document("$sum", statusCond("LATE")))
+                .append("absent", new Document("$sum", statusCond("ABSENT")))
+                .append("excused", new Document("$sum", statusCond("EXCUSED")))
+                .append("holiday", new Document("$sum", statusCond("HOLIDAY")));
+        ops.add(context -> new Document("$group", group));
+        ops.add(context -> new Document("$project",
+                new Document("_id", 0)
+                        .append("studentId", "$_id")
+                        .append("total", 1)
+                        .append("present", 1)
+                        .append("late", 1)
+                        .append("absent", 1)
+                        .append("excused", 1)
+                        .append("holiday", 1)));
+
+        AggregationResults<AnalyticsDto.StudentAttendanceStats> results =
+                mongoTemplate.aggregate(Aggregation.newAggregation(ops), "attendance", AnalyticsDto.StudentAttendanceStats.class);
+        return results.getMappedResults().stream()
+                .collect(Collectors.toMap(AnalyticsDto.StudentAttendanceStats::getStudentId, Function.identity()));
+    }
+
+    private static Document statusCond(String status) {
+        return new Document("$cond",
+                List.of(new Document("$eq", List.of("$status", status)), 1, 0));
+    }
+
+    /**
+     * PRESENT/LATE/ABSENT/EXCUSED/HOLIDAY counts per weekday via a single
+     * aggregation grouped by day-of-week.
+     */
+    private Map<String, Map<String, Integer>> aggregateDayOfWeek(String cohortId) {
+        Map<String, Map<String, Integer>> out = new java.util.LinkedHashMap<>();
+        String[] days = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"};
+        for (String day : days) {
+            out.put(day, new java.util.HashMap<>(Map.of("PRESENT", 0, "LATE", 0, "ABSENT", 0, "EXCUSED", 0, "HOLIDAY", 0)));
+        }
+
+        List<AggregationOperation> ops = new ArrayList<>();
+        if (cohortId != null && !cohortId.isBlank()) {
+            ops.add(context -> new Document("$match", new Document("cohortId", cohortId)));
+        }
+        ops.add(context -> new Document("$group",
+                new Document("_id", new Document("dow", new Document("$dayOfWeek", "$date"))
+                        .append("status", "$status"))
+                        .append("count", new Document("$sum", 1))));
+        ops.add(context -> new Document("$project",
+                new Document("_id", 0).append("dow", "$_id.dow").append("status", "$_id.status").append("count", 1)));
+        AggregationResults<Document> results = mongoTemplate.aggregate(
+                Aggregation.newAggregation(ops), "attendance", Document.class);
+        for (Document doc : results.getMappedResults()) {
+            int mongoDow = doc.getInteger("dow", 0);
+            String status = doc.getString("status");
+            int count = doc.getInteger("count", 0);
+            String javaDay = mongoDowToJavaDay(mongoDow);
+            if (javaDay != null && status != null && out.containsKey(javaDay)) {
+                out.get(javaDay).put(status, count);
+            }
+        }
+        return out;
+    }
+
+    /** Maps MongoDB $dayOfWeek (1=Sunday..7=Saturday) to the Java weekday name. */
+    private static String mongoDowToJavaDay(int mongoDow) {
+        if (mongoDow < 1 || mongoDow > 7) return null;
+        if (mongoDow == 1) return "SUNDAY";
+        return DayOfWeek.of(mongoDow - 1).name();
     }
 
     public DashboardDto.FacilitatorStats buildFacilitatorStats(String facId) throws Exception {
         List<Cohort> myCohorts = cohortRepository.findByFacilitatorId(facId);
-        List<User> myStudents = myCohorts.stream()
-                .flatMap(c -> userRepository.findByCohortId(c.getId()).stream())
-                .collect(Collectors.toList());
+        List<String> cohortIds = myCohorts.stream().map(Cohort::getId).collect(Collectors.toList());
+        List<User> myStudents = cohortIds.isEmpty() ? List.of()
+                : userRepository.findByCohortIdIn(cohortIds);
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
-        List<Attendance> todayAtt = myStudents.stream()
-                .flatMap(s -> attendanceRepository.findByStudentIdAndDate(s.getId(), today).stream())
-                .collect(Collectors.toList());
+        List<Attendance> todayAtt = myStudents.isEmpty() ? List.of()
+                : attendanceRepository.findByStudentIdIn(
+                        myStudents.stream().map(User::getId).collect(Collectors.toList()))
+                        .stream()
+                        .filter(a -> today.equals(a.getDate()))
+                        .collect(Collectors.toList());
 
         int present = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
         int late = (int) todayAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
@@ -195,26 +312,16 @@ public class CohortService {
         // Check for active QR
         boolean hasActiveQr = false;
         QrDto.QrResponse activeSession = null;
-        for (Cohort c : myCohorts) {
-            try {
-                activeSession = null; // skip QR image regeneration for dashboard
-                hasActiveQr = qrSessionRepository.findActiveSessionByCohortId(c.getId()).isPresent();
-                if (hasActiveQr) break;
-            } catch (Exception ignored) {}
+        List<QrSession> activeSessions = cohortIds.isEmpty() ? List.of()
+                : qrSessionRepository.findActiveSessionsByCohortIds(cohortIds);
+        for (QrSession s : activeSessions) {
+            if (s.getExpiresAt() != null && s.getExpiresAt().isAfter(Instant.now())) {
+                hasActiveQr = true;
+                break;
+            }
         }
 
-        List<AttendanceDto.AttendanceRecord> records = todayAtt.stream()
-                .map(a -> {
-                    User s = userRepository.findById(a.getStudentId()).orElse(null);
-                    Cohort co = a.getCohortId() != null ? cohortRepository.findById(a.getCohortId()).orElse(null) : null;
-                    Device d = a.getDeviceId() != null ? deviceRepository.findById(a.getDeviceId()).orElse(null) : null;
-                    return new AttendanceDto.AttendanceRecord(
-                            a.getId(), a.getStudentId(), s != null ? s.getName() : "",
-                            a.getCohortId(), co != null ? co.getName() : "",
-                            a.getDate(), a.getMarkedAt(), a.getStatus() != null ? a.getStatus().name() : null,
-                            a.isManual(), a.getManualReason(),
-                            d != null ? (d.getFingerprint() != null ? d.getFingerprint() : d.getImei()) : null);
-                }).collect(Collectors.toList());
+        List<AttendanceDto.AttendanceRecord> records = attendanceService.buildRecords(todayAtt);
 
         return new DashboardDto.FacilitatorStats(myStudents.size(), present, late, absent, excused,
                 hasActiveQr, activeSession, records);
@@ -257,12 +364,6 @@ public class CohortService {
     }
 
     private CohortDto.CohortResponse toResponse(Cohort c) {
-        User fac = userRepository.findById(c.getFacilitatorId()).orElse(null);
-        long count = userRepository.countByCohortIdAndRole(c.getId(), User.Role.STUDENT);
-        List<Attendance> att = attendanceRepository.findByCohortId(c.getId());
-        long distinctStudents = att.stream().map(Attendance::getStudentId).distinct().count();
-        double rate = count > 0 ? (double) att.stream().filter(a -> a.getStatus() != Attendance.AttendanceStatus.ABSENT).count() / count * 100 : 0;
-        return new CohortDto.CohortResponse(c.getId(), c.getName(), c.getFacilitatorId(),
-                fac != null ? fac.getName() : null, c.getSchedule(), c.isActive(), (int) count, rate, c.getCreatedAt());
+        return toResponses(List.of(c)).get(0);
     }
 }

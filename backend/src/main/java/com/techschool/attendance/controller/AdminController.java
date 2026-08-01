@@ -154,8 +154,17 @@ public class AdminController {
     // ── Audit Logs ─────────────────────────────────────────
 
     @GetMapping("/audit")
-    public ResponseEntity<List<AuditLog>> getAuditLogs() {
-        return ResponseEntity.ok(auditService.getRecent());
+    public ResponseEntity<AnalyticsDto.PageResponse<AuditLog>> getAuditLogs(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String actorName,
+            @RequestParam(required = false) String detail,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "createdAt") String sort,
+            @RequestParam(defaultValue = "desc") String order) {
+        return ResponseEntity.ok(auditService.getLogs(action, actorName, detail, from, to, page, size, sort, order));
     }
 
     // ── Network Settings ──────────────────────────────────

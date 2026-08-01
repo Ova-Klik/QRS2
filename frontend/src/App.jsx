@@ -23,7 +23,11 @@ function RequireAuth({ children, roles }) {
       </div>
     </div>
   )
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    const token = new URLSearchParams(window.location.search).get('token')
+    const dest = '/login' + (token ? `?qrs=${encodeURIComponent(token)}` : '')
+    return <Navigate to={dest} replace />
+  }
   if (roles && !roles.includes(user.role)) return <Navigate to={defaultRoute(user.role)} replace />
   return children
 }

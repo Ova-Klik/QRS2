@@ -13,13 +13,24 @@ api.interceptors.request.use(config => {
   return config
 })
 
+// Auth-flow requests return 401 as a normal outcome (e.g. wrong credentials).
+// Redirecting the browser for these breaks login/registration UX.
+const AUTH_FLOW_URLS = ['/auth/login', '/auth/register', '/auth/webauthn']
+
 // Handle 401 globally
 api.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('qrs_token')
-      window.location.href = '/login'
+      const url = err.config?.url || ''
+      const isAuthFlow = AUTH_FLOW_URLS.some(prefix => url.startsWith(prefix))
+      if (!isAuthFlow) {
+        localStorage.removeItem('qrs_token')
+        if (window.location.pathname !== '/login') {
+          const qrs = new URLSearchParams(window.location.search).get('token')
+          window.location.href = '/login' + (qrs ? `?qrs=${encodeURIComponent(qrs)}` : '')
+        }
+      }
     }
     return Promise.reject(err)
   }
@@ -75,7 +86,7 @@ export const adminApi = {
   // Students
   searchStudents: (params)            => api.get('/admin/students/search', { params }),
   // Audit
-  auditLogs:      ()                  => api.get('/admin/audit'),
+  auditLogs:      (params)            => api.get('/admin/audit', { params }),
   // Stats
   schoolStats:    (cohortId)          => api.get('/admin/analytics/school', { params: { cohortId } }),
   calendarMonth:  (params)            => api.get('/admin/analytics/calendar', { params }),
