@@ -40,28 +40,23 @@ export default function TesterPage() {
   const fill = (email, password) => setForm({ email, password })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--off)', display: 'flex', flexDirection: 'column' }}>
+    <div className="min-h-screen bg-off flex flex-col">
       {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 24px', borderBottom: '1px solid var(--gray-100)', background: 'var(--white)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="flex flex-wrap items-center justify-between px-6 py-3 border-b border-gray-100 bg-white">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-red rounded-md flex items-center justify-center">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/></svg>
           </div>
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--gray-900)' }}>QR Attendance · Tester Access</span>
+          <span className="text-[15px] font-semibold text-gray-900">QR Attendance · Tester Access</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link to="/" style={{ fontSize: 12, color: 'var(--gray-500)', textDecoration: 'none', padding: '6px 12px', borderRadius: 6, border: '1px solid var(--gray-200)' }}>
+        <div className="flex items-center gap-2">
+          <Link to="/" className="text-xs text-gray-500 no-underline px-3 py-1.5 rounded-md border border-gray-200">
             Home
           </Link>
           <button onClick={toggle} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 20,
-              background: dark ? '#2e2e42' : 'var(--gray-50)', border: '1px solid var(--gray-200)',
-              color: dark ? '#c0c0d8' : 'var(--gray-600)', fontSize: 12, fontWeight: 500, cursor: 'pointer', lineHeight: 1,
-            }}>
+            className={dark
+              ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#2e2e42] border border-gray-200 text-[#c0c0d8] text-xs font-medium cursor-pointer leading-none'
+              : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium cursor-pointer leading-none'}>
             {dark ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Light</>
             ) : (
@@ -72,51 +67,40 @@ export default function TesterPage() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 32, padding: '40px 24px', maxWidth: 1000, margin: '0 auto', width: '100%', boxSizing: 'border-box', alignItems: 'start' }}>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 px-6 py-10 max-w-[1000px] mx-auto w-full items-start">
 
         {/* Login */}
-        <div style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: 28, boxShadow: 'var(--shadow-md)' }}>
-          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: 'var(--gray-900)' }}>Sign in</h2>
-          <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 20 }}>Use the demo credentials to test the system.</p>
+        <div className="bg-white border border-gray-100 rounded-lg p-7 shadow-md">
+          <h2 className="text-xl font-semibold mb-1 text-gray-900">Sign in</h2>
+          <p className="text-[13px] text-gray-400 mb-5">Use the demo credentials to test the system.</p>
           {error && <Alert type="error">{error}</Alert>}
           <form onSubmit={handleSubmit}>
             <Input label="Email" type="email" placeholder="you@school.edu" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
             <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
-            <Button type="submit" loading={loading} style={{ width: '100%', justifyContent: 'center' }}>Sign in</Button>
+            <Button type="submit" loading={loading} className="w-full justify-center">Sign in</Button>
           </form>
         </div>
 
         {/* Seeded Demo Credentials */}
-        <div style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <div className="bg-white border border-gray-100 rounded-lg p-6 shadow">
+          <div className="flex items-center gap-2 mb-5">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--gray-900)' }}>Seeded Demo Credentials</span>
+            <span className="text-[15px] font-semibold text-gray-900">Seeded Demo Credentials</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="flex flex-col gap-3">
             {DEMO.map(d => (
-              <div key={d.role} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
-                borderRadius: 10, border: '1px solid var(--gray-100)', background: 'var(--off)',
-              }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 8, background: d.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  fontSize: 12, fontWeight: 700, color: '#fff',
-                }}>
+              <div key={d.role} className="flex items-center gap-3 px-4 py-3.5 rounded border border-gray-100 bg-off">
+                <div className="w-10 h-10 rounded-md flex items-center justify-center shrink-0 text-xs font-bold text-white" style={{ background: d.color }}>
                   {d.role.split(' ').map(w => w[0]).join('')}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--gray-900)' }}>{d.role}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 4, lineHeight: 1.3 }}>{d.desc}</div>
-                  <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--gray-400)', wordBreak: 'break-all' }}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-gray-900">{d.role}</div>
+                  <div className="text-xs text-gray-500 mb-1 leading-tight">{d.desc}</div>
+                  <div className="text-xs font-mono text-gray-400 break-all">
                     {d.email} / {d.pass}
                   </div>
                 </div>
-                <button onClick={() => fill(d.email, d.pass)} style={{
-                  flexShrink: 0, fontSize: 13, fontFamily: 'var(--mono)', background: d.color + '15',
-                  color: d.color, border: `1px solid ${d.color}30`, borderRadius: 6, padding: '9px 16px',
-                  cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-                }}>Auto-fill</button>
+                <button onClick={() => fill(d.email, d.pass)} className="shrink-0 text-[13px] font-mono rounded-md px-4 py-2 cursor-pointer font-semibold whitespace-nowrap" style={{ background: d.color + '15', color: d.color, border: `1px solid ${d.color}30` }}>Auto-fill</button>
               </div>
             ))}
           </div>
@@ -124,8 +108,8 @@ export default function TesterPage() {
       </div>
 
       {/* Footer */}
-      <div style={{ textAlign: 'center', padding: '20px 24px', borderTop: '1px solid var(--gray-100)', fontSize: 12, color: 'var(--gray-400)' }}>
-        <Link to="/" style={{ color: 'var(--red)', textDecoration: 'none' }}>← Back to Home</Link> · {settings?.school_name || 'Tech School'} · {settings?.school_address || 'Lagos, Nigeria'}
+      <div className="text-center px-6 py-5 border-t border-gray-100 text-xs text-gray-400">
+        <Link to="/" className="text-red no-underline">← Back to Home</Link> · {settings?.school_name || 'Tech School'} · {settings?.school_address || 'Lagos, Nigeria'}
       </div>
     </div>
   )

@@ -66,32 +66,27 @@ export default function RegisterPage() {
   const update = (key, val) => setForm(p => ({ ...p, [key]: val }))
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white)', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', width: 600, height: 600, background: 'radial-gradient(circle, rgba(192,57,43,.06) 0%, transparent 70%)', top: -100, right: -100, pointerEvents: 'none' }} />
+    <div className="min-h-screen flex items-center justify-center bg-white relative overflow-hidden px-4 py-6">
+      <div className="absolute w-[600px] h-[600px] bg-[radial-gradient(circle,rgba(192,57,43,.06)_0%,transparent_70%)] -top-[100px] -right-[100px] pointer-events-none" />
 
-      <div style={{ width: '100%', maxWidth: 440, padding: '0 24px', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-          <div style={{ width: 44, height: 44, background: 'var(--red)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="w-full max-w-[440px] z-[1]">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-11 h-11 bg-red rounded flex items-center justify-center shrink-0">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/></svg>
           </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>Tech School</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>Smart Attendance System</div>
+          <div className="min-w-0">
+            <div className="text-base font-semibold truncate">Tech School</div>
+            <div className="text-xs text-gray-400 mt-px">Smart Attendance System</div>
           </div>
         </div>
 
-        <h1 style={{ fontSize: 26, fontWeight: 600, marginBottom: 6 }}>Create Account</h1>
-        <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 20 }}>Register to start using the attendance system</p>
+        <h1 className="text-[26px] font-semibold mb-1.5">Create Account</h1>
+        <p className="text-[13px] text-gray-400 mb-5">Register to start using the attendance system</p>
 
-        <div style={{ display: 'flex', gap: 0, marginBottom: 24, border: '1.5px solid var(--gray-100)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+        <div className="flex mb-6 border-[1.5px] border-gray-100 rounded overflow-hidden">
           {[{ key: 'student', label: 'Student' }, { key: 'facilitator', label: 'Facilitator' }].map(t => (
             <button key={t.key} onClick={() => { setTab(t.key); setError('') }}
-              style={{
-                flex: 1, padding: '20px 0', fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: tab === t.key ? 'var(--red)' : 'transparent',
-                color: tab === t.key ? 'white' : 'var(--gray-600)',
-                transition: 'all .15s'
-              }}>
+              className={`flex-1 py-5 text-base font-semibold border-0 cursor-pointer transition-all duration-150 ${tab === t.key ? 'bg-red text-white' : 'bg-transparent text-gray-600'}`}>
               {t.label}
             </button>
           ))}
@@ -105,13 +100,9 @@ export default function RegisterPage() {
           <Input label="Phone Number" type="tel" placeholder="+234 800 000 0000" value={form.phone} onChange={e => update('phone', e.target.value)} />
           {tab === 'student' && (
             <>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--gray-600)', marginBottom: 4 }}>Cohort</label>
+              <label className="block text-[13px] font-medium text-gray-600 mb-1">Cohort</label>
               <select value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)}
-                style={{
-                  width: '100%', padding: '10px 12px', fontSize: 14, border: '1.5px solid var(--gray-100)',
-                  borderRadius: 10, background: 'white', color: 'var(--gray-700)', outline: 'none',
-                  marginBottom: 16, appearance: 'auto'
-                }}>
+                className="w-full px-3 py-2.5 text-sm border-[1.5px] border-gray-100 rounded bg-white text-gray-700 outline-none mb-4 appearance-auto">
                 <option value="">Select a cohort</option>
                 {cohorts.map(c => (
                   <option key={c._id || c.id} value={c.name}>{c.name}</option>
@@ -119,9 +110,9 @@ export default function RegisterPage() {
               </select>
             </>
           )}
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <Input label="Password" type={showPw ? 'text' : 'password'} placeholder="Min. 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />
-            <button type="button" onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 10, top: 32, background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--gray-400)' }}>
+            <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-2.5 top-8 bg-transparent border-0 cursor-pointer p-1 text-gray-400">
               {showPw ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               ) : (
@@ -129,9 +120,9 @@ export default function RegisterPage() {
               )}
             </button>
           </div>
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <Input label="Confirm Password" type={showCf ? 'text' : 'password'} placeholder="Re-enter password" value={form.confirm} onChange={e => update('confirm', e.target.value)} />
-            <button type="button" onClick={() => setShowCf(p => !p)} style={{ position: 'absolute', right: 10, top: 32, background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--gray-400)' }}>
+            <button type="button" onClick={() => setShowCf(p => !p)} className="absolute right-2.5 top-8 bg-transparent border-0 cursor-pointer p-1 text-gray-400">
               {showCf ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               ) : (
@@ -139,13 +130,13 @@ export default function RegisterPage() {
               )}
             </button>
           </div>
-          <Button type="submit" loading={loading} size="lg" style={{ width: '100%', justifyContent: 'center', marginTop: 4, padding: '18px 20px', fontSize: 18 }}>
+          <Button type="submit" loading={loading} size="lg" className="w-full justify-center mt-1 !py-[18px] !text-lg">
             Create {tab === 'student' ? 'Student' : 'Facilitator'} Account
           </Button>
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--gray-400)', marginTop: 20 }}>
-          Already have an account? <Link to="/login" style={{ color: 'var(--red)', fontWeight: 500, textDecoration: 'none' }}>Sign in</Link>
+        <p className="text-center text-[13px] text-gray-400 mt-5">
+          Already have an account? <Link to="/login" className="text-red font-medium no-underline">Sign in</Link>
         </p>
       </div>
     </div>

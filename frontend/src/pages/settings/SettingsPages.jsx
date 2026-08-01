@@ -47,27 +47,12 @@ const ICONS = {
 /** Pill-style tab bar */
 function Tabs({ tabs, active, onChange }) {
   return (
-    <div style={{
-      display: 'flex', gap: 4, padding: '6px',
-      background: 'var(--gray-50)', borderRadius: 12,
-      marginBottom: 24, flexWrap: 'wrap',
-      border: '1px solid var(--gray-100)',
-    }}>
+    <div className="flex flex-wrap gap-1 p-1.5 bg-gray-50 rounded-xl mb-6 border border-gray-100">
       {tabs.map(t => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          style={{
-            padding: '7px 16px', borderRadius: 8, fontSize: 13,
-            fontWeight: active === t.id ? 600 : 400,
-            background: active === t.id ? 'var(--white)' : 'transparent',
-            color: active === t.id ? 'var(--gray-900)' : 'var(--gray-500)',
-            border: active === t.id ? '1px solid var(--gray-200)' : '1px solid transparent',
-            cursor: 'pointer',
-            boxShadow: active === t.id ? 'var(--shadow)' : 'none',
-            display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'all .15s',
-          }}
+          className={`inline-flex items-center gap-1.5 px-4 py-[7px] rounded text-[13px] cursor-pointer transition-all ${active === t.id ? 'bg-white text-gray-900 border border-gray-200 shadow' : 'bg-transparent text-gray-500 border border-transparent'}`}
         >
           <span>{t.icon}</span> {t.label}
         </button>
@@ -79,13 +64,8 @@ function Tabs({ tabs, active, onChange }) {
 /** Section divider with title */
 function Section({ title, children, last }) {
   return (
-    <div style={{ marginBottom: last ? 0 : 20 }}>
-      <div style={{
-        fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
-        textTransform: 'uppercase', color: 'var(--gray-400)',
-        marginBottom: 12, paddingBottom: 8,
-        borderBottom: '1px solid var(--gray-100)'
-      }}>
+    <div className={last ? '' : 'mb-5'}>
+      <div className="text-[11px] font-bold tracking-wider uppercase text-gray-400 mb-3 pb-2 border-b border-gray-100">
         {title}
       </div>
       {children}
@@ -96,24 +76,16 @@ function Section({ title, children, last }) {
 /** Toggle switch */
 function Toggle({ checked, onChange, label, sublabel }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginBottom: 14 }}>
+    <label className="flex items-start gap-3 cursor-pointer mb-3.5">
       <div
         onClick={() => onChange(!checked)}
-        style={{
-          width: 40, height: 22, borderRadius: 11, flexShrink: 0, marginTop: 1,
-          background: checked ? 'var(--red)' : 'var(--gray-200)',
-          position: 'relative', transition: 'background .2s', cursor: 'pointer',
-        }}
+        className={`w-10 h-[22px] rounded-[11px] shrink-0 mt-0.5 relative cursor-pointer transition-colors ${checked ? 'bg-red' : 'bg-gray-200'}`}
       >
-        <div style={{
-          width: 18, height: 18, borderRadius: '50%', background: '#fff',
-          position: 'absolute', top: 2, left: checked ? 20 : 2,
-          transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)',
-        }} />
+        <div className="w-[18px] h-[18px] rounded-full bg-white absolute top-0.5 transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.2)]" style={{ left: checked ? 20 : 2 }} />
       </div>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-900)' }}>{label}</div>
-        {sublabel && <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>{sublabel}</div>}
+        <div className="text-[13px] font-medium text-gray-900">{label}</div>
+        {sublabel && <div className="text-xs text-gray-400 mt-0.5">{sublabel}</div>}
       </div>
     </label>
   )
@@ -125,12 +97,7 @@ function Avatar({ name, size = 72 }) {
   const colors = ['#C0392B', '#8E44AD', '#2980B9', '#27AE60', '#D35400']
   const color = colors[(name || '').length % colors.length]
   return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', background: color,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontSize: size * 0.32, fontWeight: 700, flexShrink: 0,
-      boxShadow: '0 4px 12px rgba(0,0,0,.15)',
-    }}>
+    <div className="rounded-full flex items-center justify-center text-white font-bold shrink-0 shadow-[0_4px_12px_rgba(0,0,0,0.15)]" style={{ width: size, height: size, background: color, fontSize: size * 0.32 }}>
       {initials}
     </div>
   )
@@ -272,37 +239,33 @@ export function StudentSettings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="Manage your account and preferences" />
-      <div style={{ padding: 24, maxWidth: 640 }} className="fade-in">
+      <div className="p-4 sm:p-6 max-w-[640px] animate-fade-in">
         <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
         {/* ── Profile ─────────────────────────────── */}
         {tab === 'profile' && (
           <Card>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
+            <div className="flex flex-wrap items-center gap-5 mb-6">
               <Avatar name={user?.name} size={72} />
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{user?.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>{user?.email}</div>
-                <span style={{
-                  display: 'inline-block', marginTop: 6, padding: '3px 10px', borderRadius: 20,
-                  background: 'var(--red-light)', color: 'var(--red)',
-                  fontSize: 11, fontWeight: 600, border: '1px solid var(--red-mid)',
-                }}>
+              <div className="min-w-0">
+                <div className="text-xl font-bold">{user?.name}</div>
+                <div className="text-[13px] text-gray-400 font-mono">{user?.email}</div>
+                <span className="inline-block mt-1.5 px-2.5 py-[3px] rounded-full bg-red-light text-red text-[11px] font-semibold border border-red-mid">
                   Student
                 </span>
               </div>
             </div>
             <Section title="Account Info">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { label: 'Full Name', value: user?.name },
                   { label: 'Email Address', value: user?.email },
                   { label: 'User ID', value: user?.userId || user?.id },
                   { label: 'Role', value: 'Student' },
                 ].map(({ label, value }) => (
-                  <div key={label} style={{ padding: '12px 14px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gray-400)', marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 500, fontFamily: label === 'User ID' || label === 'Email Address' ? 'var(--mono)' : undefined }}>{value || '—'}</div>
+                  <div key={label} className="px-3.5 py-3 bg-gray-50 rounded border border-gray-100">
+                    <div className="text-[10px] font-semibold tracking-wide uppercase text-gray-400 mb-1">{label}</div>
+                    <div className={`text-[13px] font-medium ${label === 'User ID' || label === 'Email Address' ? 'font-mono' : ''}`}>{value || '—'}</div>
                   </div>
                 ))}
               </div>
@@ -312,29 +275,28 @@ export function StudentSettings() {
 
         {/* ── Devices ─────────────────────────────── */}
         {tab === 'devices' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="flex flex-col gap-4">
 
             {/* WebAuthn Biometric */}
             <Card>
               <Section title="Biometric Fingerprint Login">
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
-                  <div style={{
-                    width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-                    background: biometricStatus === 'registered' ? 'var(--green-light)' : 'var(--gray-50)',
-                    border: `2px solid ${biometricStatus === 'registered' ? '#a8dbb8' : 'var(--gray-200)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center"
+                    style={{
+                      background: biometricStatus === 'registered' ? 'var(--green-light)' : 'var(--gray-50)',
+                      border: `2px solid ${biometricStatus === 'registered' ? '#a8dbb8' : 'var(--gray-200)'}`,
+                    }}>
                     {biometricStatus === 'registered' ? (
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     ) : (
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v7a3 3 0 0 1-6 0V6a1 1 0 0 1 2 0v7"/><path d="M8 12V6a2 2 0 0 1 4 0v6"/><path d="M16 10V6a2 2 0 0 0-2-2"/><path d="M12 22a8 8 0 0 0 8-8"/></svg>
                     )}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold mb-1">
                       {biometricStatus === 'registered' ? 'Fingerprint Registered' : 'Register Fingerprint'}
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--gray-400)', lineHeight: 1.6 }}>
+                    <p className="text-xs text-gray-400 leading-relaxed">
                       Use your device's built-in fingerprint sensor or Face ID to log in instantly — no password needed.
                       Works with Windows Hello, Touch ID, and Android fingerprint readers.
                     </p>
@@ -367,34 +329,30 @@ export function StudentSettings() {
             {/* Manual Device Registration */}
             <Card>
               <Section title="Manual Device Registration">
-                <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                   Register this browser/device manually using its unique fingerprint. Once registered, the system will recognise it for attendance marking — even without biometrics.
                 </p>
 
-                <div style={{
-                  padding: '12px 16px', borderRadius: 10, marginBottom: 16,
-                  background: 'var(--gray-50)', border: '1px solid var(--gray-100)',
-                  fontFamily: 'var(--mono)', fontSize: 12,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--gray-400)', marginBottom: 4 }}>This Device Fingerprint</div>
-                  <div style={{ color: 'var(--gray-700)', letterSpacing: '.08em' }}>{getBrowserFingerprint()}</div>
-                  <div style={{ fontSize: 10, color: 'var(--gray-400)', marginTop: 4 }}>
+                <div className="px-4 py-3 rounded mb-4 bg-gray-50 border border-gray-100 font-mono text-xs">
+                  <div className="text-[10px] font-semibold uppercase text-gray-400 mb-1">This Device Fingerprint</div>
+                  <div className="text-gray-700 tracking-[.08em]">{getBrowserFingerprint()}</div>
+                  <div className="text-[10px] text-gray-400 mt-1">
                     {navigator.platform} · {screen.width}×{screen.height} · {navigator.language}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="flex gap-2.5 flex-wrap">
                   <Input
                     label="Device Name"
                     placeholder="e.g. My Phone, Lab PC 3"
                     value={manualName}
                     onChange={e => setManualName(e.target.value)}
-                    style={{ marginBottom: 0, flex: 1 }}
+                    className="mb-0 flex-1"
                   />
                   <Button
                     loading={manualLoading}
                     onClick={handleManualRegister}
-                    style={{ marginTop: 22, flexShrink: 0 }}
+                    className="mt-[22px] shrink-0"
                   >
                     Register
                   </Button>
@@ -405,24 +363,17 @@ export function StudentSettings() {
               {!devicesLoading && devices.length > 0 && (
                 <Section title="Registered Devices">
                   {devices.map(d => (
-                    <div key={d.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                      background: 'var(--gray-50)', borderRadius: 10, marginBottom: 8,
-                      border: '1px solid var(--gray-100)',
-                    }}>
-                      <div style={{ fontSize: 22 }}>{d.primary ? (
+                    <div key={d.id} className="flex items-center gap-3 px-3.5 py-2.5 bg-gray-50 rounded mb-2 border border-gray-100">
+                      <div className="text-2xl">{d.primary ? (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                       ) : (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                       )}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{d.name}</div>
-                        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--gray-400)' }}>{d.fingerprint}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium">{d.name}</div>
+                        <div className="text-[11px] font-mono text-gray-400">{d.fingerprint}</div>
                       </div>
-                      <span style={{
-                        padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
-                        background: 'var(--green-light)', color: 'var(--green-dark)', border: '1px solid #a8dbb8'
-                      }}>Trusted</span>
+                      <span className="px-2.5 py-[3px] rounded-full text-[10px] font-semibold bg-green-light text-green-dark border border-[#a8dbb8]">Trusted</span>
                     </div>
                   ))}
                 </Section>
@@ -430,12 +381,12 @@ export function StudentSettings() {
             </Card>
 
             {/* Quick tip */}
-            <Card style={{ background: 'linear-gradient(135deg, var(--red-light), var(--blue-light))' }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.71.71 1.23 1.52 1.41 2.5"/></svg>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Why register your device?</div>
-                  <p style={{ fontSize: 12, color: 'var(--gray-600)', lineHeight: 1.6 }}>
+            <Card className="bg-[linear-gradient(135deg,var(--red-light),var(--blue-light))]">
+              <div className="flex gap-3 items-start">
+                <svg className="shrink-0" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.71.71 1.23 1.52 1.41 2.5"/></svg>
+                <div className="min-w-0">
+                  <div className="font-semibold text-[13px] mb-1">Why register your device?</div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
                     Registering your device allows the system to verify you are physically present on campus
                     without requiring a password each time. Combined with the QR code scan, it provides
                     a two-factor attendance confirmation.
@@ -489,11 +440,11 @@ export function StudentSettings() {
         {tab === 'security' && (
           <Card>
             <PasswordSection />
-            <div style={{ height: 1, background: 'var(--gray-100)', margin: '20px 0' }} />
+            <div className="h-px bg-gray-100 my-5" />
             <Section title="Session & Security" last>
-              <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)', marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', marginBottom: 4 }}>LAST LOGIN</div>
-                <div style={{ fontSize: 13 }}>{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
+              <div className="px-4 py-3 bg-gray-50 rounded border border-gray-100 mb-3">
+                <div className="text-xs font-semibold text-gray-400 mb-1">LAST LOGIN</div>
+                <div className="text-[13px]">{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
               </div>
               <Alert type="info">
                 For your security, sessions expire automatically after inactivity. Always log out on shared devices.
@@ -506,7 +457,7 @@ export function StudentSettings() {
         {tab === 'appearance' && (
           <Card>
             <Section title="Theme">
-              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+              <div className="flex flex-wrap gap-3 mb-5">
                 {[
                   { id: 'light', label: 'Light', sublabel: 'Clean & bright' },
                   { id: 'dark',  label: 'Dark',  sublabel: 'Easy on eyes' },
@@ -514,30 +465,25 @@ export function StudentSettings() {
                   <button
                     key={t.id}
                     onClick={() => { if ((t.id === 'dark') !== dark) toggle() }}
-                    style={{
-                      flex: 1, padding: '16px 12px', borderRadius: 12,
-                      border: `2px solid ${(t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-200)'}`,
-                      background: (t.id === 'dark') === dark ? 'var(--red-light)' : 'var(--gray-50)',
-                      cursor: 'pointer', textAlign: 'center',
-                    }}
+                    className={`flex-1 min-w-[120px] px-3 py-4 rounded-xl cursor-pointer text-center ${(t.id === 'dark') === dark ? 'border-2 border-red bg-red-light' : 'border-2 border-gray-200 bg-gray-50'}`}
                   >
-                    <div style={{ marginBottom: 6, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-400)' }}>
+                    <div className={`mb-1.5 ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-400'}`}>
                       {t.id === 'light' ? (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                       ) : (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-700)' }}>{t.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{t.sublabel}</div>
+                    <div className={`text-[13px] font-semibold ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-700'}`}>{t.label}</div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">{t.sublabel}</div>
                   </button>
                 ))}
               </div>
             </Section>
             <Section title="System" last>
-              <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', marginBottom: 8 }}>BROWSER INFO</div>
-                <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--gray-600)', lineHeight: 1.8 }}>
+              <div className="px-4 py-3 bg-gray-50 rounded border border-gray-100">
+                <div className="text-xs font-semibold text-gray-400 mb-2">BROWSER INFO</div>
+                <div className="text-xs font-mono text-gray-600 leading-relaxed">
                   <div>{navigator.platform}</div>
                   <div>{navigator.language} · {screen.width}×{screen.height}</div>
                   <div>{navigator.userAgent.split(' ').slice(-2).join(' ')}</div>
@@ -618,37 +564,33 @@ export function FacilitatorSettings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="Facilitator preferences & configuration" />
-      <div style={{ padding: 24, maxWidth: 640 }} className="fade-in">
+      <div className="p-4 sm:p-6 max-w-[640px] animate-fade-in">
         <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
         {/* ── Profile ─────────────────────────────── */}
         {tab === 'profile' && (
           <Card>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
+            <div className="flex flex-wrap items-center gap-5 mb-6">
               <Avatar name={user?.name} size={72} />
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{user?.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>{user?.email}</div>
-                <span style={{
-                  display: 'inline-block', marginTop: 6, padding: '3px 10px', borderRadius: 20,
-                  background: 'var(--blue-light)', color: 'var(--blue-dark)',
-                  fontSize: 11, fontWeight: 600, border: '1px solid #bfdbfe',
-                }}>
+              <div className="min-w-0">
+                <div className="text-xl font-bold">{user?.name}</div>
+                <div className="text-[13px] text-gray-400 font-mono">{user?.email}</div>
+                <span className="inline-block mt-1.5 px-2.5 py-[3px] rounded-full bg-blue-light text-blue-dark text-[11px] font-semibold border border-[#bfdbfe]">
                   Facilitator
                 </span>
               </div>
             </div>
             <Section title="Account Info" last>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { label: 'Full Name', value: user?.name },
                   { label: 'Email Address', value: user?.email },
                   { label: 'User ID', value: user?.userId || user?.id },
                   { label: 'Role', value: 'Facilitator' },
                 ].map(({ label, value }) => (
-                  <div key={label} style={{ padding: '12px 14px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gray-400)', marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 500, fontFamily: label === 'User ID' || label === 'Email Address' ? 'var(--mono)' : undefined }}>{value || '—'}</div>
+                  <div key={label} className="px-3.5 py-3 bg-gray-50 rounded border border-gray-100">
+                    <div className="text-[10px] font-semibold tracking-wide uppercase text-gray-400 mb-1">{label}</div>
+                    <div className={`text-[13px] font-medium ${label === 'User ID' || label === 'Email Address' ? 'font-mono' : ''}`}>{value || '—'}</div>
                   </div>
                 ))}
               </div>
@@ -660,38 +602,30 @@ export function FacilitatorSettings() {
         {tab === 'sessions' && (
           <Card>
             <Section title="QR Session Configuration">
-              <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+              <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                 These defaults are pre-filled when you generate a QR session. You can still override them per session.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--gray-600)', display: 'block', marginBottom: 6 }}>
+                  <label className="text-xs font-medium text-gray-600 block mb-1.5">
                     Default Session Duration (minutes)
                   </label>
                   <input
                     type="number" min="5" max="180"
                     value={sessionDefaults.defaultDuration}
                     onChange={e => setSessionDefaults(p => ({ ...p, defaultDuration: e.target.value }))}
-                    style={{
-                      width: '100%', padding: '10px 12px', borderRadius: 8,
-                      border: '1px solid var(--gray-200)', fontSize: 14,
-                      background: 'var(--white)', color: 'var(--gray-900)',
-                    }}
+                    className="w-full px-3 py-2.5 rounded border border-gray-200 text-sm bg-white text-gray-900"
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--gray-600)', display: 'block', marginBottom: 6 }}>
+                  <label className="text-xs font-medium text-gray-600 block mb-1.5">
                     Late Grace Period (minutes after 8:30)
                   </label>
                   <input
                     type="number" min="0" max="60"
                     value={sessionDefaults.lateGraceMinutes}
                     onChange={e => setSessionDefaults(p => ({ ...p, lateGraceMinutes: e.target.value }))}
-                    style={{
-                      width: '100%', padding: '10px 12px', borderRadius: 8,
-                      border: '1px solid var(--gray-200)', fontSize: 14,
-                      background: 'var(--white)', color: 'var(--gray-900)',
-                    }}
+                    className="w-full px-3 py-2.5 rounded border border-gray-200 text-sm bg-white text-gray-900"
                   />
                 </div>
               </div>
@@ -716,14 +650,14 @@ export function FacilitatorSettings() {
         {tab === 'policy' && (
           <Card>
             <Section title="Attendance Time Windows">
-              <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+              <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                 Define when the QR attendance session is open, and when a student is marked late. Changes affect the timer countdown immediately.
               </p>
               {facNetLoading ? (
-                <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+                <div className="text-center p-5"><div className="inline-block h-5 w-5 rounded-full border-2 border-gray-200 border-t-red animate-spin" /></div>
               ) : facNetSettings ? (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                     <Input
                       label="Session Opens (HH:MM)"
                       value={facNetSettings.qr_window_start || ''}
@@ -793,12 +727,12 @@ export function FacilitatorSettings() {
         {tab === 'security' && (
           <Card>
             <PasswordSection />
-            <div style={{ height: 1, background: 'var(--gray-100)', margin: '20px 0' }} />
+            <div className="h-px bg-gray-100 my-5" />
             <Section title="Active Session" last>
-              <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)', marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', marginBottom: 4 }}>CURRENT SESSION</div>
-                <div style={{ fontSize: 13 }}>Logged in as Facilitator · Session active</div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--gray-400)', marginTop: 2 }}>{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
+              <div className="px-4 py-3 bg-gray-50 rounded border border-gray-100 mb-3">
+                <div className="text-xs font-semibold text-gray-400 mb-1">CURRENT SESSION</div>
+                <div className="text-[13px]">Logged in as Facilitator · Session active</div>
+                <div className="text-[11px] font-mono text-gray-400 mt-0.5">{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
               </div>
             </Section>
           </Card>
@@ -808,7 +742,7 @@ export function FacilitatorSettings() {
         {tab === 'appearance' && (
           <Card>
             <Section title="Theme" last>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+              <div className="flex flex-wrap gap-3 mb-5">
                 {[
                   { id: 'light', label: 'Light', sublabel: 'Clean & bright' },
                   { id: 'dark',  label: 'Dark',  sublabel: 'Easy on eyes' },
@@ -816,22 +750,17 @@ export function FacilitatorSettings() {
                   <button
                     key={t.id}
                     onClick={() => { if ((t.id === 'dark') !== dark) toggle() }}
-                    style={{
-                      flex: 1, padding: '16px 12px', borderRadius: 12,
-                      border: `2px solid ${(t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-200)'}`,
-                      background: (t.id === 'dark') === dark ? 'var(--red-light)' : 'var(--gray-50)',
-                      cursor: 'pointer', textAlign: 'center',
-                    }}
+                    className={`flex-1 min-w-[120px] px-3 py-4 rounded-xl cursor-pointer text-center ${(t.id === 'dark') === dark ? 'border-2 border-red bg-red-light' : 'border-2 border-gray-200 bg-gray-50'}`}
                   >
-                    <div style={{ marginBottom: 6, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-400)' }}>
+                    <div className={`mb-1.5 ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-400'}`}>
                       {t.id === 'light' ? (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                       ) : (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-700)' }}>{t.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{t.sublabel}</div>
+                    <div className={`text-[13px] font-semibold ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-700'}`}>{t.label}</div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">{t.sublabel}</div>
                   </button>
                 ))}
               </div>
@@ -912,22 +841,18 @@ export function AdminSettings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="System-wide administration & configuration" />
-      <div style={{ padding: 24, maxWidth: 700 }} className="fade-in">
+      <div className="p-4 sm:p-6 max-w-[700px] animate-fade-in">
         <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
         {/* ── School Profile ───────────────────────── */}
         {tab === 'school' && (
           <Card>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
+            <div className="flex flex-wrap items-center gap-5 mb-6">
               <Avatar name={user?.name} size={72} />
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{user?.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>{user?.email}</div>
-                <span style={{
-                  display: 'inline-block', marginTop: 6, padding: '3px 10px', borderRadius: 20,
-                  background: 'rgba(239,68,68,.12)', color: '#dc2626',
-                  fontSize: 11, fontWeight: 600, border: '1px solid rgba(239,68,68,.25)',
-                }}>
+              <div className="min-w-0">
+                <div className="text-xl font-bold">{user?.name}</div>
+                <div className="text-[13px] text-gray-400 font-mono">{user?.email}</div>
+                <span className="inline-block mt-1.5 px-2.5 py-[3px] rounded-full bg-[rgba(239,68,68,0.12)] text-[#dc2626] text-[11px] font-semibold border border-[rgba(239,68,68,0.25)]">
                   Super Admin
                 </span>
               </div>
@@ -955,10 +880,10 @@ export function AdminSettings() {
           !netLoading ? netSettings && (
             <Card>
               <Section title="Time Windows">
-                <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                   Define when the QR attendance session is open, and when a student is marked late.
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                   <Input
                     label="Session Opens (HH:MM)"
                     value={netSettings.qr_window_start || ''}
@@ -995,13 +920,13 @@ export function AdminSettings() {
               </Section>
               <Button loading={netSaving} onClick={saveNetwork}>{ICONS.save} Save Policy</Button>
             </Card>
-          ) : <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+          ) : <div className="text-center p-10"><div className="inline-block h-5 w-5 rounded-full border-2 border-gray-200 border-t-red animate-spin" /></div>
         )}
 
         {/* ── Network & GPS ────────────────────────── */}
         {tab === 'network' && (
           !netLoading ? netSettings && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="flex flex-col gap-4">
               <Card>
                 <Section title="School Network (WiFi)">
                   <Input
@@ -1023,10 +948,10 @@ export function AdminSettings() {
               </Card>
               <Card>
                 <Section title="GPS Geofence Coordinates" last>
-                  <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+                  <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                     If network detection fails, the system will fall back to GPS coordinates. Set your school's physical location and the acceptable radius.
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                     <Input
                       label="Latitude"
                       value={netSettings.school_latitude || ''}
@@ -1050,42 +975,34 @@ export function AdminSettings() {
                 <Button loading={netSaving} onClick={saveNetwork}>{ICONS.save} Save Network & GPS Settings</Button>
               </Card>
             </div>
-          ) : <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+          ) : <div className="text-center p-10"><div className="inline-block h-5 w-5 rounded-full border-2 border-gray-200 border-t-red animate-spin" /></div>
         )}
 
         {/* ── Data & Export ────────────────────────── */}
         {tab === 'data' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="flex flex-col gap-4">
             <Card>
               <Section title="Export Attendance Data">
-                <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16, lineHeight: 1.6 }}>
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
                   Download attendance records in CSV format for offline analysis, reporting, or archiving.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="flex flex-col gap-2.5">
                   {[
                     { key: 'attendance', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>, label: 'All Attendance Records', desc: 'Full history of every scan and manual entry' },
                     { key: 'students',   icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label: 'Student Roster',         desc: 'All registered students with cohort info' },
                     { key: 'excuses',    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>, label: 'Excuse Requests',         desc: 'All excuse submissions and their statuses' },
                     { key: 'audit',      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>, label: 'Audit Logs',              desc: 'Admin and facilitator action trail' },
                   ].map(item => (
-                    <div key={item.key} style={{
-                      display: 'flex', alignItems: 'center', gap: 14,
-                      padding: '14px 16px', borderRadius: 12,
-                      background: 'var(--gray-50)', border: '1px solid var(--gray-100)',
-                    }}>
-                      <span style={{ fontSize: 24 }}>{item.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</div>
-                        <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{item.desc}</div>
+                    <div key={item.key} className="flex items-center gap-3.5 px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-100 flex-wrap">
+                      <span className="text-2xl">{item.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-semibold">{item.label}</div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">{item.desc}</div>
                       </div>
                       <button
                         onClick={() => handleExport(item.key)}
                         disabled={exportLoading}
-                        style={{
-                          padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                          background: 'var(--white)', color: 'var(--gray-700)',
-                          border: '1px solid var(--gray-200)', cursor: 'pointer',
-                        }}
+                        className="px-3.5 py-[7px] rounded text-xs font-semibold bg-white text-gray-700 border border-gray-200 cursor-pointer disabled:opacity-50"
                       >
                         Export CSV
                       </button>
@@ -1094,19 +1011,15 @@ export function AdminSettings() {
                 </div>
               </Section>
             </Card>
-            <Card style={{ borderColor: '#fca5a5', background: 'rgba(254,226,226,.5)' }}>
+            <Card className="border-[#fca5a5] bg-[rgba(254,226,226,0.5)]">
               <Section title={<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: 'middle' }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Danger Zone</span>} last>
                 <Alert type="warning">
                   These actions are permanent and cannot be undone. Only proceed if you are absolutely certain.
                 </Alert>
-                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <div className="flex gap-2.5 mt-3 flex-wrap">
                   <button
                     onClick={() => toast.error('Disabled in this environment')}
-                    style={{
-                      padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                      background: 'transparent', color: '#dc2626',
-                      border: '1px solid #fca5a5', cursor: 'pointer',
-                    }}
+                    className="px-4 py-2 rounded text-xs font-semibold bg-transparent text-[#dc2626] border border-[#fca5a5] cursor-pointer"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Clear All Attendance (Current Month)
                   </button>
@@ -1120,16 +1033,16 @@ export function AdminSettings() {
         {tab === 'security' && (
           <Card>
             <PasswordSection />
-            <div style={{ height: 1, background: 'var(--gray-100)', margin: '20px 0' }} />
+            <div className="h-px bg-gray-100 my-5" />
             <Section title="Admin Access" last>
               <Alert type="warning">
                 As Super Admin you have unrestricted system access. All actions are logged in the Audit trail.
               </Alert>
-              <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)', marginTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', marginBottom: 4 }}>LOGGED IN AS</div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{user?.name}</div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--gray-400)' }}>{user?.email}</div>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
+              <div className="px-4 py-3 bg-gray-50 rounded border border-gray-100 mt-3">
+                <div className="text-xs font-semibold text-gray-400 mb-1">LOGGED IN AS</div>
+                <div className="text-[13px] font-medium">{user?.name}</div>
+                <div className="text-[11px] font-mono text-gray-400">{user?.email}</div>
+                <div className="text-[11px] text-gray-400 mt-1">{format(new Date(), 'dd MMM yyyy, HH:mm')}</div>
               </div>
             </Section>
           </Card>
@@ -1139,7 +1052,7 @@ export function AdminSettings() {
         {tab === 'appearance' && (
           <Card>
             <Section title="Theme" last>
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div className="flex flex-wrap gap-3">
                 {[
                   { id: 'light', label: 'Light', sublabel: 'Clean & bright' },
                   { id: 'dark',  label: 'Dark',  sublabel: 'Easy on eyes' },
@@ -1147,22 +1060,17 @@ export function AdminSettings() {
                   <button
                     key={t.id}
                     onClick={() => { if ((t.id === 'dark') !== dark) toggle() }}
-                    style={{
-                      flex: 1, padding: '16px 12px', borderRadius: 12,
-                      border: `2px solid ${(t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-200)'}`,
-                      background: (t.id === 'dark') === dark ? 'var(--red-light)' : 'var(--gray-50)',
-                      cursor: 'pointer', textAlign: 'center',
-                    }}
+                    className={`flex-1 min-w-[120px] px-3 py-4 rounded-xl cursor-pointer text-center ${(t.id === 'dark') === dark ? 'border-2 border-red bg-red-light' : 'border-2 border-gray-200 bg-gray-50'}`}
                   >
-                    <div style={{ marginBottom: 6, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-400)' }}>
+                    <div className={`mb-1.5 ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-400'}`}>
                       {t.id === 'light' ? (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                       ) : (
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: (t.id === 'dark') === dark ? 'var(--red)' : 'var(--gray-700)' }}>{t.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{t.sublabel}</div>
+                    <div className={`text-[13px] font-semibold ${(t.id === 'dark') === dark ? 'text-red' : 'text-gray-700'}`}>{t.label}</div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">{t.sublabel}</div>
                   </button>
                 ))}
               </div>
@@ -1172,10 +1080,10 @@ export function AdminSettings() {
 
         {/* ── System Info ──────────────────────────── */}
         {tab === 'system' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="flex flex-col gap-4">
             <Card>
               <Section title="Application">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     { label: 'Version', value: systemInfo.version },
                     { label: 'Build Date', value: systemInfo.buildDate },
@@ -1184,9 +1092,9 @@ export function AdminSettings() {
                     { label: 'Frontend', value: 'React + Vite 5' },
                     { label: 'Auth', value: 'JWT + WebAuthn' },
                   ].map(({ label, value }) => (
-                    <div key={label} style={{ padding: '12px 14px', background: 'var(--gray-50)', borderRadius: 10, border: '1px solid var(--gray-100)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--gray-400)', marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 13, fontFamily: 'var(--mono)' }}>{value}</div>
+                    <div key={label} className="px-3.5 py-3 bg-gray-50 rounded border border-gray-100">
+                      <div className="text-[10px] font-bold tracking-wide uppercase text-gray-400 mb-1">{label}</div>
+                      <div className="text-[13px] font-mono">{value}</div>
                     </div>
                   ))}
                 </div>
@@ -1200,17 +1108,13 @@ export function AdminSettings() {
                   { label: 'QR Engine', status: true, detail: 'ZXing 3.5.3' },
                   { label: 'WebAuthn', status: isWebAuthnSupported(), detail: isWebAuthnSupported() ? 'Supported' : 'Not supported' },
                 ].map(({ label, status, detail }) => (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--gray-50)' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: status ? '#22c55e' : '#ef4444', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
-                      <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--gray-400)' }}>{detail}</div>
+                  <div key={label} className="flex items-center gap-2.5 py-2.5 border-b border-gray-50">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${status ? 'bg-[#22c55e]' : 'bg-[#ef4444]'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium">{label}</div>
+                      <div className="text-[11px] font-mono text-gray-400">{detail}</div>
                     </div>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
-                      background: status ? 'var(--green-light)' : 'var(--red-light)',
-                      color: status ? 'var(--green-dark)' : 'var(--red)',
-                    }}>{status ? 'OK' : 'Offline'}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${status ? 'bg-green-light text-green-dark' : 'bg-red-light text-red'}`}>{status ? 'OK' : 'Offline'}</span>
                   </div>
                 ))}
               </Section>
@@ -1222,7 +1126,6 @@ export function AdminSettings() {
   )
 }
 
-// Import needed in system info tab
 function isWebAuthnSupported() {
   return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined
 }

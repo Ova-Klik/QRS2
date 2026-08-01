@@ -44,27 +44,27 @@ export function AdminDashboard() {
   return (
     <>
       <PageHeader title="Admin Dashboard" subtitle={`School-wide overview — ${format(new Date(), 'EEEE, dd MMM yyyy')}`} />
-      <div style={{ padding: 24 }} className="fade-in">
-        <Card style={{ marginBottom: 20, padding: '14px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-600)' }}>Cohort Filter</div>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <Card className="mb-5 !p-3.5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-[13px] font-semibold text-gray-600">Cohort Filter</div>
             <Select
               value={cohortId}
               onChange={e => setCohortId(e.target.value)}
-              style={{ marginBottom: 0, minWidth: 220, flex: 1, maxWidth: 320 }}
+              className="!mb-0 min-w-[220px] flex-1 max-w-[320px]"
             >
               <option value="">All Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
-            <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+            <span className="text-xs text-gray-400">
               {cohortId ? (cohorts.find(c => c.id === cohortId)?.name || 'Selected cohort') : 'All cohorts'} · {d.totalStudents || 0} students
             </span>
           </div>
         </Card>
 
-        {loading && <Card style={{ marginBottom: 20 }}><Skeleton rows={3} height={26} /></Card>}
+        {loading && <Card className="mb-5"><Skeleton rows={3} height={26} /></Card>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard label="Total Students"    value={d.totalStudents    || 0} />
           <StatCard label="Present Today"     value={(d.presentToday || 0) + (d.lateToday || 0)} badge="incl. late" badgeColor="green" />
           <StatCard label="Absent Today"      value={d.absentToday      || 0} badgeColor="red" />
@@ -72,9 +72,9 @@ export function AdminDashboard() {
           <StatCard label="Excused Today"     value={d.excusedToday     || 0} badge="approved" badgeColor="gray" />
           <StatCard label="Attendance Rate"   value={`${Math.round(d.schoolAttendanceRate || 0)}%`} progress={d.schoolAttendanceRate} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 20 }}>
-          <Card>
-            <div style={{ fontWeight: 600, marginBottom: 16 }}>Cohort Performance</div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+          <Card className="lg:col-span-2">
+            <div className="font-semibold mb-4">Cohort Performance</div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
                 <XAxis dataKey="name" style={{ fontSize: 11 }} />
@@ -88,17 +88,17 @@ export function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </Card>
-          <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontWeight: 600, marginBottom: 12, alignSelf: 'flex-start' }}>Today's Breakdown</div>
+          <Card className="flex flex-col items-center justify-center">
+            <div className="font-semibold mb-3 self-start">Today's Breakdown</div>
             <PieChart width={160} height={160}>
               <Pie data={pieData} cx={75} cy={75} innerRadius={45} outerRadius={70} dataKey="value">
                 {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Pie>
             </PieChart>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+            <div className="flex gap-2.5 flex-wrap justify-center mt-2">
               {pieData.map(p => (
-                <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color }} />
+                <div key={p.name} className="flex items-center gap-1 text-[11px]">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
                   {p.name}: {p.value}
                 </div>
               ))}
@@ -106,12 +106,12 @@ export function AdminDashboard() {
           </Card>
         </div>
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Activity</div>
+          <div className="font-semibold mb-4">Recent Activity</div>
           {(d.recentActivity || []).map((a, i) => (
-            <div key={i} style={{ padding: '8px 0', borderBottom: i < (d.recentActivity.length - 1) ? '1px solid var(--gray-50)' : 'none' }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{a.action?.replace(/_/g, ' ')}</div>
-              <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>{a.actor} — {a.detail}</div>
-              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--gray-200)', marginTop: 2 }}>{a.ts}</div>
+            <div key={i} className={`py-2 ${i < (d.recentActivity.length - 1) ? 'border-b border-gray-50' : ''}`}>
+              <div className="text-[13px] font-medium">{a.action?.replace(/_/g, ' ')}</div>
+              <div className="text-xs text-gray-400">{a.actor} — {a.detail}</div>
+              <div className="text-[10px] font-mono text-gray-200 mt-0.5">{a.ts}</div>
             </div>
           ))}
         </Card>
@@ -193,16 +193,16 @@ export function AdminStudents() {
     <>
       <PageHeader title="Students" subtitle={`${total} registered students`}
         actions={<Button onClick={() => { setModal('add'); setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '' }) }}>+ Add Student</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="flex gap-3 mb-4 flex-wrap">
             <Input
               placeholder="Search by name, email or registration number..."
               value={q}
               onChange={e => setQ(e.target.value)}
-              style={{ flex: 1, minWidth: 220 }}
+              className="!mb-0 flex-1 min-w-[220px]"
             />
-            <Select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} style={{ marginBottom: 0, minWidth: 180 }}>
+            <Select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} className="!mb-0 min-w-[180px]">
               <option value="">All Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
@@ -210,13 +210,13 @@ export function AdminStudents() {
           <Table
             columns={[
               { key: 'name',         label: 'Name',      strong: true },
-              { key: 'email',        label: 'Email',     render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> },
+              { key: 'email',        label: 'Email',     render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
               { key: 'cohortId',     label: 'Cohort',    render: (_, row) => cohorts.find(c => c.id === row.cohortId)?.name || '—' },
               { key: 'device',       label: 'Device Lock', render: (_, row) => row.device?.locked && row.device?.fingerprint ? <Badge status="PRESENT" label="Locked" /> : <Badge status="EXCUSED" label="Cleared" /> },
               { key: 'attendance',   label: 'Rate',      render: (_, row) => row.attendanceSummary ? `${Math.round(row.attendanceSummary.rate)}%` : '—' },
               { key: 'active',       label: 'Status',    render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
               { key: 'actions',      label: 'Actions',    render: (_, row) => (
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div className="flex gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => unlockDevice(row.id)}>Reset Device</Button>
                   <Button size="sm" variant="outline" onClick={() => setReset(row.id)}>Reset Pwd</Button>
                   <Button size="sm" variant="outline" onClick={() => toggleActive(row)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
@@ -237,7 +237,7 @@ export function AdminStudents() {
         <Select label="Cohort"      value={form.cohortId} onChange={e => setForm(p => ({...p, cohortId: e.target.value}))}>
           {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setModal(null)}>Cancel</Button>
           <Button loading={saving} onClick={addStudent}>Add Student</Button>
         </div>
@@ -246,7 +246,7 @@ export function AdminStudents() {
       {/* Reset Password Modal */}
       <Modal open={!!resetModal} onClose={() => setReset(null)} title="Reset Password">
         <Input label="New Password" type="password" value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="Min. 6 characters" />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setReset(null)}>Cancel</Button>
           <Button loading={saving} onClick={doResetPass}>Reset</Button>
         </div>
@@ -285,12 +285,12 @@ export function AdminFacilitators() {
     <>
       <PageHeader title="Facilitators" subtitle={`${facilitators.length} facilitators`}
         actions={<Button size="sm" onClick={() => setModal(true)}>+ Add Facilitator</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <Table
             columns={[
               { key: 'name',              label: 'Name',    strong: true },
-              { key: 'email',             label: 'Email',   render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> },
+              { key: 'email',             label: 'Email',   render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
               { key: 'assignedCohortIds', label: 'Cohorts', render: v => (v || []).map(id => cohorts.find(c => c.id === id)?.name).filter(Boolean).join(', ') || '—' },
               { key: 'active',            label: 'Status',  render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
             ]}
@@ -302,7 +302,7 @@ export function AdminFacilitators() {
         <Input label="Full Name *"  value={form.name}     onChange={e => setForm(p => ({...p, name: e.target.value}))} />
         <Input label="Email *"      value={form.email}    onChange={e => setForm(p => ({...p, email: e.target.value}))} type="email" />
         <Input label="Password *"   value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} type="password" />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
           <Button loading={saving} onClick={addFac}>Add Facilitator</Button>
         </div>
@@ -368,22 +368,24 @@ export function AdminCohorts() {
 
   if (loading) return <LoadingPage />
 
+  const sortableBtn = 'bg-transparent border-0 p-0 text-left font-[inherit] cursor-pointer hover:text-red'
+
   return (
     <>
       <PageHeader title="Cohorts" subtitle={`${cohorts.filter(c => c.active).length} active cohorts`}
         actions={<Button size="sm" onClick={() => { setModal(true); setForm({ name: '', facilitatorId: facilitators[0]?.id || '' }) }}>+ Add Cohort</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <Table
             columns={[
               { key: 'name',             label: 'Name',        strong: true },
               { key: 'facilitatorName',  label: 'Facilitator' },
               { key: 'studentCount',     label: 'Students' },
-              { key: 'schedule',         label: 'Schedule',    render: v => <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--gray-400)' }}>{v}</span> },
+              { key: 'schedule',         label: 'Schedule',    render: v => <span className="text-xs font-mono text-gray-400">{v}</span> },
               { key: 'attendanceRate',   label: 'Att. Rate',   render: v => `${Math.round(v)}%` },
               { key: 'active',           label: 'Status',      render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
               { key: 'actions',          label: '',            render: (_, row) => (
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div className="flex gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => { setViewCohort({ id: row.id, name: row.name }); setMemQ(''); setMemPage(0) }}>View</Button>
                   <Button size="sm" variant="outline" onClick={() => toggle(row.id)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
                 </div>
@@ -398,7 +400,7 @@ export function AdminCohorts() {
         <Select label="Facilitator *" value={form.facilitatorId} onChange={e => setForm(p => ({...p, facilitatorId: e.target.value}))}>
           {facilitators.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </Select>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
           <Button loading={saving} onClick={add}>Create Cohort</Button>
         </div>
@@ -410,19 +412,19 @@ export function AdminCohorts() {
           placeholder="Search students..."
           value={memQ}
           onChange={e => setMemQ(e.target.value)}
-          style={{ marginBottom: 12 }}
+          className="!mb-3"
         />
         {memLoading && <Skeleton rows={3} height={22} />}
         {!memLoading && (
           <>
             <Table
               columns={[
-                { key: 'name', label: `Name${sortArrow('name')}`, strong: true, render: (_, row) => <button className="sortable" onClick={() => toggleSort('name')}>{row.name}</button> },
-                { key: 'email', label: 'Email', render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> },
-                { key: 'registrationNumber', label: 'Reg. No.', render: v => <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{v || '—'}</span> },
+                { key: 'name', label: `Name${sortArrow('name')}`, strong: true, render: (_, row) => <button className={sortableBtn} onClick={() => toggleSort('name')}>{row.name}</button> },
+                { key: 'email', label: 'Email', render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
+                { key: 'registrationNumber', label: 'Reg. No.', render: v => <span className="font-mono text-[11px]">{v || '—'}</span> },
                 { key: 'rate', label: `Rate${sortArrow('rate')}`, render: (_, row) => {
                   const r = Math.round(row.attendanceSummary?.rate ?? row.analytics?.attendanceRate ?? 0)
-                  return <button className="sortable" onClick={() => toggleSort('rate')}>{r ? `${r}%` : '—'}</button>
+                  return <button className={sortableBtn} onClick={() => toggleSort('rate')}>{r ? `${r}%` : '—'}</button>
                 } },
                 { key: 'active', label: 'Status', render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
               ]}
@@ -462,8 +464,8 @@ export function AdminDevices() {
   return (
     <>
       <PageHeader title="Devices" subtitle="Student device registry" />
-      <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <StatCard label="Total Devices"  value={withDevices.length} />
           <StatCard label="Registered"     value={locked}   badgeColor="green" badge="Active" />
           <StatCard label="Unlocked"       value={unlocked} badgeColor="red"   badge="Needs action" color={unlocked > 0 ? 'var(--red)' : undefined} />
@@ -472,7 +474,7 @@ export function AdminDevices() {
           <Table
             columns={[
               { key: 'name',        label: 'Student',      strong: true },
-              { key: 'device',      label: 'Fingerprint',  render: (v) => v?.fingerprint ? <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{v.fingerprint}</span> : '—' },
+              { key: 'device',      label: 'Fingerprint',  render: (v) => v?.fingerprint ? <span className="font-mono text-[11px]">{v.fingerprint}</span> : '—' },
               { key: 'device2',     label: 'Status',       render: (_, row) => <Badge status={row.device?.locked ? 'ACTIVE' : 'ABSENT'} /> },
               { key: 'device3',     label: 'Registered',   render: (_, row) => row.device?.registeredAt ? format(new Date(row.device.registeredAt), 'dd MMM yyyy') : '—' },
               { key: 'action',      label: '',             render: (_, row) => row.device?.locked
@@ -497,15 +499,15 @@ export function AdminAudit() {
   return (
     <>
       <PageHeader title="Audit Logs" subtitle="Full system activity trail" />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <Table
             columns={[
               { key: 'action',      label: 'Action',    strong: true, render: v => v?.replace(/_/g,' ') },
               { key: 'actorName',   label: 'Actor' },
               { key: 'targetName',  label: 'Target' },
-              { key: 'detail',      label: 'Detail',    render: v => <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>{v}</span> },
-              { key: 'createdAt',   label: 'Timestamp', render: v => v ? <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gray-400)' }}>{format(new Date(v), 'dd MMM HH:mm:ss')}</span> : '—' },
+              { key: 'detail',      label: 'Detail',    render: v => <span className="text-xs text-gray-400">{v}</span> },
+              { key: 'createdAt',   label: 'Timestamp', render: v => v ? <span className="font-mono text-[11px] text-gray-400">{format(new Date(v), 'dd MMM HH:mm:ss')}</span> : '—' },
             ]}
             rows={logs}
           />
@@ -560,8 +562,8 @@ export function AdminAnalytics() {
     <>
       <PageHeader title="Analytics & Behaviour Insights" subtitle="School-wide attendance metrics, day-of-week trends, and student behavior risk patterns"
         actions={<Button variant="outline" size="sm" onClick={exportCSV}>↓ Export Behaviour CSV</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 24 }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard label="School Rate"      value={`${Math.round(d.schoolAttendanceRate||0)}%`} progress={d.schoolAttendanceRate} />
           <StatCard label="Present Today"   value={d.presentToday||0} badgeColor="green" />
           <StatCard label="Late Today"      value={d.lateToday||0}    badgeColor="yellow" />
@@ -571,9 +573,9 @@ export function AdminAnalytics() {
         </div>
 
         {/* Day of Week Behaviour Patterns */}
-        <Card style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Day-of-Week Attendance Patterns</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>Breakdown of attendance statuses across days of the week</p>
+        <Card className="mb-6">
+          <div className="font-semibold mb-1">Day-of-Week Attendance Patterns</div>
+          <p className="text-xs text-gray-400 mb-4">Breakdown of attendance statuses across days of the week</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={dayOfWeekChartData}>
               <XAxis dataKey="day" style={{ fontSize: 11 }} />
@@ -589,29 +591,29 @@ export function AdminAnalytics() {
 
         {/* Student Behaviour & Risk Analytics Matrix */}
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Student Behaviour & Punctuality Risk Analytics</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>Automated behavioral pattern classification derived from attendance & excuse history</p>
+          <div className="font-semibold mb-1">Student Behaviour & Punctuality Risk Analytics</div>
+          <p className="text-xs text-gray-400 mb-4">Automated behavioral pattern classification derived from attendance & excuse history</p>
           <Table
             columns={[
               { key: 'studentName',        label: 'Student',  strong: true },
               { key: 'cohortName',         label: 'Cohort' },
-              { key: 'present',            label: 'Present', render: v => <span style={{ color: 'var(--green-dark)', fontWeight: 500 }}>{v}</span> },
-              { key: 'late',               label: 'Late',    render: v => <span style={{ color: 'var(--yellow-dark)', fontWeight: 500 }}>{v}</span> },
-              { key: 'excused',            label: 'Excused', render: v => <span style={{ color: '#1d4ed8', fontWeight: 500 }}>{v}</span> },
-              { key: 'absent',             label: 'Absent',  render: v => <span style={{ color: 'var(--red)', fontWeight: 500 }}>{v}</span> },
+              { key: 'present',            label: 'Present', render: v => <span className="text-green-dark font-medium">{v}</span> },
+              { key: 'late',               label: 'Late',    render: v => <span className="text-yellow-dark font-medium">{v}</span> },
+              { key: 'excused',            label: 'Excused', render: v => <span className="text-[#1d4ed8] font-medium">{v}</span> },
+              { key: 'absent',             label: 'Absent',  render: v => <span className="text-red font-medium">{v}</span> },
               { key: 'attendanceRate',     label: 'Rate',    render: (v) => {
                 const r = Math.round(v || 0)
                 return (
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <span style={{ fontWeight:500, fontSize:12 }}>{r}%</span>
-                    <div style={{ width:50, height:4, background:'var(--gray-100)', borderRadius:2 }}>
-                      <div style={{ width:`${r}%`, height:'100%', background: r>=80?'var(--green)':r>=60?'#f59e0b':'var(--red)', borderRadius:2 }} />
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-xs">{r}%</span>
+                    <div className="w-[50px] h-1 bg-gray-100 rounded-[2px]">
+                      <div className="h-full rounded-[2px]" style={{ width: `${r}%`, background: r>=80?'var(--green)':r>=60?'#f59e0b':'var(--red)' }} />
                     </div>
                   </div>
                 )
               }},
               { key: 'behaviorTag',        label: 'Behavior Pattern', render: (v) => renderTagBadge(v) },
-              { key: 'behaviorInsightText',label: 'Behavioral Observation', render: v => <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>{v}</span> },
+              { key: 'behaviorInsightText',label: 'Behavioral Observation', render: v => <span className="text-xs text-gray-600">{v}</span> },
             ]}
             rows={behaviourList}
             emptyMessage="No student behavioral data available yet"
@@ -666,23 +668,23 @@ export function AdminSettings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="System configuration" />
-      <div style={{ padding: 24, maxWidth: 600 }} className="fade-in">
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Account</div>
-          <div style={{ fontSize: 13, color: 'var(--gray-600)' }}>Logged in as <strong>{user?.name}</strong></div>
-          <div style={{ fontSize: 12, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>{user?.email}</div>
+      <div className="p-4 sm:p-6 max-w-[600px] animate-fade-in">
+        <Card className="mb-4">
+          <div className="font-semibold mb-3">Account</div>
+          <div className="text-[13px] text-gray-600">Logged in as <strong>{user?.name}</strong></div>
+          <div className="text-xs text-gray-400 font-mono">{user?.email}</div>
         </Card>
 
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 16 }}>Network & Attendance Settings</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>
+        <Card className="mb-4">
+          <div className="font-semibold mb-4">Network & Attendance Settings</div>
+          <p className="text-xs text-gray-400 mb-4">
             Configure the school network and attendance time windows. Changes take effect immediately.
           </p>
           {netLoading ? (
-            <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+            <div className="text-center py-5"><div className="mx-auto inline-block h-5 w-5 rounded-full border-2 border-gray-200 border-t-red animate-spin" /></div>
           ) : netSettings && (
             <>
-              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8, color: 'var(--gray-600)' }}>Network</div>
+              <div className="font-medium text-[13px] mb-2 text-gray-600">Network</div>
               <Input
                 label="School WiFi SSID"
                 value={netSettings.school_wifi_ssid || ''}
@@ -695,34 +697,34 @@ export function AdminSettings() {
                 onChange={e => updateNet('school_ip_range', e.target.value)}
                 placeholder="e.g. 192.168.1.0/24"
               />
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--gray-600)' }}>
+              <div className="mb-3.5">
+                <label className="flex items-center gap-2 cursor-pointer text-[13px] text-gray-600">
                   <input
                     type="checkbox"
                     checked={netSettings.network_enforce === 'true'}
                     onChange={e => updateNet('network_enforce', e.target.checked ? 'true' : 'false')}
-                    style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                    className="w-4 h-4 accent-red"
                   />
                   Enforce school network for attendance
                 </label>
-                <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4, marginLeft: 24 }}>
+                <p className="text-[11px] text-gray-400 mt-1 ml-6">
                   When enabled, students must be connected to the school network to mark attendance
                 </p>
               </div>
-              <div style={{ height: 1, background: 'var(--gray-100)', margin: '16px 0' }} />
-              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8, color: 'var(--gray-600)' }}>GPS Geofence Fallback</div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--gray-600)' }}>
+              <div className="h-px bg-gray-100 my-4" />
+              <div className="font-medium text-[13px] mb-2 text-gray-600">GPS Geofence Fallback</div>
+              <div className="mb-2.5">
+                <label className="flex items-center gap-2 cursor-pointer text-[13px] text-gray-600">
                   <input
                     type="checkbox"
                     checked={netSettings.geofence_fallback_enabled === 'true'}
                     onChange={e => updateNet('geofence_fallback_enabled', e.target.checked ? 'true' : 'false')}
-                    style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                    className="w-4 h-4 accent-red"
                   />
                   Enable GPS Geofence Fallback when school network is offline/disconnected
                 </label>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Input
                   label="School Latitude"
                   value={netSettings.school_latitude || ''}
@@ -742,9 +744,9 @@ export function AdminSettings() {
                   placeholder="e.g. 150"
                 />
               </div>
-              <div style={{ height: 1, background: 'var(--gray-100)', margin: '16px 0' }} />
-              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8, color: 'var(--gray-600)' }}>Attendance Time Windows</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div className="h-px bg-gray-100 my-4" />
+              <div className="font-medium text-[13px] mb-2 text-gray-600">Attendance Time Windows</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Input
                   label="QR Window Start"
                   value={netSettings.qr_window_start || ''}
@@ -764,7 +766,7 @@ export function AdminSettings() {
                   placeholder="HH:MM"
                 />
               </div>
-              <Button onClick={saveNetwork} loading={netSaving} style={{ marginTop: 4 }}>
+              <Button onClick={saveNetwork} loading={netSaving} className="mt-1">
                 Save Network & Geofence Settings
               </Button>
             </>
@@ -772,7 +774,7 @@ export function AdminSettings() {
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 16 }}>Change Password</div>
+          <div className="font-semibold mb-4">Change Password</div>
           <form onSubmit={save}>
             <Input label="Current password" type="password" value={form.currentPassword} onChange={e => setForm(p => ({...p, currentPassword: e.target.value}))} />
             <Input label="New password" type="password" value={form.newPassword} onChange={e => setForm(p => ({...p, newPassword: e.target.value}))} />

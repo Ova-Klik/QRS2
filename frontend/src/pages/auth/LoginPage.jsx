@@ -49,22 +49,15 @@ export default function LoginPage() {
   const fill = (email, password) => setForm({ email, password })
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white)', position: 'relative', overflow: 'hidden' }}>
+    <div className="min-h-screen flex items-center justify-center bg-white relative overflow-hidden px-4">
       {/* Background accent */}
-      <div style={{ position: 'absolute', width: 600, height: 600, background: 'radial-gradient(circle, rgba(192,57,43,.06) 0%, transparent 70%)', top: -100, right: -100, pointerEvents: 'none' }} />
+      <div className="absolute w-[600px] h-[600px] bg-[radial-gradient(circle,rgba(192,57,43,.06)_0%,transparent_70%)] -top-[100px] -right-[100px] pointer-events-none" />
 
       {/* Theme toggle — top right */}
       <button
         onClick={toggle}
         title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-        style={{
-          position: 'absolute', top: 20, right: 24,
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '6px 12px', borderRadius: 20, zIndex: 10,
-          background: 'var(--gray-50)', border: '1px solid var(--gray-200)',
-          color: 'var(--gray-600)', fontSize: 12, fontWeight: 500,
-          cursor: 'pointer', lineHeight: 1,
-        }}
+        className="absolute top-5 right-4 sm:right-6 inline-flex items-center gap-[5px] px-3 py-1.5 rounded-full z-[10] bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium cursor-pointer leading-none"
       >
         {dark ? (
           <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Light</>
@@ -73,28 +66,28 @@ export default function LoginPage() {
         )}
       </button>
 
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', zIndex: 1 }}>
+      <div className="w-full max-w-[400px] z-[1]">
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
-          <div style={{ width: 44, height: 44, background: 'var(--red)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="flex items-center gap-3 mb-10">
+          <div className="w-11 h-11 bg-red rounded flex items-center justify-center shrink-0">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/></svg>
           </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{settings?.school_name || 'Tech School'}</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>Smart Attendance System</div>
+          <div className="min-w-0">
+            <div className="text-base font-semibold truncate">{settings?.school_name || 'Tech School'}</div>
+            <div className="text-xs text-gray-400 mt-px">Smart Attendance System</div>
           </div>
         </div>
 
-        <h1 style={{ fontSize: 26, fontWeight: 600, marginBottom: 6 }}>Welcome back</h1>
-        <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 28 }}>Sign in to your account to continue</p>
+        <h1 className="text-[26px] font-semibold mb-1.5">Welcome back</h1>
+        <p className="text-[13px] text-gray-400 mb-7">Sign in to your account to continue</p>
 
         {error && <Alert type="error">{error}</Alert>}
 
         <form onSubmit={handleSubmit}>
           <Input label="Email address" type="email" placeholder="you@techschool.edu" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <Input label="Password" type={showPw ? 'text' : 'password'} placeholder="••••••••" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
-            <button type="button" onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 10, top: 32, background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--gray-400)' }}>
+            <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-2.5 top-8 bg-transparent border-0 cursor-pointer p-1 text-gray-400">
               {showPw ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               ) : (
@@ -102,49 +95,36 @@ export default function LoginPage() {
               )}
             </button>
           </div>
-          <Button type="submit" loading={loading} style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}>
+          <Button type="submit" loading={loading} className="w-full justify-center mb-3">
             Sign in
           </Button>
         </form>
 
         {/* Demo credentials */}
-        <div style={{ background: 'var(--off)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: 14, marginTop: 8 }}>
-          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Demo credentials</p>
+        <div className="bg-off border border-gray-100 rounded p-3.5 mt-2">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">Demo credentials</p>
           {[
             { label: 'Super Admin',  email: 'admin@techschool.edu',       pass: 'Admin@1234' },
             { label: 'Facilitator',  email: 'james.obi@techschool.edu',   pass: 'Fac@1234' },
             { label: 'Student',      email: 'ada.okafor@techschool.edu',  pass: 'Student@1234' },
           ].map(c => (
-            <div key={c.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--gray-600)', fontWeight: 500 }}>{c.label}</span>
-              <button type="button" onClick={() => fill(c.email, c.pass)} style={{ fontSize: 11, fontFamily: 'var(--mono)', background: 'var(--red-light)', color: 'var(--red)', border: '1px solid var(--red-mid)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>
+            <div key={c.label} className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-gray-600 font-medium min-w-0 truncate">{c.label}</span>
+              <button type="button" onClick={() => fill(c.email, c.pass)} className="text-[11px] font-mono bg-red-light text-red border border-red-mid rounded-[4px] px-2 py-0.5 cursor-pointer shrink-0">
                 Use
               </button>
             </div>
           ))}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--gray-400)', marginTop: 20 }}>
-          Don't have an account? <Link to="/register" style={{ color: 'var(--red)', fontWeight: 500, textDecoration: 'none' }}>Register now</Link>
+        <p className="text-center text-[13px] text-gray-400 mt-5">
+          Don't have an account? <Link to="/register" className="text-red font-medium no-underline">Register now</Link>
         </p>
 
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
+        <div className="mt-4 text-center">
           <Link
             to="/project"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--gray-700)',
-              background: 'var(--off)',
-              border: '1px solid var(--gray-200)',
-              borderRadius: 'var(--radius)',
-              padding: '10px 16px',
-              textDecoration: 'none',
-              transition: 'all .15s'
-            }}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-700 bg-off border border-gray-200 rounded px-4 py-2.5 no-underline transition-all duration-150 hover:border-gray-400"
           >
             📺 Open Class Projection Screen
           </Link>

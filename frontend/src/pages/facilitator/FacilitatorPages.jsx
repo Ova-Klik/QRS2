@@ -21,25 +21,25 @@ export function FacilitatorDashboard() {
     <>
       <PageHeader title="Facilitator Dashboard" subtitle={format(new Date(), "EEEE, dd MMM yyyy")}
         actions={<Button variant="outline" size="sm" onClick={reload}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         {d.qrSessionActive
           ? <Alert type="success"><strong>QR Session is active</strong> — Students can scan until the session expires.</Alert>
           : <Alert type="warning"><strong>No active QR session.</strong> Go to QR Generator to open today's session.</Alert>
         }
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
           <StatCard label="Total Students" value={d.totalStudents || 0} />
           <StatCard label="Present"  value={d.presentToday || 0} badgeColor="green" badge="On time" />
           <StatCard label="Late"     value={d.lateToday    || 0} badgeColor="yellow" badge="After 7:30" />
           <StatCard label="Absent"   value={d.absentToday  || 0} badgeColor="red" badge="No record" color={d.absentToday > 0 ? 'var(--red)' : undefined} />
         </div>
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 16 }}>Today's Live Attendance</div>
+          <div className="font-semibold mb-4">Today's Live Attendance</div>
           <Table
             columns={[
               { key: 'studentName', label: 'Student',  strong: true },
               { key: 'cohortName',  label: 'Cohort' },
               { key: 'status',      label: 'Status',  render: v => <Badge status={v} /> },
-              { key: 'markedAt',    label: 'Time',    render: v => v ? <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{format(new Date(v), 'HH:mm')}</span> : '—' },
+              { key: 'markedAt',    label: 'Time',    render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
               { key: 'manual',      label: 'Type',    render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
             ]}
             rows={d.todayRecords || []}
@@ -146,11 +146,11 @@ export function FacilitatorQR() {
   return (
     <>
       <PageHeader title="QR Generator" subtitle="Generate or stop daily attendance QR codes with custom session durations" />
-        <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, maxWidth: 800 }}>
+        <div className="p-4 sm:p-6 animate-fade-in">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-[800px]">
             {/* Controls */}
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 16 }}>Manage QR Session</div>
+            <div className="font-semibold mb-4">Manage QR Session</div>
             <Select label="Cohort" value={selectedCohort} onChange={e => setSelected(e.target.value)}>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
@@ -163,17 +163,17 @@ export function FacilitatorQR() {
               <option value="120">120 Minutes (2 Hours)</option>
               <option value="180">180 Minutes (3 Hours)</option>
             </Select>
-            <div style={{ background: 'var(--off)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 4 }}>SESSION STATUS</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: isActive ? 'var(--green-dark)' : 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? 'var(--green)' : 'var(--red)', display: 'inline-block' }} />
+            <div className="bg-off rounded p-3 mb-4">
+              <div className="text-[11px] text-gray-400 mb-1">SESSION STATUS</div>
+              <div className={`flex items-center gap-1.5 text-[13px] font-medium ${isActive ? 'text-green-dark' : 'text-red'}`}>
+                <span className={`inline-block h-2 w-2 rounded-full ${isActive ? 'bg-green' : 'bg-red'}`} />
                 {isActive ? 'Active Session Available' : 'No Active Session'}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--gray-600)', marginTop: 2 }}>
+              <div className="text-xs text-gray-600 mt-0.5">
                 {isActive ? '10-second dynamic TOTP rolling rotation enabled' : 'Select cohort & duration to generate session'}
               </div>
             </div>
-            <Button onClick={generate} loading={generating} style={{ width: '100%', justifyContent: 'center' }}>
+            <Button onClick={generate} loading={generating} className="w-full justify-center">
               {isActive ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               ) : (
@@ -182,7 +182,7 @@ export function FacilitatorQR() {
               {isActive ? 'Generate New QR Session' : 'Generate QR Code'}
             </Button>
             {isActive && (
-              <Button variant="outline" onClick={expire} style={{ width: '100%', justifyContent: 'center', marginTop: 8, color: 'var(--red)', borderColor: 'var(--red-mid)' }}>
+              <Button variant="outline" onClick={expire} className="w-full justify-center mt-2 !text-red !border-red-mid">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
                 Stop QR Session
               </Button>
@@ -190,36 +190,36 @@ export function FacilitatorQR() {
           </Card>
 
           {/* QR Display */}
-          <Card style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 600, marginBottom: 16 }}>Session QR</div>
+          <Card className="text-center">
+            <div className="font-semibold mb-4">Session QR</div>
             {session ? (
               <>
-                <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
-                  <img src={`data:image/png;base64,${session.qrImageBase64}`} alt="QR Code" style={{ width: 180, height: 180, borderRadius: 8, opacity: isActive ? 1 : .3 }} />
+                <div className="relative inline-block mb-3">
+                  <img src={`data:image/png;base64,${session.qrImageBase64}`} alt="QR Code" className={`w-[180px] h-[180px] rounded ${isActive ? 'opacity-100' : 'opacity-30'}`} />
                   {!isActive && (
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.85)', borderRadius: 8 }}>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 rounded">
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                      <span style={{ fontSize: 13, color: 'var(--red)', fontWeight: 500, marginTop: 4 }}>Expired</span>
+                      <span className="text-[13px] text-red font-medium mt-1">Expired</span>
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 2 }}>{timerLabel}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 500, color: displayRemaining < 300 ? 'var(--red)' : 'var(--gray-900)', marginBottom: 4 }}>
+                <div className="text-[11px] text-gray-400 mb-0.5">{timerLabel}</div>
+                <div className={`font-mono text-[28px] font-medium mb-1 ${displayRemaining < 300 ? 'text-red' : 'text-gray-900'}`}>
                   {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
                 </div>
-                <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, background: isActive ? 'var(--green-light)' : 'var(--yellow-light)', color: isActive ? 'var(--green-dark)' : 'var(--yellow-dark)', border: `1px solid ${isActive ? '#a8dbb8' : '#f3dfa8'}` }}>
-                    {isActive && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', animation: 'pulse 1.5s infinite', display: 'inline-block' }} />}
+                <div className="mb-2 flex flex-col items-center gap-1.5">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${isActive ? 'bg-green-light text-green-dark border-[#a8dbb8]' : 'bg-yellow-light text-yellow-dark border-[#f3dfa8]'}`}>
+                    {isActive && <span className="inline-block h-[7px] w-[7px] rounded-full bg-green animate-pulse" />}
                     {isActive ? 'Active (10s TOTP)' : `Window ends at ${qrWindowEnd}`}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>Cohort: {session.cohortName}</div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--gray-200)', marginTop: 6, wordBreak: 'break-all' }}>{session.token?.substring(0, 20)}...</div>
+                <div className="text-[11px] text-gray-400">Cohort: {session.cohortName}</div>
+                <div className="text-[10px] font-mono text-gray-200 mt-1.5 break-all">{session.token?.substring(0, 20)}...</div>
               </>
             ) : (
-              <div style={{ padding: '40px 0', color: 'var(--gray-400)' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--gray-300)' }}>
+              <div className="py-10 text-gray-400">
+                <div className="flex justify-center mb-3">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300">
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <rect x="7" y="7" width="3" height="3" />
                     <rect x="14" y="7" width="3" height="3" />
@@ -227,9 +227,9 @@ export function FacilitatorQR() {
                     <rect x="14" y="14" width="3" height="3" />
                   </svg>
                 </div>
-                <p style={{ fontSize: 13 }}>Generate a session to see the QR code</p>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 8 }}>{timerLabel}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 500, color: displayRemaining < 300 ? 'var(--red)' : 'var(--gray-500)', marginTop: 4 }}>
+                <p className="text-[13px]">Generate a session to see the QR code</p>
+                <div className="text-[11px] text-gray-400 mt-2">{timerLabel}</div>
+                <div className={`font-mono text-xl font-medium mt-1 ${displayRemaining < 300 ? 'text-red' : 'text-gray-500'}`}>
                   {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
                 </div>
               </div>
@@ -283,11 +283,11 @@ export function FacilitatorManual() {
   return (
     <>
       <PageHeader title="Manual Attendance" subtitle="Override attendance for exceptional cases" />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         <Alert type="warning">Manual attendance requires a reason and is fully logged in the audit trail.</Alert>
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} style={{ marginBottom: 0, minWidth: 180 }}>
+        <Card className="mb-4">
+          <div className="flex gap-3 items-center flex-wrap">
+            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} className="mb-0 min-w-[180px]">
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
             <Button variant="outline" size="sm" onClick={() => loadSummary(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
@@ -295,11 +295,11 @@ export function FacilitatorManual() {
         </Card>
         {summary && (
           <Card>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="flex gap-3 mb-4 flex-wrap">
               {[['Present', summary.present, 'green'], ['Late', summary.late, 'yellow'], ['Absent', summary.absent, 'red']].map(([l, v, c]) => (
-                <div key={l} style={{ padding: '8px 16px', borderRadius: 8, background: `var(--${c === 'green' ? 'green' : c === 'yellow' ? 'yellow' : 'red'}-light)`, border: `1px solid ${c === 'green' ? '#a8dbb8' : c === 'yellow' ? '#f3dfa8' : 'var(--red-mid)'}` }}>
-                  <div style={{ fontSize: 20, fontWeight: 600 }}>{v}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>{l}</div>
+                <div key={l} className={`px-4 py-2 rounded ${c === 'green' ? 'bg-green-light border-[#a8dbb8]' : c === 'yellow' ? 'bg-yellow-light border-[#f3dfa8]' : 'bg-red-light border-red-mid'}`}>
+                  <div className="text-xl font-semibold">{v}</div>
+                  <div className="text-[11px] text-gray-400">{l}</div>
                 </div>
               ))}
             </div>
@@ -317,7 +317,7 @@ export function FacilitatorManual() {
       </div>
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={`Manual Attendance — ${modal?.studentName}`}>
-        <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 16 }}>This will be saved and logged in the audit trail.</p>
+        <p className="text-[13px] text-gray-400 mb-4">This will be saved and logged in the audit trail.</p>
         <Select label="Status" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
           <option value="PRESENT">Present</option>
           <option value="LATE">Late</option>
@@ -325,7 +325,7 @@ export function FacilitatorManual() {
           <option value="ABSENT">Absent</option>
         </Select>
         <Textarea label="Reason (required)" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} placeholder="e.g. Device malfunction, medical appointment..." />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => setModal(null)}>Cancel</Button>
           <Button loading={saving} onClick={save}>Save Override</Button>
         </div>
@@ -366,16 +366,16 @@ export function FacilitatorReports() {
     <>
       <PageHeader title="Reports" subtitle="Attendance data for your cohorts"
         actions={<Button variant="outline" size="sm" onClick={exportCSV}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <Select value={selected} onChange={e => { setSelected(e.target.value); load(e.target.value) }} style={{ marginBottom: 0, minWidth: 200 }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <div className="flex gap-3 mb-4 flex-wrap">
+          <Select value={selected} onChange={e => { setSelected(e.target.value); load(e.target.value) }} className="mb-0 min-w-[200px]">
             {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
           </Select>
             <Button variant="outline" size="sm" onClick={() => load(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
         </div>
         {summary && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginBottom: 20 }}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
               <StatCard label="Total"   value={summary.total}   />
               <StatCard label="Present" value={summary.present} badgeColor="green" progress={summary.total ? summary.present / summary.total * 100 : 0} />
               <StatCard label="Late"    value={summary.late}    badgeColor="yellow" />
@@ -383,14 +383,14 @@ export function FacilitatorReports() {
               <StatCard label="Rate"    value={`${Math.round(summary.rate)}%`} progress={summary.rate} />
             </div>
             <Card>
-              {loading ? <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner spinner-lg" style={{ margin: '0 auto' }} /></div> : (
+              {loading ? <div className="text-center p-8"><div className="inline-block h-9 w-9 rounded-full border-[3px] border-gray-200 border-t-red animate-spin" /></div> : (
                 <Table
                   columns={[
                     { key: 'studentName', label: 'Student', strong: true },
                     { key: 'status',      label: 'Status',  render: v => <Badge status={v} /> },
-                    { key: 'markedAt',    label: 'Time',    render: v => v ? <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{format(new Date(v), 'HH:mm')}</span> : '—' },
+                    { key: 'markedAt',    label: 'Time',    render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
                     { key: 'manual',      label: 'Type',    render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
-                    { key: 'manualReason',label: 'Note',    render: v => v ? <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> : null },
+                    { key: 'manualReason',label: 'Note',    render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : null },
                   ]}
                   rows={summary.records || []}
                 />
@@ -451,10 +451,10 @@ export function FacilitatorExcuses() {
   return (
     <>
       <PageHeader title="Excuse Requests" subtitle="Review and accept or reject student absence excuses" />
-      <div style={{ padding: 24 }} className="fade-in">
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} style={{ marginBottom: 0, minWidth: 200 }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <Card className="mb-4">
+          <div className="flex gap-3 items-center flex-wrap">
+            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} className="mb-0 min-w-[200px]">
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
           <Button variant="outline" size="sm" onClick={() => load(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
@@ -467,13 +467,13 @@ export function FacilitatorExcuses() {
               { key: 'startDate',    label: 'Start Date', render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
               { key: 'numberOfDays', label: 'Days',       render: v => `${v} day${v > 1 ? 's' : ''}` },
               { key: 'reason',       label: 'Reason' },
-              { key: 'coverUpPlan',  label: 'Cover-Up Plan', render: v => <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>{v}</span> },
+              { key: 'coverUpPlan',  label: 'Cover-Up Plan', render: v => <span className="text-xs text-gray-600">{v}</span> },
               { key: 'status',       label: 'Status',     render: v => <Badge status={v} /> },
               { key: 'actions',      label: 'Actions',    render: (_, row) => (
                 row.status === 'PENDING' ? (
                   <Button size="sm" variant="outline" onClick={() => { setReview(row); setForm({ status: 'ACCEPTED', notes: '' }) }}>Review Request</Button>
                 ) : (
-                  <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>Reviewed by {row.reviewedByName}</span>
+                  <span className="text-[11px] text-gray-400">Reviewed by {row.reviewedByName}</span>
                 )
               )}
             ]}
@@ -484,18 +484,18 @@ export function FacilitatorExcuses() {
       </div>
 
       <Modal open={!!reviewModal} onClose={() => setReview(null)} title={`Review Excuse Request — ${reviewModal?.studentName}`}>
-        <div style={{ background: 'var(--off)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Reason:</div>
-          <div style={{ fontSize: 13, color: 'var(--gray-700)', marginBottom: 8 }}>{reviewModal?.reason}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Cover-up Plan:</div>
-          <div style={{ fontSize: 12, color: 'var(--gray-600)' }}>{reviewModal?.coverUpPlan}</div>
+        <div className="bg-off p-3 rounded mb-4">
+          <div className="text-xs font-semibold mb-1">Reason:</div>
+          <div className="text-[13px] text-gray-700 mb-2">{reviewModal?.reason}</div>
+          <div className="text-xs font-semibold mb-1">Cover-up Plan:</div>
+          <div className="text-xs text-gray-600">{reviewModal?.coverUpPlan}</div>
         </div>
         <Select label="Decision" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
           <option value="ACCEPTED">Accept Excuse</option>
           <option value="REJECTED">Reject Excuse</option>
         </Select>
         <Textarea label="Reviewer Notes / Feedback" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Provide reasoning or instructions for student..." rows={3} />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+        <div className="flex gap-2 justify-end mt-4">
           <Button variant="outline" onClick={() => setReview(null)}>Cancel</Button>
           <Button loading={saving} onClick={saveReview}>Submit Decision</Button>
         </div>

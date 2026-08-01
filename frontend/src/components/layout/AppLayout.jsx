@@ -74,129 +74,108 @@ export default function AppLayout({ children }) {
 
   const sidebarWidth = isMobile ? (mobileOpen ? 220 : 0) : (collapsed ? 64 : 220)
 
-  const sidebarCommon = {
-    flexShrink: 0,
-    background: 'var(--white)',
-    borderRight: '1px solid var(--gray-100)',
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    position: isMobile ? 'fixed' : 'sticky',
-    top: 0,
-    transition: 'width .2s, left .2s',
-    overflow: 'hidden',
-    zIndex: isMobile ? 100 : 'auto',
-    left: isMobile ? (mobileOpen ? 0 : -220) : 'auto',
-  }
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="flex min-h-screen">
       {/* Mobile overlay */}
       {isMobile && mobileOpen && (
-        <div onClick={() => setMobileOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 99 }} />
+        <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/40 z-[99]" />
       )}
 
       {/* Sidebar */}
-      <div style={{ width: sidebarWidth, ...sidebarCommon }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 16px 16px', minWidth: 220 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}
-            onClick={() => isMobile ? setMobileOpen(false) : setCollapsed(!collapsed)}>
+      <div
+        className="shrink-0 bg-white border-r border-gray-100 flex flex-col h-screen overflow-hidden z-[100]"
+        style={{
+          width: sidebarWidth,
+          position: isMobile ? 'fixed' : 'sticky',
+          top: 0,
+          transition: 'width .2s, left .2s',
+          left: isMobile ? (mobileOpen ? 0 : -220) : 'auto',
+        }}
+      >
+        <div className="flex items-center gap-2.5 px-4 pt-5 pb-4 min-w-[220px]">
+          <div
+            onClick={() => isMobile ? setMobileOpen(false) : setCollapsed(!collapsed)}
+            className="w-8 h-8 bg-red rounded-md flex items-center justify-center shrink-0 cursor-pointer"
+          >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/></svg>
           </div>
           {(isMobile ? mobileOpen : !collapsed) && (
-            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+            <div className="text-[13px] font-semibold leading-tight whitespace-nowrap">
               QR Attendance<br />
-              <span style={{ fontWeight: 400, color: 'var(--gray-400)', fontSize: 11 }}>{settings?.school_name || 'Tech School'}</span>
+              <span className="font-normal text-gray-400 text-[11px]">{settings?.school_name || 'Tech School'}</span>
             </div>
           )}
         </div>
-        <div style={{ height: 1, background: 'var(--gray-100)', margin: '0 16px 12px' }} />
+        <div className="h-px bg-gray-100 mx-4 mb-3" />
 
-        <nav style={{ flex: 1, overflowY: 'auto' }}>
+        <nav className="flex-1 overflow-y-auto">
           {navItems.map(item => (
             <NavLink key={item.path} to={item.path} end={item.path.split('/').length <= 2}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px',
-                borderRadius: 8, margin: '1px 8px', cursor: 'pointer', fontSize: 13,
-                textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden',
-                color: isActive ? 'var(--red)' : 'var(--gray-600)',
-                background: isActive ? 'var(--red-light)' : 'transparent',
-                fontWeight: isActive ? 500 : 400,
-                transition: 'all .12s',
-              })}>
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-4 py-2 rounded-lg mx-2 cursor-pointer text-[13px] whitespace-nowrap overflow-hidden transition-colors ${
+                  isActive ? 'text-red bg-red-light font-medium' : 'text-gray-600 hover:bg-gray-50'
+                }`
+              }>
               {ICONS[item.icon]}
               {(isMobile ? true : !collapsed) && item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--gray-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{initials}</div>
+        <div className="px-4 py-3 border-t border-gray-100">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-8 h-8 rounded-full bg-red flex items-center justify-center text-white text-xs font-semibold shrink-0">{initials}</div>
             {(isMobile ? true : !collapsed) && (
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>{roleLabel}</div>
+              <div className="overflow-hidden">
+                <div className="text-[13px] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{user?.name}</div>
+                <div className="text-[11px] text-gray-400">{roleLabel}</div>
               </div>
             )}
           </div>
           <button onClick={handleLogout}
-            style={{
-              width: '100%', padding: '7px', background: 'var(--gray-50)', border: '1px solid var(--gray-100)',
-              borderRadius: 7, fontSize: 12, color: 'var(--gray-600)', cursor: 'pointer',
-              transition: 'all .12s', whiteSpace: 'nowrap', overflow: 'hidden',
-            }}>
+            className="w-full py-1.5 bg-gray-50 border border-gray-100 rounded-md text-xs text-gray-600 hover:bg-gray-100 transition-colors whitespace-nowrap overflow-hidden">
             Sign out
           </button>
         </div>
       </div>
 
       {/* Main */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'auto' }}>
+      <div className="flex-1 flex flex-col min-h-screen overflow-x-hidden">
         {/* Topbar */}
-        <div style={{
-          height: 44, background: 'var(--white)', borderBottom: '1px solid var(--gray-100)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: isMobile ? '0 12px' : '0 28px',
-          position: 'sticky', top: 0, zIndex: 20, flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className={`h-11 bg-white border-b border-gray-100 flex items-center justify-between sticky top-0 z-20 shrink-0 ${isMobile ? 'px-3' : 'px-7'}`}>
+          <div className="flex items-center gap-2">
             {isMobile && (
-              <button onClick={() => setMobileOpen(true)}
-                style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: 'var(--gray-600)' }}>
+              <button onClick={() => setMobileOpen(true)} className="bg-transparent border-0 p-1 cursor-pointer text-gray-600">
                 {ICONS.hamburger}
               </button>
             )}
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontSize: 12, color: 'var(--gray-400)' }} className="desktop-only">School Network</span>
+            <div className="w-2 h-2 rounded-full bg-green animate-pulse" />
+            <span className="text-xs text-gray-400 hidden md:inline">School Network</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="flex items-center gap-2">
             <Clock />
-            <span className="desktop-only" style={{ fontSize: 12, color: 'var(--gray-400)', fontWeight: 500 }}>{roleLabel}</span>
+            <span className="text-xs text-gray-400 font-medium hidden md:inline">{roleLabel}</span>
             <button
               onClick={toggle}
               title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="inline-flex items-center gap-1 rounded-full text-xs font-medium cursor-pointer leading-none select-none border"
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 20,
+                padding: isMobile ? '5px 8px' : '5px 10px',
                 background: dark ? '#2e2e42' : 'var(--gray-50)',
-                border: '1px solid var(--gray-200)',
+                borderColor: 'var(--gray-200)',
                 color: dark ? '#c0c0d8' : 'var(--gray-600)',
-                fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                lineHeight: 1, userSelect: 'none',
               }}
             >
               {dark ? (
-                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span className="desktop-only">Light</span></>
+                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span className="hidden md:inline">Light</span></>
               ) : (
-                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span className="desktop-only">Dark</span></>
+                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span className="hidden md:inline">Dark</span></>
               )}
             </button>
           </div>
         </div>
 
-        <div style={{ flex: 1 }} className="fade-in">{children}</div>
+        <div className="flex-1 animate-fade-in">{children}</div>
       </div>
     </div>
   )
@@ -208,5 +187,5 @@ function Clock() {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000)
     return () => clearInterval(t)
   }, [])
-  return <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--gray-400)' }}>{time}</span>
+  return <span className="font-mono text-xs text-gray-400">{time}</span>
 }

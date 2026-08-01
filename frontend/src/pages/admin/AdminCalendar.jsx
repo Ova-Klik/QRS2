@@ -25,6 +25,10 @@ function resolveRange(preset, customStart, customEnd) {
   }
 }
 
+const calCellBase = 'min-h-[56px] sm:min-h-[62px] rounded-[8px] bg-gray-50 border border-transparent p-1.5 text-left flex flex-col gap-0.5 text-xs text-gray-900 hover:border-red-mid cursor-pointer'
+
+const calDot = 'inline-block h-2 w-2 rounded-full shrink-0'
+
 export function AdminCalendar() {
   const [ym, setYm]                 = useState(() => { const t = new Date(); return { year: t.getFullYear(), month: t.getMonth() + 1 } })
   const [cohortId, setCohortId]     = useState('')
@@ -111,12 +115,12 @@ export function AdminCalendar() {
   eachDayOfInterval({ start: monthStart, end: monthEnd }).forEach(d => cells.push(d))
 
   const statusBadge = d => {
-    if (!d) return <span className="cal-dot" style={{ background: 'transparent' }} />
+    if (!d) return <span className={calDot} style={{ background: 'transparent' }} />
     const n = (d.present || 0) + (d.late || 0) + (d.excused || 0) + (d.absent || 0)
-    if (d.holiday) return <span className="cal-dot" style={{ background: 'var(--gray-400)' }} title={`Holiday: ${d.holidayName}`} />
-    if (n === 0) return <span className="cal-dot" style={{ background: 'transparent' }} />
+    if (d.holiday) return <span className={calDot} style={{ background: 'var(--gray-400)' }} title={`Holiday: ${d.holidayName}`} />
+    if (n === 0) return <span className={calDot} style={{ background: 'transparent' }} />
     const pct = ((d.present || 0) + (d.late || 0)) / n
-    return <span className="cal-dot" style={{ background: pct >= 0.75 ? 'var(--green)' : pct >= 0.5 ? '#f59e0b' : 'var(--red)' }} />
+    return <span className={calDot} style={{ background: pct >= 0.75 ? 'var(--green)' : pct >= 0.5 ? '#f59e0b' : 'var(--red)' }} />
   }
 
   if (loading && !cal) return <LoadingPage />
@@ -125,20 +129,20 @@ export function AdminCalendar() {
     <>
       <PageHeader title="Attendance Calendar" subtitle="Month overview, holidays, and day-by-day attendance"
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => { setHolModal({ holiday: null, form: { name: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd'), reason: '', appliesToAll: true, cohortId: '' } }) }}>+ Add Holiday</Button>
             <Button size="sm" onClick={doExport}>↓ Export Range</Button>
           </div>
         } />
-      <div style={{ padding: 24 }} className="fade-in">
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <Card className="mb-4">
+          <div className="flex items-center gap-3 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => monthNav(-1)}>←</Button>
-            <div style={{ fontWeight: 700, minWidth: 180, textAlign: 'center', textTransform: 'capitalize' }}>
+            <div className="font-bold min-w-[180px] text-center capitalize">
               {format(new Date(ym.year, ym.month - 1, 1), 'MMMM yyyy')}
             </div>
             <Button variant="outline" size="sm" onClick={() => monthNav(1)}>→</Button>
-            <Select value={cohortId} onChange={e => setCohortId(e.target.value)} style={{ marginBottom: 0, minWidth: 180, marginLeft: 'auto' }}>
+            <Select value={cohortId} onChange={e => setCohortId(e.target.value)} className="!mb-0 min-w-[180px] lg:ml-auto">
               <option value="">All Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
@@ -146,32 +150,32 @@ export function AdminCalendar() {
           {loading && <Skeleton rows={4} height={40} />}
         </Card>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="flex gap-2 mb-4 flex-wrap items-center">
           {RANGE_PRESETS.map(r => (
             <button
               key={r.key}
-              className={`chip ${preset === r.key ? 'chip-active' : ''}`}
+              className={`px-3.5 py-1.5 rounded-full bg-white border border-gray-100 text-gray-500 text-xs font-medium transition-colors hover:border-red-mid hover:text-red cursor-pointer ${preset === r.key ? 'bg-red border-red text-white hover:text-white' : ''}`}
               onClick={() => setPreset(r.key)}
             >{r.label}</button>
           ))}
           {preset === 'custom' && (
             <>
-              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} style={{ width: 150, marginBottom: 0 }} />
-              <span style={{ color: 'var(--gray-400)', fontSize: 12 }}>to</span>
-              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} style={{ width: 150, marginBottom: 0 }} />
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="!mb-0 w-[150px]" />
+              <span className="text-gray-400 text-xs">to</span>
+              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="!mb-0 w-[150px]" />
             </>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>
+          <span className="lg:ml-auto text-xs text-gray-400 font-mono">
             {range.start} → {range.end}
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
-          <Card>
-            <div className="cal-grid">
-              {WEEKDAYS.map(w => <div key={w} className="cal-weekday">{w}</div>)}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <Card className="lg:col-span-2">
+            <div className="grid grid-cols-7 gap-1">
+              {WEEKDAYS.map(w => <div key={w} className="text-[11px] font-semibold text-gray-400 text-center py-1">{w}</div>)}
               {cells.map((d, i) => {
-                if (!d) return <div key={`b${i}`} className="cal-cell cal-cell-empty" />
+                if (!d) return <div key={`b${i}`} className="min-h-[56px] sm:min-h-[62px] rounded-[8px] bg-transparent" />
                 const iso = format(d, 'yyyy-MM-dd')
                 const info = dayMap[iso]
                 const selected = selectedDay === iso
@@ -179,42 +183,42 @@ export function AdminCalendar() {
                 return (
                   <button
                     key={iso}
-                    className={`cal-cell ${selected ? 'cal-cell-selected' : ''} ${today ? 'cal-cell-today' : ''} ${info?.holiday ? 'cal-cell-holiday' : ''} ${info?.weekend ? 'cal-cell-weekend' : ''}`}
+                    className={`${calCellBase} ${selected ? 'bg-red-light border-red' : ''} ${today ? 'border-red-mid' : ''} ${info?.holiday ? 'bg-blue-light' : ''} ${info?.weekend ? 'opacity-55' : ''}`}
                     onClick={() => setSelectedDay(iso)}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontWeight: today ? 700 : 500 }}>{format(d, 'd')}</span>
+                    <div className="flex justify-between items-center gap-1">
+                      <span className={today ? 'font-bold' : 'font-medium'}>{format(d, 'd')}</span>
                       {statusBadge(info)}
                     </div>
                     {info && (
-                      <div className="cal-cell-stats">
-                        <span style={{ color: 'var(--green-dark)' }}>{info.present || 0}</span>
-                        <span style={{ color: 'var(--yellow-dark)' }}>{info.late || 0}</span>
-                        <span style={{ color: '#1d4ed8' }}>{info.excused || 0}</span>
-                        <span style={{ color: 'var(--red)' }}>{info.absent || 0}</span>
+                      <div className="flex gap-1 text-[10px] font-semibold font-mono">
+                        <span className="text-green-dark">{info.present || 0}</span>
+                        <span className="text-yellow-dark">{info.late || 0}</span>
+                        <span className="text-[#1d4ed8]">{info.excused || 0}</span>
+                        <span className="text-red">{info.absent || 0}</span>
                       </div>
                     )}
-                    {info?.holiday && <div className="cal-cell-holname">{info.holidayName}</div>}
+                    {info?.holiday && <div className="text-[9px] text-blue-dark whitespace-nowrap overflow-hidden text-ellipsis w-full">{info.holidayName}</div>}
                   </button>
                 )
               })}
             </div>
-            <div style={{ display: 'flex', gap: 14, marginTop: 12, fontSize: 11, color: 'var(--gray-400)', flexWrap: 'wrap' }}>
-              <span><span className="cal-dot" style={{ background: 'var(--green)', display: 'inline-block' }} /> Present</span>
-              <span><span className="cal-dot" style={{ background: '#f59e0b', display: 'inline-block' }} /> Late</span>
-              <span><span className="cal-dot" style={{ background: '#1d4ed8', display: 'inline-block' }} /> Excused</span>
-              <span><span className="cal-dot" style={{ background: 'var(--red)', display: 'inline-block' }} /> Absent</span>
-              <span><span className="cal-dot" style={{ background: 'var(--gray-400)', display: 'inline-block' }} /> Holiday</span>
+            <div className="flex gap-3.5 mt-3 text-[11px] text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1"><span className={calDot} style={{ background: 'var(--green)' }} /> Present</span>
+              <span className="flex items-center gap-1"><span className={calDot} style={{ background: '#f59e0b' }} /> Late</span>
+              <span className="flex items-center gap-1"><span className={calDot} style={{ background: '#1d4ed8' }} /> Excused</span>
+              <span className="flex items-center gap-1"><span className={calDot} style={{ background: 'var(--red)' }} /> Absent</span>
+              <span className="flex items-center gap-1"><span className={calDot} style={{ background: 'var(--gray-400)' }} /> Holiday</span>
             </div>
           </Card>
 
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Selected Day</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 12 }}>
+            <div className="font-semibold mb-1">Selected Day</div>
+            <div className="text-xs text-gray-400 mb-3">
               {selectedDay ? format(parseISO(selectedDay), 'EEEE, dd MMM yyyy') : 'Select a day'}
             </div>
             {selectedDay && dayMap[selectedDay] && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 <StatBox label="Present" value={dayMap[selectedDay].present || 0} color="var(--green-dark)" />
                 <StatBox label="Late" value={dayMap[selectedDay].late || 0} color="var(--yellow-dark)" />
                 <StatBox label="Excused" value={dayMap[selectedDay].excused || 0} color="#1d4ed8" />
@@ -224,9 +228,9 @@ export function AdminCalendar() {
             {selectedDay && dayMap[selectedDay]?.holiday && (
               <Alert type="info">Holiday — {dayMap[selectedDay].holidayName}</Alert>
             )}
-            <div style={{ fontWeight: 600, marginBottom: 8, marginTop: 8 }}>Records</div>
+            <div className="font-semibold mb-2 mt-2">Records</div>
             {dayLoading ? <Skeleton rows={3} height={20} /> : (
-              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+              <div className="max-h-[300px] overflow-y-auto">
                 <Table
                   columns={[
                     { key: 'studentName', label: 'Student', strong: true },
@@ -241,18 +245,18 @@ export function AdminCalendar() {
         </div>
 
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Holidays</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>School holidays and special days — attendance is auto-marked as Holiday</p>
+          <div className="font-semibold mb-1">Holidays</div>
+          <p className="text-xs text-gray-400 mb-4">School holidays and special days — attendance is auto-marked as Holiday</p>
           <Table
             columns={[
               { key: 'name', label: 'Name', strong: true },
               { key: 'startDate', label: 'Start', render: v => format(parseISO(v), 'dd MMM yyyy') },
               { key: 'endDate', label: 'End', render: v => format(parseISO(v), 'dd MMM yyyy') },
               { key: 'scope', label: 'Scope', render: (_, row) => row.appliesToAll ? 'All Cohorts' : (cohorts.find(c => c.id === row.cohortId)?.name || 'Specific') },
-              { key: 'reason', label: 'Reason', render: v => <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>{v || '—'}</span> },
+              { key: 'reason', label: 'Reason', render: v => <span className="text-xs text-gray-400">{v || '—'}</span> },
               { key: 'active', label: 'Status', render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
               { key: 'actions', label: '', render: (_, row) => (
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div className="flex gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => setHolModal({ holiday: row, form: { name: row.name, startDate: row.startDate, endDate: row.endDate, reason: row.reason || '', appliesToAll: row.appliesToAll, cohortId: row.cohortId || '' } })}>Edit</Button>
                   <Button size="sm" variant="outline" onClick={() => toggleHoliday(row)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
                   <Button size="sm" variant="outline" onClick={() => deleteHoliday(row)}>Delete</Button>
@@ -269,7 +273,7 @@ export function AdminCalendar() {
         {holModal && (
           <>
             <Input label="Holiday Name *" value={holModal.form.name} onChange={e => setHolModal(p => ({ ...p, form: { ...p.form, name: e.target.value } }))} placeholder="e.g. Independence Day" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input label="Start Date *" type="date" value={holModal.form.startDate} onChange={e => setHolModal(p => ({ ...p, form: { ...p.form, startDate: e.target.value } }))} />
               <Input label="End Date *" type="date" value={holModal.form.endDate} onChange={e => setHolModal(p => ({ ...p, form: { ...p.form, endDate: e.target.value } }))} />
             </div>
@@ -283,7 +287,7 @@ export function AdminCalendar() {
                 {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setHolModal(null)}>Cancel</Button>
               <Button loading={holSaving} onClick={saveHoliday}>{holModal.holiday ? 'Update' : 'Create'}</Button>
             </div>
@@ -296,9 +300,9 @@ export function AdminCalendar() {
 
 function StatBox({ label, value, color }) {
   return (
-    <div style={{ background: 'var(--gray-50)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{label}</div>
+    <div className="bg-gray-50 rounded p-2.5 text-center">
+      <div className="text-xl font-bold" style={{ color }}>{value}</div>
+      <div className="text-[11px] text-gray-400 mt-0.5">{label}</div>
     </div>
   )
 }

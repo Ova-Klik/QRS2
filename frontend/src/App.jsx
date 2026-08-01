@@ -16,10 +16,10 @@ import TesterPage from './pages/public/TesterPage'
 function RequireAuth({ children, roles }) {
   const { user, loading } = useAuth()
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--white)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div className="spinner spinner-lg" style={{ margin: '0 auto 12px' }} />
-        <p style={{ color: 'var(--gray-400)', fontSize: 13 }}>Loading...</p>
+    <div className="flex items-center justify-center min-h-screen bg-white">
+      <div className="text-center">
+        <div className="mx-auto mb-3 inline-block h-9 w-9 rounded-full border-[3px] border-gray-200 border-t-red animate-spin" />
+        <p className="text-gray-400 text-[13px]">Loading...</p>
       </div>
     </div>
   )

@@ -23,37 +23,37 @@ export function StudentDashboard() {
   return (
     <>
       <PageHeader title="Dashboard" subtitle={`Today — ${format(new Date(), 'dd MMM yyyy')}`} />
-      <div style={{ padding: 24 }} className="fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in">
         {d.markedToday
           ? <Alert type="success"><strong>Attendance recorded today</strong> — You are marked <strong>{d.todayStatus?.toLowerCase()}</strong>.</Alert>
           : <Alert type="info"><strong>Attendance not yet recorded today.</strong> Go to Scan QR Code to mark attendance.</Alert>
         }
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-5">
           <StatCard label="Attendance Rate" value={`${Math.round(d.rate || 0)}%`} progress={d.rate} />
           <StatCard label="Present"  value={d.present  || 0} badge="On time"  badgeColor="green" />
           <StatCard label="Late"     value={d.late     || 0} badge="After 7:30" badgeColor="yellow" />
           <StatCard label="Absent"   value={d.absent   || 0} badge="No record"  badgeColor="red" color={d.absent > 0 ? 'var(--red)' : undefined} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 14 }}>Registered Device</div>
+            <div className="font-semibold mb-3.5">Registered Device</div>
             {d.deviceStatus?.registered ? (
               <>
-                <div style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 4 }}>FINGERPRINT</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--gray-600)', marginBottom: 10 }}>{d.deviceStatus.fingerprint}</div>
-                <span style={{ display: 'inline-block', fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'var(--green-light)', color: 'var(--green-dark)', border: '1px solid #a8dbb8', fontWeight: 500 }}>Registered</span>
+                <div className="text-[11px] text-gray-400 mb-1">FINGERPRINT</div>
+                <div className="font-mono text-xs text-gray-600 mb-2.5 break-all">{d.deviceStatus.fingerprint}</div>
+                <span className="inline-block text-[10px] px-[7px] py-0.5 rounded-full bg-green-light text-green-dark border border-[#a8dbb8] font-medium">Registered</span>
               </>
             ) : <Alert type="warning">No device registered. Contact admin.</Alert>}
           </Card>
           <Card>
-            <div style={{ fontWeight: 600, marginBottom: 14 }}>Recent History</div>
+            <div className="font-semibold mb-3.5">Recent History</div>
             {(d.recentHistory || []).slice(0, 5).map((r, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: i < 4 ? '1px solid var(--gray-50)' : 'none' }}>
-                <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>{r.date ? format(new Date(r.date), 'dd MMM') : '—'}</span>
+              <div key={i} className={`flex items-center justify-between py-1.5 ${i < 4 ? 'border-b border-gray-50' : ''}`}>
+                <span className="text-xs text-gray-600 min-w-0 truncate">{r.date ? format(new Date(r.date), 'dd MMM') : '—'}</span>
                 <Badge status={r.status} />
               </div>
             ))}
-            {!(d.recentHistory?.length) && <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>No history yet</p>}
+            {!(d.recentHistory?.length) && <p className="text-xs text-gray-400">No history yet</p>}
           </Card>
         </div>
       </div>
@@ -268,11 +268,11 @@ export function StudentScan() {
   return (
     <>
       <PageHeader title="Scan QR Code" subtitle="Mark your attendance for today's session" />
-      <div style={{ padding: 24, maxWidth: 560 }} className="fade-in">
+      <div className="p-4 sm:p-6 max-w-[560px] animate-fade-in">
         {result && (
           <Alert type={result.status === 'PRESENT' ? 'success' : 'warning'}>
             <strong>Attendance marked — {result.status}</strong><br />
-            {result.markedAt && <span style={{ fontSize: 12 }}>Recorded at {format(new Date(result.markedAt), 'HH:mm:ss')}</span>}
+            {result.markedAt && <span className="text-xs">Recorded at {format(new Date(result.markedAt), 'HH:mm:ss')}</span>}
           </Alert>
         )}
         {dashboard?.markedToday && !result && (
@@ -281,10 +281,10 @@ export function StudentScan() {
 
         {biometricAvailable && !biometricRegistered && !dashboard?.markedToday && !result && (
           <Alert type="info">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-              <div>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="min-w-0">
                 <strong>Set up fingerprint authentication</strong><br />
-                <span style={{ fontSize: 12 }}>Secure your attendance with biometric verification</span>
+                <span className="text-xs">Secure your attendance with biometric verification</span>
               </div>
               <Button size="sm" variant="outline" loading={biometricLoading} onClick={handleSetupBiometric}>
                 Set up fingerprint
@@ -294,42 +294,38 @@ export function StudentScan() {
         )}
 
         {/* Network Status */}
-        <Card style={{ marginBottom: 16, padding: '12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: networkInfo.online ? 'var(--green)' : 'var(--red)' }} />
-              <span style={{ fontSize: 12, fontWeight: 500 }}>
+        <Card className="mb-4 !px-4 !py-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-2 h-2 rounded-full shrink-0 ${networkInfo.online ? 'bg-green' : 'bg-red'}`} />
+              <span className="text-xs font-medium truncate">
                 {networkInfo.online ? 'Connected to network' : 'No network connection'}
               </span>
             </div>
-            <span style={{ fontSize: 10, color: 'var(--gray-400)', fontFamily: 'var(--mono)' }}>
+            <span className="text-[10px] text-gray-400 font-mono">
               {networkInfo.ssid || 'Detecting...'}
             </span>
           </div>
         </Card>
 
         {/* Camera Scanner */}
-        <Card style={{ marginBottom: 16, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontWeight: 600 }}>QR Scanner</div>
+        <Card className="mb-4 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+            <div className="font-semibold">QR Scanner</div>
             {cameraActive && (
               <Button size="sm" variant="outline" onClick={stopCamera}>Stop Camera</Button>
             )}
           </div>
 
-          <div id="qr-reader" ref={scannerRef} style={{ width: '100%', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 12 }} />
+          <div id="qr-reader" ref={scannerRef} className="w-full rounded overflow-hidden mb-3" />
 
           {autoScanning && (
             <Alert type="info" ><strong>QR detected — marking your attendance...</strong></Alert>
           )}
           {!cameraActive && !result && !dashboard?.markedToday && (
-            <div style={{ textAlign: 'center' }}>
+            <div className="text-center">
               <div
-                style={{
-                  width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', margin: '0 auto 16px', cursor: 'pointer',
-                  background: 'var(--red-light)', transition: 'transform .15s',
-                }}
+                className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 cursor-pointer bg-red-light transition-transform duration-150"
                 onClick={startCamera}
                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -339,60 +335,60 @@ export function StudentScan() {
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
               </div>
-              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Scan QR Code with Camera</h3>
-              <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>
+              <h3 className="text-[15px] font-semibold mb-1.5">Scan QR Code with Camera</h3>
+              <p className="text-xs text-gray-400 mb-4">
                 Point your camera at the facilitator's QR code to mark attendance
               </p>
-              <Button onClick={startCamera} className="btn-sign" style={{ width: '100%', justifyContent: 'center' }}>
+              <Button onClick={startCamera} className="animate-sign-pulse text-lg font-semibold !px-7 !py-4 !rounded-[12px] hover:scale-105 hover:shadow-[0_10px_24px_rgba(192,57,43,0.28)] active:scale-95 w-full justify-center">
                 Open Camera &amp; Sign Attendance
               </Button>
               {scannerError && (
-                <p style={{ fontSize: 11, color: 'var(--red)', marginTop: 8 }}>{scannerError}</p>
+                <p className="text-[11px] text-red mt-2">{scannerError}</p>
               )}
             </div>
           )}
 
           {cameraActive && (
-            <p style={{ fontSize: 11, color: 'var(--gray-400)', textAlign: 'center', marginTop: 8 }}>
+            <p className="text-[11px] text-gray-400 text-center mt-2">
               Align the QR code within the frame. Scanning happens automatically.
             </p>
           )}
         </Card>
 
         {/* Manual Token Entry */}
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Manual Entry</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 12 }}>
+        <Card className="mb-4">
+          <div className="font-semibold mb-3">Manual Entry</div>
+          <p className="text-xs text-gray-400 mb-3">
             If camera scanning is unavailable, paste the QR token below.
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2">
             <input
               value={token} onChange={e => setToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !loading && submitScan()}
               placeholder="Paste QR token here..."
-              style={{ flex: 1, padding: '10px 14px', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius)', fontSize: 13, fontFamily: 'var(--mono)' }}
+              className="flex-1 min-w-0 px-3.5 py-2.5 border-[1.5px] border-gray-200 rounded text-[13px] font-mono outline-none focus:border-red"
             />
-            <Button loading={loading || biometricLoading} onClick={() => submitScan()} disabled={dashboard?.markedToday || biometricLoading} className="btn-sign">
+            <Button loading={loading || biometricLoading} onClick={() => submitScan()} disabled={dashboard?.markedToday || biometricLoading} className="animate-sign-pulse text-lg font-semibold !px-7 !py-4 !rounded-[12px] hover:scale-105 hover:shadow-[0_10px_24px_rgba(192,57,43,0.28)] active:scale-95">
               {biometricRegistered ? 'Verify & Sign Attendance' : 'Sign Attendance'}
             </Button>
           </div>
           {biometricRegistered && (
-            <p style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 10 }}>
+            <p className="text-[11px] text-gray-400 mt-2.5">
               Fingerprint verification will be required before marking attendance
             </p>
           )}
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Validation Checklist</div>
+          <div className="font-semibold mb-3">Validation Checklist</div>
           {checks.map((c, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < checks.length - 1 ? '1px solid var(--gray-50)' : 'none' }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: c.green ? 'var(--green-light)' : c.pass ? 'var(--green-light)' : 'var(--red-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 10, color: c.green ? 'var(--green-dark)' : c.pass ? 'var(--green-dark)' : 'var(--red)' }}>{c.pass ? '\u2713' : '\u2717'}</span>
+            <div key={i} className={`flex items-center gap-2.5 py-2 ${i < checks.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center ${c.green || c.pass ? 'bg-green-light' : 'bg-red-light'}`}>
+                <span className={`text-[10px] ${c.green || c.pass ? 'text-green-dark' : 'text-red'}`}>{c.pass ? '\u2713' : '\u2717'}</span>
               </div>
-              <span style={{ fontSize: 13, fontWeight: c.green ? 600 : 400, color: c.green ? 'var(--green-dark)' : c.pass ? 'var(--gray-900)' : 'var(--gray-400)' }}>
+              <span className={`text-[13px] min-w-0 ${c.green ? 'font-semibold text-green-dark' : c.pass ? 'text-gray-900' : 'text-gray-400'}`}>
                 {c.label}
-                {c.optional && <span style={{ fontSize: 10, color: 'var(--gray-300)', marginLeft: 6 }}>(recommended)</span>}
+                {c.optional && <span className="text-[10px] text-gray-300 ml-1.5">(recommended)</span>}
               </span>
             </div>
           ))}
@@ -429,24 +425,24 @@ export function StudentHistory() {
 
   const cols = [
     { key: 'date',         label: 'Date',     strong: true, render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
-    { key: 'markedAt',     label: 'Time',     render: v => v ? <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{format(new Date(v), 'HH:mm')}</span> : '—' },
+    { key: 'markedAt',     label: 'Time',     render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
     { key: 'cohortName',   label: 'Cohort' },
     { key: 'status',       label: 'Status',   render: v => <Badge status={v} /> },
     { key: 'manual',       label: 'Type',     render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
-    { key: 'manualReason', label: 'Note',     render: v => v ? <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>{v}</span> : null },
+    { key: 'manualReason', label: 'Note',     render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : null },
   ]
 
   return (
     <>
       <PageHeader title="My Attendance" subtitle={`${total} records`} />
-      <div style={{ padding: 24 }} className="fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <StatCard label="Present" value={present} badgeColor="green" />
           <StatCard label="Late"    value={late}    badgeColor="yellow" />
           <StatCard label="Absent"  value={absent}  badgeColor="red" />
           <StatCard label="Excused" value={excused} />
         </div>
-        <Card>
+        <Card className="overflow-x-auto">
           <Table columns={cols} rows={records} emptyMessage="No attendance records yet" />
           <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
@@ -508,20 +504,20 @@ export function StudentSettings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="Manage your account" />
-      <div style={{ padding: 24, maxWidth: 480 }} className="fade-in">
+      <div className="p-4 sm:p-6 max-w-[480px] animate-fade-in">
         {/* Biometric Settings */}
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Biometric Authentication</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>
+        <Card className="mb-4">
+          <div className="font-semibold mb-1">Biometric Authentication</div>
+          <p className="text-xs text-gray-400 mb-4">
             Register your fingerprint for secure attendance marking.
           </p>
           {platformAuth ? (
             biometricRegistered ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--green-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--green-dark)' }}>{'\u2713'}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-green-light flex items-center justify-center shrink-0">
+                  <span className="text-xs text-green-dark">{'\u2713'}</span>
                 </div>
-                <span style={{ fontSize: 13, color: 'var(--green-dark)', fontWeight: 500 }}>Fingerprint registered</span>
+                <span className="text-[13px] text-green-dark font-medium">Fingerprint registered</span>
               </div>
             ) : (
               <Button variant="outline" loading={biometricLoading} onClick={handleRegisterBiometric}>
@@ -535,8 +531,8 @@ export function StudentSettings() {
 
         {/* Password Change */}
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Change Password</div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 20 }}>Use a strong password of at least 6 characters.</p>
+          <div className="font-semibold mb-1">Change Password</div>
+          <p className="text-xs text-gray-400 mb-5">Use a strong password of at least 6 characters.</p>
           <form onSubmit={handleChange}>
             <Input label="Current password" type="password" value={form.currentPassword} onChange={e => setForm(p => ({ ...p, currentPassword: e.target.value }))} />
             <Input label="New password" type="password" value={form.newPassword} onChange={e => setForm(p => ({ ...p, newPassword: e.target.value }))} />
@@ -596,14 +592,14 @@ export function StudentExcuse() {
     <>
       <PageHeader title="Excuse Requests" subtitle="Request absence excuses and track review status"
         actions={<Button size="sm" onClick={() => setModal(true)}>+ Request Excuse</Button>} />
-      <div style={{ padding: 24 }} className="fade-in">
-        <Card>
+      <div className="p-4 sm:p-6 animate-fade-in">
+        <Card className="overflow-x-auto">
           <Table
             columns={[
               { key: 'startDate',    label: 'Start Date', render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
               { key: 'numberOfDays', label: 'Days',       render: v => `${v} day${v > 1 ? 's' : ''}` },
               { key: 'reason',       label: 'Reason',     strong: true },
-              { key: 'coverUpPlan',  label: 'Cover-Up Plan', render: v => <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>{v}</span> },
+              { key: 'coverUpPlan',  label: 'Cover-Up Plan', render: v => <span className="text-xs text-gray-600">{v}</span> },
               { key: 'status',       label: 'Status',     render: v => <Badge status={v} /> },
               { key: 'reviewerNotes',label: 'Reviewer Feedback', render: (v, row) => row.reviewedByName ? `${row.reviewedByName}: ${v || 'No notes'}` : '—' },
             ]}
@@ -615,12 +611,12 @@ export function StudentExcuse() {
 
       <Modal open={modal} onClose={() => setModal(false)} title="Request Absence Excuse">
         <Input label="Reason for Absence *" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} placeholder="e.g. Medical emergency / Family event" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input label="Start Date *" type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
           <Input label="Number of Days *" type="number" min="1" max="30" value={form.numberOfDays} onChange={e => setForm(p => ({ ...p, numberOfDays: parseInt(e.target.value) || 1 }))} />
         </div>
         <Textarea label="Plan to Cover Missed Lessons *" value={form.coverUpPlan} onChange={e => setForm(p => ({ ...p, coverUpPlan: e.target.value }))} placeholder="Detail how you will study and submit assignments for missed classes..." rows={3} />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+        <div className="flex justify-end gap-2 mt-4 flex-wrap">
           <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
           <Button loading={saving} onClick={submit}>Submit Request</Button>
         </div>

@@ -46,28 +46,23 @@ export default function LandingPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--off)', display: 'flex', flexDirection: 'column' }}>
+    <div className="min-h-screen bg-off flex flex-col">
       {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 24px', borderBottom: '1px solid var(--gray-100)', background: 'var(--white)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--red)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="flex flex-wrap items-center justify-between px-6 py-3 border-b border-gray-100 bg-white">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-red rounded-md flex items-center justify-center">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/></svg>
           </div>
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--gray-900)' }}>QR Attendance</span>
+          <span className="text-[15px] font-semibold text-gray-900">QR Attendance</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link to="/project" style={{ fontSize: 12, color: 'var(--gray-500)', textDecoration: 'none', padding: '6px 12px', borderRadius: 6, border: '1px solid var(--gray-200)' }}>
+        <div className="flex items-center gap-2">
+          <Link to="/project" className="text-xs text-gray-500 no-underline px-3 py-1.5 rounded-md border border-gray-200">
             Projection Screen
           </Link>
           <button onClick={toggle} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 20,
-              background: dark ? '#2e2e42' : 'var(--gray-50)', border: '1px solid var(--gray-200)',
-              color: dark ? '#c0c0d8' : 'var(--gray-600)', fontSize: 12, fontWeight: 500, cursor: 'pointer', lineHeight: 1,
-            }}>
+            className={dark
+              ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#2e2e42] border border-gray-200 text-[#c0c0d8] text-xs font-medium cursor-pointer leading-none'
+              : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 text-xs font-medium cursor-pointer leading-none'}>
             {dark ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Light</>
             ) : (
@@ -78,40 +73,36 @@ export default function LandingPage() {
       </div>
 
       {/* Hero */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 48, maxWidth: 900, width: '100%', alignItems: 'center' }}>
+      <div className="flex-1 flex items-center justify-center px-4 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-[900px] w-full items-center">
           {/* Left — Hero */}
           <div>
-            <div style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--red)', background: 'var(--red-light)', padding: '3px 10px', borderRadius: 20 }}>v1.0 · Smart Attendance</span>
+            <div className="mb-3">
+              <span className="text-[11px] font-semibold text-red bg-red-light px-2.5 py-0.5 rounded-full">v1.0 · Smart Attendance</span>
             </div>
-            <h1 style={{ fontSize: 34, fontWeight: 700, color: 'var(--gray-900)', lineHeight: 1.2, marginBottom: 12 }}>
+            <h1 className="text-3xl sm:text-[34px] font-bold text-gray-900 leading-tight mb-3">
               {settings?.school_name || 'Tech School'}<br />
-              <span style={{ color: 'var(--red)' }}>QR Attendance System</span>
+              <span className="text-red">QR Attendance System</span>
             </h1>
-            <p style={{ fontSize: 14, color: 'var(--gray-500)', lineHeight: 1.6, marginBottom: 24, maxWidth: 400 }}>
+            <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-[400px]">
               Secure, contactless attendance tracking with dynamic QR codes, biometric verification, and real-time classroom projection.
             </p>
-            <Link to="/project" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500,
-              color: 'var(--gray-600)', textDecoration: 'none', padding: '10px 16px', borderRadius: 8,
-              border: '1px solid var(--gray-200)', background: 'var(--white)',
-            }}>
+            <Link to="/project" className="inline-flex items-center gap-2 text-[13px] font-medium text-gray-600 no-underline px-4 py-2.5 rounded border border-gray-200 bg-white">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               Open Classroom Projection Screen
             </Link>
           </div>
 
           {/* Right — Login */}
-          <div style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: 28, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 4, color: 'var(--gray-900)' }}>Sign in</h2>
-            <p style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 24 }}>Sign in to your account to continue.</p>
+          <div className="bg-white border border-gray-100 rounded-lg p-7 shadow-md">
+            <h2 className="text-xl font-black mb-1 text-gray-900">Sign in</h2>
+            <p className="text-[13px] text-gray-400 mb-6">Sign in to your account to continue.</p>
             {error && <Alert type="error">{error}</Alert>}
             <form onSubmit={handleSubmit}>
               <Input label="Email" type="email" placeholder="you@school.edu" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-              <div style={{ position: 'relative' }}>
+              <div className="relative">
                 <Input label="Password" type={showPw ? 'text' : 'password'} placeholder="••••••••" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
-                <button type="button" onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 10, top: 32, background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--gray-400)' }}>
+                <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-2.5 top-8 bg-transparent border-0 cursor-pointer p-1 text-gray-400">
                   {showPw ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                   ) : (
@@ -119,17 +110,17 @@ export default function LandingPage() {
                   )}
                 </button>
               </div>
-              <Button type="submit" loading={loading} style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}>Sign in</Button>
+              <Button type="submit" loading={loading} className="w-full justify-center mb-3">Sign in</Button>
             </form>
-            <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--gray-400)' }}>
-              No account? <Link to="/register" style={{ color: 'var(--red)', fontWeight: 500, textDecoration: 'none' }}>Register here</Link>
+            <p className="text-center text-[13px] text-gray-400">
+              No account? <Link to="/register" className="text-red font-medium no-underline">Register here</Link>
             </p>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ textAlign: 'center', padding: '20px 24px', borderTop: '1px solid var(--gray-100)', fontSize: 12, color: 'var(--gray-400)' }}>
+      <div className="text-center px-6 py-5 border-t border-gray-100 text-xs text-gray-400">
         {settings?.school_name || 'Tech School'} · {settings?.school_address || 'Lagos, Nigeria'}
       </div>
     </div>

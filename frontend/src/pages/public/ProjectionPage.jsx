@@ -159,43 +159,32 @@ export function ProjectionPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: dark ? '#0f172a' : '#f1f5f9', color: C.fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 18, color: C.muted }}>Loading classroom display...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: dark ? '#0f172a' : '#f1f5f9', color: C.fg }}>
+        <div className="text-lg" style={{ color: C.muted }}>Loading classroom display...</div>
       </div>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: C.bg,
-      color: C.fg,
-      fontFamily: 'Inter, system-ui, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: isMobile ? '12px 16px' : '24px 36px',
-      boxSizing: 'border-box'
-    }}>
+    <div className="min-h-screen flex flex-col px-4 py-3 sm:px-9 sm:py-6" style={{ background: C.bg, color: C.fg, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Top Bar */}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 12, gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ background: '#ef4444', color: '#fff', fontWeight: 800, padding: '6px 12px', borderRadius: 10, fontSize: 14, letterSpacing: '.05em', flexShrink: 0 }}>
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between mb-4 border-b pb-3 gap-3" style={{ borderColor: C.border }}>
+        <div className="flex items-center gap-3">
+          <div className="bg-[#ef4444] text-white font-extrabold px-3 py-1.5 rounded-lg text-sm tracking-wide shrink-0">
             QRS
           </div>
-          <div>
-            <h1 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, margin: 0, color: C.fg }}>Classroom Projection</h1>
-            <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>{settings?.school_name || 'Tech School'} — Scan dynamic QR code</p>
+          <div className="min-w-0">
+            <h1 className="text-base md:text-xl font-bold m-0" style={{ color: C.fg }}>Classroom Projection</h1>
+            <p className="text-[11px] m-0" style={{ color: C.muted }}>{settings?.school_name || 'Tech School'} — Scan dynamic QR code</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedCohort}
             onChange={e => setSelected(e.target.value)}
-            style={{
-              background: C.selectBg, color: C.fg, border: `1px solid ${C.selectBorder}`,
-              padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: isMobile ? 1 : 'none',
-            }}
+            className="px-3 py-2 rounded-md text-[13px] font-semibold outline-none cursor-pointer flex-1 md:flex-none"
+            style={{ background: C.selectBg, color: C.fg, border: `1px solid ${C.selectBorder}` }}
           >
             {cohorts.map(c => (
               <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>
@@ -205,10 +194,8 @@ export function ProjectionPage() {
           <button
             onClick={toggle}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            style={{
-              background: C.controlBg, color: C.fg, border: `1px solid ${C.controlBorder}`,
-              padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s'
-            }}
+            className="px-3 py-2 rounded-md text-xs font-semibold cursor-pointer transition-all duration-150"
+            style={{ background: C.controlBg, color: C.fg, border: `1px solid ${C.controlBorder}` }}
           >
             {dark ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: -2, marginRight: 5 }}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Light</>
@@ -219,20 +206,16 @@ export function ProjectionPage() {
 
           <button
             onClick={toggleFullscreen}
-            style={{
-              background: C.controlBg, color: C.fg, border: `1px solid ${C.controlBorder}`,
-              padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s'
-            }}
+            className="px-3 py-2 rounded-md text-xs font-semibold cursor-pointer transition-all duration-150"
+            style={{ background: C.controlBg, color: C.fg, border: `1px solid ${C.controlBorder}` }}
           >
             ⛶ Fullscreen
           </button>
 
           <a
             href="https://qrsattendance.netlify.app"
-            style={{
-              color: C.muted, fontSize: 12, textDecoration: 'none', padding: '8px 12px', borderRadius: 8,
-              border: `1px solid ${C.border}`, background: C.linkBg
-            }}
+            className="text-xs no-underline px-3 py-2 rounded-md"
+            style={{ color: C.muted, border: `1px solid ${C.border}`, background: C.linkBg }}
           >
             ← Back to Login
           </a>
@@ -240,74 +223,52 @@ export function ProjectionPage() {
       </div>
 
       {/* Main Content Display */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2.5fr 1fr', gap: 20, alignItems: 'center', justifyItems: 'center' }}>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[2.5fr_1fr] gap-5 items-center justify-items-center">
         {/* Center Projection Card */}
-        <div style={{
-          background: C.cardBg,
-          backdropFilter: 'blur(16px)',
-          border: `1px solid ${C.borderStrong}`,
-          borderRadius: 24,
-          padding: isMobile ? 24 : 40,
-          textAlign: 'center',
-          boxShadow: C.shadow,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: isMobile ? 320 : 480
-        }}>
+        <div className="flex flex-col items-center justify-center text-center rounded-3xl p-6 sm:p-10 min-h-[320px] lg:min-h-[480px]"
+          style={{ background: C.cardBg, backdropFilter: 'blur(16px)', border: `1px solid ${C.borderStrong}`, boxShadow: C.shadow }}>
           {session && !isExpired ? (
             <>
-              <div style={{ marginBottom: 12, display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.4)', color: '#4ade80', padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 10px #22c55e' }} />
+              <div className="mb-3 inline-flex items-center gap-2 bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.4)] text-[#4ade80] px-4 py-1.5 rounded-full text-[13px] font-semibold">
+                <span className="w-2 h-2 rounded-full bg-[#22c55e] inline-block shadow-[0_0_10px_#22c55e]" />
                 Active Session — 10s TOTP Rotation Live
               </div>
 
               {/* QR Image Frame */}
-              <div style={{
-                position: 'relative',
-                background: '#fff',
-                padding: 16,
-                borderRadius: 20,
-                boxShadow: '0 0 40px rgba(239, 68, 68, 0.25)',
-                marginBottom: 20,
-                marginTop: 8
-              }}>
+              <div className="relative bg-white p-4 rounded-[20px] shadow-[0_0_40px_rgba(239,68,68,0.25)] mb-5 mt-2">
                 <img
                   src={`data:image/png;base64,${session.qrImageBase64}`}
                   alt="Live Session QR"
-                  style={{ width: isMobile ? 180 : 260, height: isMobile ? 180 : 260, display: 'block', borderRadius: 8 }}
+                  className="block rounded"
+                  style={{ width: isMobile ? 180 : 260, height: isMobile ? 180 : 260 }}
                 />
               </div>
 
               {/* TOTP Progress Bar */}
-              <div style={{ width: 280, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted, marginBottom: 4 }}>
+              <div className="w-[280px] max-w-full mb-4">
+                <div className="flex justify-between text-[11px] mb-1" style={{ color: C.muted }}>
                   <span>Dynamic Code Security Refresh</span>
-                  <span style={{ fontFamily: 'monospace' }}>{totpCountdown}s</span>
+                  <span className="font-mono">{totpCountdown}s</span>
                 </div>
-                <div style={{ height: 4, background: C.progressBg, borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(totpCountdown / 10) * 100}%`, background: '#3b82f6', transition: 'width 1s linear' }} />
+                <div className="h-1 rounded-[2px] overflow-hidden" style={{ background: C.progressBg }}>
+                  <div className="h-full bg-[#3b82f6] transition-[width] duration-1000 ease-linear" style={{ width: `${(totpCountdown / 10) * 100}%` }} />
                 </div>
               </div>
 
-              <div style={{ fontSize: 14, color: C.soft }}>
+              <div className="text-sm" style={{ color: C.soft }}>
                 Cohort: <strong style={{ color: C.fg }}>{(session.cohortName || '').match(/\d+/)?.[0] || session.cohortName}</strong>
               </div>
             </>
           ) : (
-            <div style={{ padding: '60px 20px', color: C.muted }}>
-              <div style={{ fontSize: 64, marginBottom: 16 }}>⛔</div>
-              <h2 style={{ fontSize: 22, color: C.fg, marginBottom: 8 }}>Session Expired or Inactive</h2>
-              <p style={{ fontSize: 14, maxWidth: 360, margin: '0 auto 20px auto' }}>
+            <div className="px-5 py-14" style={{ color: C.muted }}>
+              <div className="text-[64px] mb-4">⛔</div>
+              <h2 className="text-2xl sm:text-4xl mb-2" style={{ color: C.fg }}>Session Expired or Inactive</h2>
+              <p className="text-sm max-w-[360px] mx-auto mb-5">
                 The automated QR attendance session has ended. Request facilitator to generate a new session or set session duration.
               </p>
               <button
                 onClick={() => fetchSession(selectedCohort)}
-                style={{
-                  background: '#ef4444', color: '#fff', border: 'none', padding: '10px 20px',
-                  borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer'
-                }}
+                className="bg-[#ef4444] text-white border-0 px-5 py-2.5 rounded-md text-sm font-semibold cursor-pointer"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh Session
               </button>
@@ -316,46 +277,46 @@ export function ProjectionPage() {
         </div>
 
         {/* Sidebar Info Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="flex flex-col gap-5 w-full max-w-[380px]">
           {/* Countdown Card */}
-          <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 20, padding: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+          <div className="rounded-[20px] p-6" style={{ background: C.cardBg, border: `1px solid ${C.border}` }}>
+            <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.muted }}>
               Remaining Session Duration
             </div>
-            <div style={{ fontFamily: 'monospace', fontSize: 36, fontWeight: 700, color: isExpired ? '#ef4444' : C.fg }}>
+            <div className="font-mono text-4xl font-bold" style={{ color: isExpired ? '#ef4444' : C.fg }}>
               {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
             </div>
-            <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>
+            <div className="text-[11px] mt-1" style={{ color: C.dim }}>
               Session auto-stops when countdown reaches 00:00
             </div>
           </div>
 
           {/* Live Attendance Counter Card */}
-          <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 20, padding: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 12 }}>
+          <div className="rounded-[20px] p-6" style={{ background: C.cardBg, border: `1px solid ${C.border}` }}>
+            <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.muted }}>
               Live Attendance Count
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: 12, borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-[rgba(34,197,94,0.1)] border border-[rgba(34,197,94,0.2)] p-3 rounded-xl text-center">
+                <div className="text-2xl font-bold" style={{ color: C.green }}>
                   {summary ? (summary.present + summary.late) : 0}
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Scanned / Present</div>
+                <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>Scanned / Present</div>
               </div>
 
-              <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: 12, borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: C.amber }}>
+              <div className="bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.2)] p-3 rounded-xl text-center">
+                <div className="text-2xl font-bold" style={{ color: C.amber }}>
                   {summary ? summary.late : 0}
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Late Arrivals</div>
+                <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>Late Arrivals</div>
               </div>
             </div>
           </div>
 
           {/* Quick Instructions */}
-          <div style={{ background: C.cardBgDeep, border: `1px solid ${C.borderSoft}`, borderRadius: 20, padding: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.soft, marginBottom: 8 }}>📲 Student Instructions:</div>
-            <ol style={{ paddingLeft: 18, margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+          <div className="rounded-[20px] p-5" style={{ background: C.cardBgDeep, border: `1px solid ${C.borderSoft}` }}>
+            <div className="text-xs font-semibold mb-2" style={{ color: C.soft }}>📲 Student Instructions:</div>
+            <ol className="pl-[18px] m-0 text-xs leading-relaxed" style={{ color: C.muted }}>
               <li>Connect to school WiFi or allow GPS location.</li>
               <li>Log into student account on phone.</li>
               <li>Scan the projected QR code above before 8:30 AM for On-Time status.</li>
