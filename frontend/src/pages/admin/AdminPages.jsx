@@ -604,7 +604,12 @@ export function AdminCohorts() {
       setFacs(fList)
     }).catch(err => {
       console.error('Cohort load error:', err)
-      toast.error('Failed to load cohorts')
+      adminApi.listCohorts().then(cRes => {
+        const cList = Array.isArray(cRes.data) ? cRes.data : (cRes.data?.content || [])
+        setCohorts(cList)
+        setTotal(cList.length)
+        setTotalPages(1)
+      }).catch(() => toast.error('Failed to load cohorts'))
     }).finally(() => setLoading(false))
   }, [debouncedQ, statusFilter, page, size])
 
@@ -910,11 +915,21 @@ export function AdminDevices() {
       sort: 'name',
       order: 'asc',
     }).then(r => {
-      setStudents(r.data.content || [])
-      setTotal(r.data.totalElements || 0)
-      setTotalPages(Math.max(r.data.totalPages || 1, 1))
-    }).catch(() => toast.error('Failed to load device registry'))
-      .finally(() => setLoading(false))
+      const sList = Array.isArray(r.data) ? r.data : (r.data?.content || [])
+      const sTotal = Array.isArray(r.data) ? r.data.length : (r.data?.totalElements || 0)
+      const sPages = Array.isArray(r.data) ? 1 : Math.max(r.data?.totalPages || 1, 1)
+      setStudents(sList)
+      setTotal(sTotal)
+      setTotalPages(sPages)
+    }).catch(err => {
+      console.error('Device load error:', err)
+      adminApi.listUsers('student').then(r => {
+        const sList = Array.isArray(r.data) ? r.data : (r.data?.content || [])
+        setStudents(sList)
+        setTotal(sList.length)
+        setTotalPages(1)
+      }).catch(() => toast.error('Failed to load device registry'))
+    }).finally(() => setLoading(false))
   }, [debouncedQ, page, size])
 
   useEffect(() => { setPage(0) }, [debouncedQ])
