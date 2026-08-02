@@ -396,7 +396,7 @@ public class AttendanceService {
 
         List<Attendance> records = attendanceRepository.findByStudentIdAndDateBetween(studentId, first, last);
         Map<LocalDate, Attendance> byDay = records.stream()
-                .collect(Collectors.toMap(Attendance::getDate, Function.identity()));
+                .collect(Collectors.toMap(Attendance::getDate, Function.identity(), (a, b) -> a));
         Map<LocalDate, String> holidays = holidayService.holidayNamesBetween(first, last, cohortId);
 
         List<AnalyticsDto.CalendarDay> days = new ArrayList<>();
@@ -659,11 +659,11 @@ public class AttendanceService {
                 .filter(Objects::nonNull).collect(Collectors.toSet());
 
         Map<String, User> students = userRepository.findAllById(studentIds).stream()
-                .collect(Collectors.toMap(User::getId, Function.identity()));
+                .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
         Map<String, Cohort> cohorts = cohortRepository.findAllById(cohortIds).stream()
-                .collect(Collectors.toMap(Cohort::getId, Function.identity()));
+                .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
         Map<String, Device> devices = deviceRepository.findAllById(deviceIds).stream()
-                .collect(Collectors.toMap(Device::getId, Function.identity()));
+                .collect(Collectors.toMap(Device::getId, Function.identity(), (a, b) -> a));
 
         return records.stream().map(a -> {
             User s = students.get(a.getStudentId());

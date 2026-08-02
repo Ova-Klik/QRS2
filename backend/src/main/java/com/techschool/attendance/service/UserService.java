@@ -400,7 +400,7 @@ public class UserService {
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         if (ids.isEmpty()) return Map.of();
         return cohortRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(Cohort::getId, Function.identity()));
+                .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
     }
 
     private Map<String, Device> loadDevicesByStudent(List<User> users) {

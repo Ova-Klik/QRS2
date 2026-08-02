@@ -87,7 +87,7 @@ public class CohortService {
                 .collect(Collectors.toSet());
         Map<String, User> facById = facilitatorIds.isEmpty() ? Map.of()
                 : userRepository.findAllById(facilitatorIds).stream()
-                        .collect(Collectors.toMap(User::getId, Function.identity()));
+                        .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
 
         Map<String, Long> studentCountByCohort = userRepository.findByRole(User.Role.STUDENT).stream()
                 .filter(u -> u.getCohortId() != null)
@@ -166,7 +166,7 @@ public class CohortService {
                 .collect(Collectors.toSet());
         Map<String, User> facById = facilitatorIds.isEmpty() ? Map.of()
                 : userRepository.findAllById(facilitatorIds).stream()
-                .collect(Collectors.toMap(User::getId, Function.identity()));
+                .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
 
         String q = query == null ? "" : query.trim().toLowerCase();
         if (!q.isEmpty()) {
