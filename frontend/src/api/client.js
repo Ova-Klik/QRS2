@@ -26,9 +26,9 @@ api.interceptors.response.use(
       const isAuthFlow = AUTH_FLOW_URLS.some(prefix => url.startsWith(prefix))
       if (!isAuthFlow) {
         localStorage.removeItem('qrs_token')
-        if (window.location.pathname !== '/login') {
+        if (window.location.pathname !== '/') {
           const qrs = new URLSearchParams(window.location.search).get('token')
-          window.location.href = '/login' + (qrs ? `?qrs=${encodeURIComponent(qrs)}` : '')
+          window.location.href = '/' + (qrs ? `?qrs=${encodeURIComponent(qrs)}` : '')
         }
       }
     }
@@ -76,15 +76,21 @@ export const adminApi = {
   // Devices
   registerDevice: (body)              => api.post('/admin/devices/register', body),
   unlockDevice:   (studentId)         => api.post(`/admin/devices/unlock/${studentId}`),
+  searchDevices:  (params)            => api.get('/admin/devices/search', { params }),
   // Cohorts
   listCohorts:    ()                  => api.get('/admin/cohorts'),
+  searchCohorts:  (params)            => api.get('/admin/cohorts/search', { params }),
+  getCohort:      (id)                => api.get(`/admin/cohorts/${id}`),
   createCohort:   (body)              => api.post('/admin/cohorts', body),
+  updateCohort:   (id, body)          => api.put(`/admin/cohorts/${id}`, body),
+  deleteCohort:   (id)                => api.delete(`/admin/cohorts/${id}`),
   toggleCohort:   (id)                => api.patch(`/admin/cohorts/${id}/toggle`),
   cohortStudents: (id)                => api.get(`/admin/cohorts/${id}/students`),
   cohortStudentsPage: (id, params)    => api.get(`/admin/cohorts/${id}/students/page`, { params }),
-  exportCohort:   (id, format)        => api.get(`/admin/cohorts/${id}/export?format=${format}`, { responseType: 'blob' }),
   // Students
   searchStudents: (params)            => api.get('/admin/students/search', { params }),
+  deleteStudent:  (id)                => api.delete(`/admin/students/${id}`),
+  exportStudents: (params)            => api.get('/admin/students/export', { params, responseType: 'blob' }),
   // Audit
   auditLogs:      (params)            => api.get('/admin/audit', { params }),
   // Stats

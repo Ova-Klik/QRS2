@@ -66,6 +66,27 @@ public class UserDto {
         }
     }
 
+    @Data @AllArgsConstructor @NoArgsConstructor
+    public static class StudentAttendanceResponse {
+        private String id;
+        private String name;
+        private String registrationNumber;
+        private String email;
+        private String cohortId;
+        private String cohortName;
+        private double attendanceRate;
+        private int presentDays;
+        private int absentDays;
+        private int excusedDays;
+        private int lateDays;
+        private int holidayCount;
+        private int totalAttendanceDays;
+        private String rating; // EXCELLENT, GOOD, FAIR, POOR
+        private java.time.LocalDate lastAttendanceDate;
+        private boolean active;
+        private Instant createdAt;
+    }
+
     @Data
     public static class UpdateUserRequest {
         private String name;

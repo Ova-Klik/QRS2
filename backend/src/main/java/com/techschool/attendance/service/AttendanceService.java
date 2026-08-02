@@ -77,8 +77,9 @@ public class AttendanceService {
         Device device = deviceRepository.findByStudentId(studentId).orElse(null);
         String incomingFingerprint = request.getDeviceFingerprint();
         if (incomingFingerprint == null || incomingFingerprint.trim().isEmpty()) {
-            incomingFingerprint = "fp_" + (studentId.length() >= 8 ? studentId.substring(0, 8) : studentId);
+            throw AppException.badRequest("Device fingerprint is required to mark attendance.");
         }
+        incomingFingerprint = incomingFingerprint.trim();
 
         if (device == null || !device.isLocked() || device.getFingerprint() == null) {
             if (device == null) {
@@ -153,10 +154,6 @@ public class AttendanceService {
             onSchoolNetwork = isIpInSchoolRange(request.getClientIP(), ipRange);
         }
 
-        if (!onSchoolNetwork) {
-            onSchoolNetwork = isIpInSchoolRange(studentId, ipRange);
-        }
-
         if (onSchoolNetwork) return; // Passed via WiFi/IP network!
 
         // If network check fails, test GPS Geofence Fallback!
@@ -204,10 +201,26 @@ public class AttendanceService {
         return R * c;
     }
 
-    private boolean isIpInSchoolRange(String ipOrStudentId, String ipRange) {
+    private boolean isIpInSchoolRange(String clientIp, String ipRange) {
+        if (clientIp == null || clientIp.isBlank() || ipRange == null || ipRange.isBlank()) return false;
         try {
-            String prefix = ipRange.substring(0, ipRange.lastIndexOf('.'));
-            return ipOrStudentId.startsWith(prefix.replace("/", ""));
+            String cleanIp = clientIp.trim();
+            String range = ipRange.trim();
+            if (range.contains("/")) {
+                String subnet = range.split("/")[0];
+                int lastDot = subnet.lastIndexOf('.');
+                if (lastDot > 0) {
+                    String prefix = subnet.substring(0, lastDot);
+                    return cleanIp.startsWith(prefix);
+                }
+            } else {
+                int lastDot = range.lastIndexOf('.');
+                if (lastDot > 0) {
+                    String prefix = range.substring(0, lastDot);
+                    return cleanIp.startsWith(prefix);
+                }
+            }
+            return cleanIp.equals(range);
         } catch (Exception e) {
             return false;
         }
@@ -283,20 +296,12 @@ public class AttendanceService {
 
     public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getStudentHistoryPage(
             String studentId, int page, int size) {
-        List<Attendance> sorted = attendanceRepository.findByStudentId(studentId).stream()
-                .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
-                .collect(Collectors.toList());
-
-        int total = sorted.size();
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, total);
-        int to = Math.min(from + safeSize, total);
-
-        List<AttendanceDto.AttendanceRecord> content =
-                buildRecords(sorted.subList(from, to));
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
-                (int) Math.ceil((double) total / safeSize));
+        Pageable pageable = PageRequest.of(safePage, safeSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "date"));
+        Page<Attendance> result = attendanceRepository.findByStudentId(studentId, pageable);
+        return new AnalyticsDto.PageResponse<>(buildRecords(result.getContent()),
+                safePage, safeSize, result.getTotalElements(), result.getTotalPages());
     }
 
     public AttendanceDto.DailySummary getCohortSummaryToday(String cohortId) {
@@ -555,8 +560,9 @@ public class AttendanceService {
     // ── Cohort export data ───────────────────────────────
 
     public List<AnalyticsDto.CohortExportRow> buildCohortExportRows(String cohortId) {
-        Cohort cohort = cohortRepository.findById(cohortId)
-                .orElseThrow(() -> AppException.notFound("Cohort not found"));
+        if (!cohortRepository.existsById(cohortId)) {
+            throw AppException.notFound("Cohort not found");
+        }
         List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
@@ -612,9 +618,15 @@ public class AttendanceService {
             return Attendance.AttendanceStatus.HOLIDAY;
         }
         LocalTime now = LocalTime.now(zone);
-        String thresholdVal = getSetting("late_threshold", lateThreshold);
-        String[] parts = thresholdVal.split(":");
-        LocalTime threshold = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+        LocalTime threshold;
+        try {
+            String thresholdVal = getSetting("late_threshold", lateThreshold);
+            String[] parts = thresholdVal.split(":");
+            threshold = LocalTime.of(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()));
+        } catch (Exception e) {
+            log.warn("Invalid late_threshold setting. Defaulting to 08:31: {}", e.getMessage());
+            threshold = LocalTime.of(8, 31);
+        }
         return now.isBefore(threshold) ? Attendance.AttendanceStatus.PRESENT : Attendance.AttendanceStatus.LATE;
     }
 

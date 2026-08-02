@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { studentApi } from '../../api/client'
 import { authApi } from '../../api/client'
 import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Input, Modal, Select, Textarea, Pagination } from '../../components/common/UI'
@@ -458,7 +459,7 @@ export function StudentSettings() {
   const [biometricRegistered, setBiometricRegistered] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [platformAuth, setPlatformAuth] = useState(false)
-  const { user } = require('../../context/AuthContext').useAuth ? require('../../context/AuthContext').useAuth() : { user: null }
+  const { user } = useAuth()
 
   useEffect(() => {
     isPlatformAuthenticatorAvailable().then(avail => setPlatformAuth(avail)).catch(() => {})

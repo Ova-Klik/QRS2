@@ -136,7 +136,7 @@ export default function RegisterPage() {
         </form>
 
         <p className="text-center text-[13px] text-gray-400 mt-5">
-          Already have an account? <Link to="/login" className="text-red font-medium no-underline">Sign in</Link>
+          Already have an account? <Link to="/" className="text-red font-medium no-underline">Sign in</Link>
         </p>
       </div>
     </div>

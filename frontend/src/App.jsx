@@ -2,7 +2,6 @@ import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/layout/AppLayout'
-import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import { StudentDashboard, StudentScan, StudentHistory, StudentExcuse } from './pages/student/StudentPages'
 import { FacilitatorDashboard, FacilitatorQR, FacilitatorManual, FacilitatorReports, FacilitatorExcuses } from './pages/facilitator/FacilitatorPages'
@@ -25,7 +24,7 @@ function RequireAuth({ children, roles }) {
   )
   if (!user) {
     const token = new URLSearchParams(window.location.search).get('token')
-    const dest = '/login' + (token ? `?qrs=${encodeURIComponent(token)}` : '')
+    const dest = '/' + (token ? `?qrs=${encodeURIComponent(token)}` : '')
     return <Navigate to={dest} replace />
   }
   if (roles && !roles.includes(user.role)) return <Navigate to={defaultRoute(user.role)} replace />
@@ -39,7 +38,7 @@ function defaultRoute(role) {
 function RoleRedirect() {
   const { user, loading } = useAuth()
   if (loading) return null
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/" replace />
   return <Navigate to={defaultRoute(user.role)} replace />
 }
 
@@ -48,7 +47,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         {/* Public */}
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/project" element={<ProjectionPage />} />
         <Route path="/tester" element={<TesterPage />} />

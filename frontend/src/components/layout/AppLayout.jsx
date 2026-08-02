@@ -70,7 +70,7 @@ export default function AppLayout({ children }) {
 
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
-  const handleLogout = () => { logout(); navigate('/login') }
+  const handleLogout = () => { logout(); navigate('/') }
 
   const sidebarWidth = isMobile ? (mobileOpen ? 220 : 0) : (collapsed ? 64 : 220)
 

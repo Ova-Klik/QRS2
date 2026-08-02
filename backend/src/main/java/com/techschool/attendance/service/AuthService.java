@@ -21,8 +21,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final CohortRepository cohortRepository;
-    private final DeviceRepository deviceRepository;
-    private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final AuditService auditService;

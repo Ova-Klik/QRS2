@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -18,6 +19,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.http.ResponseEntity;
 
 @Service
 @RequiredArgsConstructor
@@ -107,6 +109,255 @@ public class UserService {
 
         return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
+    }
+
+    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchDevices(
+            String query, int page, int size, String sort, String order) {
+        List<User> candidates = userRepository.findByRole(User.Role.STUDENT);
+        String q = query == null ? "" : query.trim().toLowerCase();
+        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
+                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
+                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q)))
+                .collect(Collectors.toList());
+
+        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(filtered);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(filtered);
+
+        int total = filtered.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<UserDto.UserResponse> content = filtered.subList(from, to).stream()
+                .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
+                .collect(Collectors.toList());
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    public AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse> searchStudentsAdmin(
+            String cohortId, String query,
+            LocalDate startDate, LocalDate endDate,
+            String statusStr,
+            int page, int size,
+            String sort, String order) {
+
+        List<User> candidates = (cohortId != null && !cohortId.isBlank())
+                ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
+                : userRepository.findByRole(User.Role.STUDENT);
+
+        String q = query == null ? "" : query.trim().toLowerCase();
+        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
+                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
+                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q))
+                        || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
+                .collect(Collectors.toList());
+
+        Attendance.AttendanceStatus statusFilter = null;
+        if (statusStr != null && !statusStr.isBlank() && !"ALL".equalsIgnoreCase(statusStr)) {
+            try {
+                statusFilter = Attendance.AttendanceStatus.valueOf(statusStr.trim().toUpperCase());
+            } catch (Exception ignored) {}
+        }
+
+        final Attendance.AttendanceStatus targetStatus = statusFilter;
+        final LocalDate effStart = startDate;
+        final LocalDate effEnd = endDate;
+
+        if (targetStatus != null || effStart != null || effEnd != null) {
+            Set<String> matchingStudentIds;
+            if (effStart != null && effEnd != null) {
+                List<Attendance> inRange = attendanceRepository.findByDateBetween(effStart, effEnd);
+                matchingStudentIds = inRange.stream()
+                        .filter(a -> targetStatus == null || a.getStatus() == targetStatus)
+                        .map(Attendance::getStudentId)
+                        .collect(Collectors.toSet());
+            } else if (targetStatus != null) {
+                List<Attendance> allRecs = attendanceRepository.findAll();
+                matchingStudentIds = allRecs.stream()
+                        .filter(a -> a.getStatus() == targetStatus)
+                        .map(Attendance::getStudentId)
+                        .collect(Collectors.toSet());
+            } else {
+                matchingStudentIds = Set.of();
+            }
+
+            if (targetStatus != null) {
+                filtered = filtered.stream()
+                        .filter(u -> matchingStudentIds.contains(u.getId()))
+                        .collect(Collectors.toList());
+            }
+        }
+
+        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
+        Map<String, UserDto.StudentAttendanceResponse> responsesByStudent =
+                loadStudentAttendanceResponses(filtered, effStart, effEnd, cohortsById);
+
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
+        Comparator<User> cmp;
+        switch (sortKey) {
+            case "email":
+                cmp = Comparator.comparing(User::getEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "registrationnumber":
+            case "registration":
+                cmp = Comparator.comparing(User::getRegistrationNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "rate":
+            case "attendancerate":
+            case "attendance":
+                cmp = Comparator.comparing(u -> {
+                    UserDto.StudentAttendanceResponse r = responsesByStudent.get(u.getId());
+                    return r != null ? r.getAttendanceRate() : 0.0;
+                });
+                break;
+            default:
+                cmp = Comparator.comparing(User::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+        filtered.sort(asc ? cmp : cmp.reversed());
+
+        int total = filtered.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<UserDto.StudentAttendanceResponse> content = filtered.subList(from, to).stream()
+                .map(u -> responsesByStudent.get(u.getId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    private Map<String, UserDto.StudentAttendanceResponse> loadStudentAttendanceResponses(
+            List<User> students, LocalDate startDate, LocalDate endDate, Map<String, Cohort> cohortsById) {
+        Set<String> ids = students.stream().map(User::getId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+
+        List<Attendance> all;
+        if (startDate != null && endDate != null) {
+            all = attendanceRepository.findByStudentIdInAndDateBetween(ids, startDate, endDate);
+        } else {
+            all = attendanceRepository.findByStudentIdIn(ids);
+        }
+
+        Map<String, List<Attendance>> byStudent = all.stream()
+                .collect(Collectors.groupingBy(Attendance::getStudentId));
+
+        Map<String, UserDto.StudentAttendanceResponse> out = new HashMap<>();
+        for (User u : students) {
+            List<Attendance> att = byStudent.getOrDefault(u.getId(), List.of());
+            int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+            int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+            int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
+            int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+            int holiday = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
+            int totalDays = att.size();
+
+            double rate = totalDays > 0 ? (double) (present + late) / totalDays * 100.0 : 0.0;
+            String rating = rate >= 90 ? "EXCELLENT" : rate >= 75 ? "GOOD" : rate >= 50 ? "FAIR" : "POOR";
+
+            LocalDate lastDate = att.stream()
+                    .map(Attendance::getDate)
+                    .filter(Objects::nonNull)
+                    .max(LocalDate::compareTo)
+                    .orElse(null);
+
+            Cohort c = u.getCohortId() != null ? cohortsById.get(u.getCohortId()) : null;
+            String cohortName = c != null ? c.getName() : (u.getCohortId() != null ? u.getCohortId() : "—");
+
+            UserDto.StudentAttendanceResponse resp = new UserDto.StudentAttendanceResponse(
+                    u.getId(),
+                    u.getName(),
+                    u.getRegistrationNumber(),
+                    u.getEmail(),
+                    u.getCohortId(),
+                    cohortName,
+                    Math.round(rate * 10.0) / 10.0,
+                    present,
+                    absent,
+                    excused,
+                    late,
+                    holiday,
+                    totalDays,
+                    rating,
+                    lastDate,
+                    u.isActive(),
+                    u.getCreatedAt()
+            );
+            out.put(u.getId(), resp);
+        }
+        return out;
+    }
+
+    public void deleteStudent(String actorId, String actorName, String actorRole, String studentId) {
+        User student = userRepository.findById(studentId)
+                .orElseThrow(() -> AppException.notFound("Student not found"));
+        if (student.getRole() != User.Role.STUDENT) {
+            throw AppException.badRequest("User is not a student");
+        }
+
+        // Clean up attendance records
+        List<Attendance> atts = attendanceRepository.findByStudentId(studentId);
+        if (!atts.isEmpty()) {
+            attendanceRepository.deleteAll(atts);
+        }
+
+        // Clean up device assignment
+        deviceRepository.findByStudentId(studentId).ifPresent(deviceRepository::delete);
+
+        // Delete user
+        userRepository.delete(student);
+
+        auditService.log(actorId, actorName, actorRole,
+                AuditLog.ActionType.USER_DELETED, studentId, student.getName(),
+                "Student account and associated attendance data deleted", null);
+    }
+
+    public ResponseEntity<byte[]> exportStudentsAdmin(String cohortId, String query,
+                                                     LocalDate startDate, LocalDate endDate,
+                                                     String status, String format, ExportService exportService) {
+        AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse> page =
+                searchStudentsAdmin(cohortId, query, startDate, endDate, status, 0, 10000, "name", "asc");
+
+        List<List<Object>> table = new java.util.ArrayList<>();
+        for (UserDto.StudentAttendanceResponse r : page.getContent()) {
+            table.add(List.of(
+                    r.getName() != null ? r.getName() : "",
+                    r.getRegistrationNumber() != null ? r.getRegistrationNumber() : "",
+                    r.getEmail() != null ? r.getEmail() : "",
+                    r.getCohortName() != null ? r.getCohortName() : "",
+                    String.format("%.1f", r.getAttendanceRate()) + "%",
+                    String.valueOf(r.getPresentDays()),
+                    String.valueOf(r.getAbsentDays()),
+                    String.valueOf(r.getExcusedDays()),
+                    String.valueOf(r.getLateDays()),
+                    String.valueOf(r.getHolidayCount()),
+                    String.valueOf(r.getTotalAttendanceDays()),
+                    r.getRating() != null ? r.getRating() : "",
+                    r.getLastAttendanceDate() != null ? r.getLastAttendanceDate().toString() : "N/A"
+            ));
+        }
+
+        List<String> headers = List.of(
+                "Student Name", "Registration No", "Email", "Cohort",
+                "Attendance %", "Present Days", "Absent Days", "Excused Days",
+                "Late Days", "Holiday Count", "Total Days", "Rating", "Last Attendance Date"
+        );
+
+        String baseName = "students_attendance";
+        if (cohortId != null && !cohortId.isBlank()) {
+            baseName += "_cohort_" + cohortId;
+        }
+
+        return exportService.export(headers, table, format, baseName);
     }
 
     /**

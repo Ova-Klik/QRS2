@@ -21,7 +21,11 @@ export function AdminDashboard() {
     setLoading(true)
     adminApi.schoolStats(cohortId || undefined)
       .then(r => { if (alive) setData(r.data) })
-      .catch(() => alive && toast.error('Failed to load dashboard'))
+      .catch((err) => {
+        if (alive && err.response?.status !== 401) {
+          toast.error('Failed to load dashboard')
+        }
+      })
       .finally(() => alive && setLoading(false))
     return () => { alive = false }
   }, [cohortId])
@@ -189,25 +193,64 @@ export function AdminDashboard() {
 export function AdminStudents() {
   const [students, setStudents] = useState([])
   const [loading, setLoading]   = useState(true)
-  const [modal, setModal]       = useState(null) // 'add' | {user}
-  const [resetModal, setReset]  = useState(null) // userId
-  const [form, setForm]         = useState({ name: '', email: '', password: '', cohortId: '' })
+  const [modal, setModal]       = useState(null) // 'add'
+  const [deleteTarget, setDeleteTarget] = useState(null) // student object to delete
+  const [form, setForm]         = useState({ name: '', email: '', password: 'Student@1234', cohortId: '', registrationNumber: '' })
   const [cohorts, setCohorts]   = useState([])
   const [saving, setSaving]     = useState(false)
-  const [resetPass, setResetPass] = useState('')
-  const [q, setQ]               = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  // Filters
+  const [q, setQ]                     = useState('')
   const [cohortFilter, setCohortFilter] = useState('')
+  const [datePreset, setDatePreset]   = useState('ALL') // ALL | TODAY | YESTERDAY | LAST_7 | LAST_30 | CUSTOM
+  const [startDate, setStartDate]     = useState('')
+  const [endDate, setEndDate]         = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL') // ALL | PRESENT | ABSENT | LATE | EXCUSED | HOLIDAY
+
+  // Pagination (default 10 per page)
   const [page, setPage]         = useState(0)
-  const [size, setSize]         = useState(20)
+  const [size, setSize]         = useState(10)
   const [total, setTotal]       = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const debouncedQ = useDebounce(q, 350)
+
+  const debouncedQ = useDebounce(q, 400)
+
+  // Resolve start and end dates based on preset
+  const resolvedDates = useMemo(() => {
+    const today = new Date()
+    const fmt = d => format(d, 'yyyy-MM-dd')
+    switch (datePreset) {
+      case 'TODAY':
+        return { start: fmt(today), end: fmt(today) }
+      case 'YESTERDAY': {
+        const y = new Date(today); y.setDate(y.getDate() - 1)
+        return { start: fmt(y), end: fmt(y) }
+      }
+      case 'LAST_7': {
+        const d = new Date(today); d.setDate(d.getDate() - 6)
+        return { start: fmt(d), end: fmt(today) }
+      }
+      case 'LAST_30': {
+        const d = new Date(today); d.setDate(d.getDate() - 29)
+        return { start: fmt(d), end: fmt(today) }
+      }
+      case 'CUSTOM':
+        return { start: startDate || undefined, end: endDate || undefined }
+      default:
+        return { start: undefined, end: undefined }
+    }
+  }, [datePreset, startDate, endDate])
 
   const load = useCallback(() => {
+    setLoading(true)
     Promise.all([
       adminApi.searchStudents({
         q: debouncedQ,
         cohortId: cohortFilter || undefined,
+        start: resolvedDates.start,
+        end: resolvedDates.end,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
         page,
         size,
         sort: 'name',
@@ -215,105 +258,210 @@ export function AdminStudents() {
       }),
       adminApi.listCohorts(),
     ]).then(([u, c]) => {
-      setStudents(u.data.content); setTotal(u.data.totalElements); setTotalPages(Math.max(u.data.totalPages, 1))
-      setCohorts(c.data)
+      setStudents(u.data.content || [])
+      setTotal(u.data.totalElements || 0)
+      setTotalPages(Math.max(u.data.totalPages || 1, 1))
+      setCohorts(c.data || [])
+    }).catch(() => {
+      toast.error('Failed to load students')
     }).finally(() => setLoading(false))
-  }, [debouncedQ, cohortFilter, page, size])
-  useEffect(() => { setPage(0) }, [debouncedQ, cohortFilter])
+  }, [debouncedQ, cohortFilter, resolvedDates, statusFilter, page, size])
+
+  useEffect(() => { setPage(0) }, [debouncedQ, cohortFilter, datePreset, startDate, endDate, statusFilter])
   useEffect(() => { load() }, [load])
 
   const addStudent = async () => {
-    if (!form.name || !form.email || !form.password) { toast.error('Fill all required fields'); return }
+    if (!form.name || !form.email || !form.password || !form.cohortId) {
+      toast.error('Fill all required fields'); return
+    }
     setSaving(true)
     try {
       await adminApi.createUser({ ...form, role: 'STUDENT' })
-      toast.success('Student added'); setModal(null); load()
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to add student') }
-    finally { setSaving(false) }
+      toast.success('Student added successfully')
+      setModal(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add student')
+    } finally { setSaving(false) }
   }
 
-  const toggleActive = async (student) => {
-    await adminApi.updateUser(student.id, { active: !student.active })
-    toast.success(student.active ? 'Student deactivated' : 'Student activated'); load()
-  }
-
-  const unlockDevice = async (studentId) => {
-    await adminApi.unlockDevice(studentId)
-    toast.success('Device unlocked'); load()
-  }
-
-  const doResetPass = async () => {
-    if (!resetPass || resetPass.length < 6) { toast.error('Password too short'); return }
-    setSaving(true)
+  const confirmDeleteStudent = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      await adminApi.resetPassword({ userId: resetModal, newPassword: resetPass })
-      toast.success('Password reset'); setReset(null); setResetPass('')
-    } catch { toast.error('Failed') }
-    finally { setSaving(false) }
+      await adminApi.deleteStudent(deleteTarget.id)
+      toast.success(`Student ${deleteTarget.name} deleted`)
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete student')
+    } finally { setDeleting(false) }
   }
 
-  if (loading) return <LoadingPage />
+  const handleExportAll = (fmt = 'csv') => {
+    adminApi.exportStudents({
+      cohortId: cohortFilter || undefined,
+      q: debouncedQ || undefined,
+      start: resolvedDates.start,
+      end: resolvedDates.end,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      format: fmt,
+    }).then(res => {
+      const disposition = res.headers?.['content-disposition'] || ''
+      const match = disposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `students_attendance.${fmt}`
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Exported students as ${fmt.toUpperCase()}`)
+    }).catch(() => toast.error('Export failed'))
+  }
+
+  const handleExportIndividual = (student, fmt = 'csv') => {
+    adminApi.exportStudentSummary(student.id, { format: fmt })
+      .then(res => {
+        const disposition = res.headers?.['content-disposition'] || ''
+        const match = disposition.match(/filename="?([^"]+)"?/)
+        const filename = match ? match[1] : `${student.name.replace(/\s+/g, '_')}_summary.${fmt}`
+        const url = window.URL.createObjectURL(new Blob([res.data]))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+        toast.success(`Exported ${student.name} summary`)
+      })
+      .catch(() => toast.error('Individual export failed'))
+  }
+
+  const ratingBadge = (rating) => {
+    switch (rating) {
+      case 'EXCELLENT': return <Badge status="PRESENT" label="Excellent" />
+      case 'GOOD':      return <Badge status="ACTIVE" label="Good" />
+      case 'FAIR':      return <Badge status="LATE" label="Fair" />
+      case 'POOR':      return <Badge status="ABSENT" label="Poor" />
+      default:          return <Badge status="INACTIVE" label={rating || '—'} />
+    }
+  }
 
   return (
     <>
-      <PageHeader title="Students" subtitle={`${total} registered students`}
-        actions={<Button onClick={() => { setModal('add'); setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '' }) }}>+ Add Student</Button>} />
+      <PageHeader
+        title="Students Attendance & Analytics"
+        subtitle={`${total} student records`}
+        actions={
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => handleExportAll('csv')}>↓ CSV Export</Button>
+            <Button variant="outline" onClick={() => handleExportAll('xlsx')}>↓ Excel Export</Button>
+            <Button onClick={() => { setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '', registrationNumber: '' }); setModal('add'); }}>+ Add Student</Button>
+          </div>
+        }
+      />
       <div className="p-4 sm:p-6 animate-fade-in">
-        <Card>
-          <div className="flex gap-3 mb-4 flex-wrap">
+        <Card className="mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <Input
-              placeholder="Search by name, email or registration number..."
+              placeholder="Search name, email, reg no..."
               value={q}
               onChange={e => setQ(e.target.value)}
-              className="!mb-0 flex-1 min-w-[220px]"
+              className="!mb-0"
             />
-            <Select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} className="!mb-0 min-w-[180px]">
+            <Select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} className="!mb-0">
               <option value="">All Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
+            <Select value={datePreset} onChange={e => setDatePreset(e.target.value)} className="!mb-0">
+              <option value="ALL">All Time</option>
+              <option value="TODAY">Today</option>
+              <option value="YESTERDAY">Yesterday</option>
+              <option value="LAST_7">Last 7 Days</option>
+              <option value="LAST_30">Last 30 Days</option>
+              <option value="CUSTOM">Custom Date Range</option>
+            </Select>
+            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="!mb-0">
+              <option value="ALL">All Attendance Statuses</option>
+              <option value="PRESENT">Present</option>
+              <option value="ABSENT">Absent</option>
+              <option value="LATE">Late</option>
+              <option value="EXCUSED">Excused</option>
+              <option value="HOLIDAY">Holiday</option>
+            </Select>
+            <div className="flex items-center text-xs text-gray-500 font-medium px-2">
+              Showing {students.length} of {total} students
+            </div>
           </div>
-          <Table
-            columns={[
-              { key: 'name',         label: 'Name',      strong: true },
-              { key: 'email',        label: 'Email',     render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
-              { key: 'cohortId',     label: 'Cohort',    render: (_, row) => cohorts.find(c => c.id === row.cohortId)?.name || '—' },
-              { key: 'device',       label: 'Device Lock', render: (_, row) => row.device?.locked && row.device?.fingerprint ? <Badge status="PRESENT" label="Locked" /> : <Badge status="EXCUSED" label="Cleared" /> },
-              { key: 'attendance',   label: 'Rate',      render: (_, row) => row.attendanceSummary ? `${Math.round(row.attendanceSummary.rate)}%` : '—' },
-              { key: 'active',       label: 'Status',    render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
-              { key: 'actions',      label: 'Actions',    render: (_, row) => (
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => unlockDevice(row.id)}>Reset Device</Button>
-                  <Button size="sm" variant="outline" onClick={() => setReset(row.id)}>Reset Pwd</Button>
-                  <Button size="sm" variant="outline" onClick={() => toggleActive(row)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
-                </div>
-              )},
-            ]}
-            rows={students}
-          />
+          {datePreset === 'CUSTOM' && (
+            <div className="flex gap-3 mb-4 items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100 flex-wrap">
+              <span className="text-xs font-semibold text-gray-600">Custom Date Range:</span>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="!mb-0 max-w-[180px]" />
+              <span className="text-xs text-gray-400">to</span>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="!mb-0 max-w-[180px]" />
+            </div>
+          )}
+
+          {loading ? (
+            <Skeleton rows={8} height={40} />
+          ) : (
+            <Table
+              columns={[
+                { key: 'name',               label: 'Student Name', strong: true },
+                { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-[11px] text-gray-600">{v || '—'}</span> },
+                { key: 'email',              label: 'Email',  render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
+                { key: 'cohortName',         label: 'Cohort', render: v => v || '—' },
+                { key: 'attendanceRate',     label: 'Rate',   render: v => <span className="font-semibold text-gray-800">{v != null ? `${v}%` : '—'}</span> },
+                { key: 'presentDays',        label: 'Present', render: v => <span className="text-green-600 font-medium">{v || 0}</span> },
+                { key: 'absentDays',         label: 'Absent',  render: v => <span className="text-red-600 font-medium">{v || 0}</span> },
+                { key: 'excusedDays',        label: 'Excused', render: v => <span className="text-blue-600 font-medium">{v || 0}</span> },
+                { key: 'lateDays',           label: 'Late',    render: v => <span className="text-yellow-600 font-medium">{v || 0}</span> },
+                { key: 'holidayCount',       label: 'Holidays', render: v => v || 0 },
+                { key: 'totalAttendanceDays',label: 'Total Days', render: v => v || 0 },
+                { key: 'rating',             label: 'Behaviour', render: v => ratingBadge(v) },
+                { key: 'lastAttendanceDate', label: 'Last Attended', render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
+                { key: 'actions',            label: 'Actions',  render: (_, row) => (
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" onClick={() => handleExportIndividual(row, 'csv')}>Export</Button>
+                    <Button size="sm" variant="outline" className="!text-red-600 !border-red-200 hover:!bg-red-50" onClick={() => setDeleteTarget(row)}>Delete</Button>
+                  </div>
+                )},
+              ]}
+              rows={students}
+            />
+          )}
           <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
       </div>
 
       {/* Add Student Modal */}
       <Modal open={modal === 'add'} onClose={() => setModal(null)} title="Add Student">
-        <Input label="Full Name *"  value={form.name}     onChange={e => setForm(p => ({...p, name: e.target.value}))} placeholder="Ada Okafor" />
-        <Input label="Email *"      value={form.email}    onChange={e => setForm(p => ({...p, email: e.target.value}))} type="email" placeholder="ada@techschool.edu" />
+        <Input label="Full Name *"  value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} placeholder="Ada Okafor" />
+        <Input label="Registration Number" value={form.registrationNumber} onChange={e => setForm(p => ({...p, registrationNumber: e.target.value}))} placeholder="REG/2026/001" />
+        <Input label="Email *"      value={form.email} onChange={e => setForm(p => ({...p, email: e.target.value}))} type="email" placeholder="ada@techschool.edu" />
         <Input label="Password *"   value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} type="password" />
-        <Select label="Cohort"      value={form.cohortId} onChange={e => setForm(p => ({...p, cohortId: e.target.value}))}>
+        <Select label="Cohort *"    value={form.cohortId} onChange={e => setForm(p => ({...p, cohortId: e.target.value}))}>
+          <option value="">Select Cohort</option>
           {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
-        <div className="flex gap-2 justify-end">
+        <div className="flex gap-2 justify-end mt-4">
           <Button variant="outline" onClick={() => setModal(null)}>Cancel</Button>
           <Button loading={saving} onClick={addStudent}>Add Student</Button>
         </div>
       </Modal>
 
-      {/* Reset Password Modal */}
-      <Modal open={!!resetModal} onClose={() => setReset(null)} title="Reset Password">
-        <Input label="New Password" type="password" value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="Min. 6 characters" />
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={() => setReset(null)}>Cancel</Button>
-          <Button loading={saving} onClick={doResetPass}>Reset</Button>
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Student">
+        <div className="py-2">
+          <Alert type="warning" message={`Are you sure you want to delete ${deleteTarget?.name}? This will remove the student account and clean up their attendance analytics data. This action cannot be undone.`} />
+        </div>
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button variant="danger" loading={deleting} onClick={confirmDeleteStudent}>Delete Student</Button>
         </div>
       </Modal>
     </>
@@ -404,126 +552,318 @@ export function AdminFacilitators() {
 
 // ── Cohorts ──────────────────────────────────────────────
 export function AdminCohorts() {
-  const [cohorts, setCohorts]       = useState([])
-  const [facilitators, setFacs]     = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [modal, setModal]           = useState(false)
-  const [form, setForm]             = useState({ name: '', facilitatorId: '' })
-  const [saving, setSaving]         = useState(false)
-  const [viewCohort, setViewCohort] = useState(null)   // { id, name }
-  const [members, setMembers]       = useState({ content: [], totalElements: 0, totalPages: 1 })
-  const [memQ, setMemQ]             = useState('')
-  const [memSort, setMemSort]       = useState('name')
-  const [memOrder, setMemOrder]     = useState('asc')
-  const [memPage, setMemPage]       = useState(0)
-  const [memSize, setMemSize]       = useState(10)
-  const [memLoading, setMemLoading] = useState(false)
-  const debouncedMemQ = useDebounce(memQ, 350)
+  const [cohorts, setCohorts]         = useState([])
+  const [facilitators, setFacs]       = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [modal, setModal]             = useState(null) // 'add' | 'edit'
+  const [editTarget, setEditTarget]   = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [form, setForm]               = useState({ name: '', facilitatorId: '', schedule: '7:00 AM – 8:30 AM', description: '' })
+  const [saving, setSaving]           = useState(false)
+  const [deleting, setDeleting]       = useState(false)
+
+  // Filters & Pagination for Cohorts
+  const [q, setQ]                     = useState('')
+  const [statusFilter, setStatusFilter] = useState('ACTIVE') // ACTIVE | ARCHIVED | ALL
+  const [page, setPage]               = useState(0)
+  const [size, setSize]               = useState(10)
+  const [total, setTotal]             = useState(0)
+  const [totalPages, setTotalPages]   = useState(1)
+  const debouncedQ                    = useDebounce(q, 400)
+
+  // View Cohort Details & Paginated Members
+  const [viewCohort, setViewCohort]   = useState(null) // CohortResponse object
+  const [members, setMembers]         = useState({ content: [], totalElements: 0, totalPages: 1 })
+  const [memQ, setMemQ]               = useState('')
+  const [memPage, setMemPage]         = useState(0)
+  const [memSize, setMemSize]         = useState(10)
+  const [memLoading, setMemLoading]   = useState(false)
+  const debouncedMemQ                 = useDebounce(memQ, 400)
 
   const load = useCallback(() => {
-    Promise.all([adminApi.listCohorts(), adminApi.listUsers('facilitator')]).then(([c, f]) => { setCohorts(c.data); setFacs(f.data) }).finally(() => setLoading(false))
-  }, [])
+    setLoading(true)
+    Promise.all([
+      adminApi.searchCohorts({
+        q: debouncedQ || undefined,
+        status: statusFilter,
+        page,
+        size,
+        sort: 'name',
+        order: 'asc',
+      }),
+      adminApi.listUsers('facilitator'),
+    ]).then(([cRes, fRes]) => {
+      setCohorts(cRes.data.content || [])
+      setTotal(cRes.data.totalElements || 0)
+      setTotalPages(Math.max(cRes.data.totalPages || 1, 1))
+      setFacs(fRes.data || [])
+    }).catch(() => toast.error('Failed to load cohorts'))
+      .finally(() => setLoading(false))
+  }, [debouncedQ, statusFilter, page, size])
+
+  useEffect(() => { setPage(0) }, [debouncedQ, statusFilter])
   useEffect(() => { load() }, [load])
 
   const loadMembers = useCallback(() => {
     if (!viewCohort) return
     setMemLoading(true)
-    adminApi.cohortStudentsPage(viewCohort.id, {
+    adminApi.searchStudents({
+      cohortId: viewCohort.id,
       q: debouncedMemQ || undefined,
       page: memPage,
       size: memSize,
-      sort: memSort,
-      order: memOrder,
-    }).then(r => setMembers(r.data)).catch(() => toast.error('Failed to load students'))
+      sort: 'name',
+      order: 'asc',
+    }).then(r => setMembers(r.data))
+      .catch(() => toast.error('Failed to load cohort students'))
       .finally(() => setMemLoading(false))
-  }, [viewCohort, debouncedMemQ, memPage, memSize, memSort, memOrder])
+  }, [viewCohort, debouncedMemQ, memPage, memSize])
 
-  useEffect(() => { setMemPage(0) }, [debouncedMemQ, memSort, memOrder])
+  useEffect(() => { setMemPage(0) }, [debouncedMemQ])
   useEffect(() => { loadMembers() }, [loadMembers])
 
-  const toggleSort = (key) => {
-    if (memSort === key) setMemOrder(o => (o === 'asc' ? 'desc' : 'asc'))
-    else { setMemSort(key); setMemOrder('asc') }
-  }
-  const sortArrow = (key) => memSort === key ? (memOrder === 'asc' ? ' ▲' : ' ▼') : ''
-
-  const add = async () => {
-    if (!form.name || !form.facilitatorId) { toast.error('Fill all fields'); return }
+  const handleCreate = async () => {
+    if (!form.name || !form.facilitatorId) { toast.error('Please enter a cohort name and select a facilitator'); return }
     setSaving(true)
-    try { await adminApi.createCohort(form); toast.success('Cohort created'); setModal(false); load() }
-    catch (err) { toast.error(err.response?.data?.message || 'Failed') }
-    finally { setSaving(false) }
+    try {
+      await adminApi.createCohort(form)
+      toast.success('Cohort created successfully')
+      setModal(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create cohort')
+    } finally { setSaving(false) }
   }
 
-  const toggle = async id => { await adminApi.toggleCohort(id); load() }
+  const handleUpdate = async () => {
+    if (!form.name || !form.name.trim()) { toast.error('Cohort name cannot be empty'); return }
+    setSaving(true)
+    try {
+      await adminApi.updateCohort(editTarget.id, form)
+      toast.success('Cohort updated successfully')
+      setModal(null)
+      setEditTarget(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update cohort')
+    } finally { setSaving(false) }
+  }
 
-  if (loading) return <LoadingPage />
+  const handleToggleArchive = async (cohort) => {
+    try {
+      await adminApi.toggleCohort(cohort.id)
+      toast.success(cohort.active ? `Cohort "${cohort.name}" archived` : `Cohort "${cohort.name}" restored`)
+      load()
+    } catch {
+      toast.error('Failed to update cohort status')
+    }
+  }
 
-  const sortableBtn = 'bg-transparent border-0 p-0 text-left font-[inherit] cursor-pointer hover:text-red'
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await adminApi.deleteCohort(deleteTarget.id)
+      toast.success(`Cohort "${deleteTarget.name}" deleted`)
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete cohort')
+    } finally { setDeleting(false) }
+  }
+
+  const openEditModal = (cohort) => {
+    setEditTarget(cohort)
+    setForm({
+      name: cohort.name,
+      facilitatorId: cohort.facilitatorId || facilitators[0]?.id || '',
+      schedule: cohort.schedule || '7:00 AM – 8:30 AM',
+      description: cohort.description || '',
+    })
+    setModal('edit')
+  }
 
   return (
     <>
-      <PageHeader title="Cohorts" subtitle={`${cohorts.filter(c => c.active).length} active cohorts`}
-        actions={<Button size="sm" onClick={() => { setModal(true); setForm({ name: '', facilitatorId: facilitators[0]?.id || '' }) }}>+ Add Cohort</Button>} />
+      <PageHeader
+        title="Cohorts"
+        subtitle={`${total} cohort records`}
+        actions={
+          <Button onClick={() => {
+            setForm({ name: '', facilitatorId: facilitators[0]?.id || '', schedule: '7:00 AM – 8:30 AM', description: '' })
+            setModal('add')
+          }}>+ Add Cohort</Button>
+        }
+      />
       <div className="p-4 sm:p-6 animate-fade-in">
-        <Card>
-          <Table
-            columns={[
-              { key: 'name',             label: 'Name',        strong: true },
-              { key: 'facilitatorName',  label: 'Facilitator' },
-              { key: 'studentCount',     label: 'Students' },
-              { key: 'schedule',         label: 'Schedule',    render: v => <span className="text-xs font-mono text-gray-400">{v}</span> },
-              { key: 'attendanceRate',   label: 'Att. Rate',   render: v => `${Math.round(v)}%` },
-              { key: 'active',           label: 'Status',      render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
-              { key: 'actions',          label: '',            render: (_, row) => (
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => { setViewCohort({ id: row.id, name: row.name }); setMemQ(''); setMemPage(0) }}>View</Button>
-                  <Button size="sm" variant="outline" onClick={() => toggle(row.id)}>{row.active ? 'Deactivate' : 'Activate'}</Button>
-                </div>
-              ) },
-            ]}
-            rows={cohorts}
-          />
+        <Card className="mb-4">
+          <div className="flex gap-3 mb-4 flex-wrap items-center">
+            <Input
+              placeholder="Search by cohort name or facilitator..."
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              className="!mb-0 flex-1 min-w-[240px]"
+            />
+            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="!mb-0 min-w-[180px]">
+              <option value="ACTIVE">Active Cohorts</option>
+              <option value="ARCHIVED">Archived Cohorts</option>
+              <option value="ALL">All Cohorts</option>
+            </Select>
+            <div className="text-xs text-gray-500 font-medium px-2">
+              Showing {cohorts.length} of {total} cohorts
+            </div>
+          </div>
+
+          {loading ? (
+            <Skeleton rows={6} height={40} />
+          ) : (
+            <Table
+              columns={[
+                { key: 'name',            label: 'Cohort Name', strong: true },
+                { key: 'facilitatorName', label: 'Assigned Facilitator', render: (_, row) => (
+                  <div>
+                    <div className="font-medium text-gray-800 dark:text-gray-100">{row.facilitatorName || 'Unassigned'}</div>
+                    {row.facilitatorEmail && <div className="text-[11px] font-mono text-gray-400 dark:text-gray-300">{row.facilitatorEmail}</div>}
+                  </div>
+                )},
+                { key: 'studentCount',    label: 'Students', render: v => <span className="font-medium">{v || 0}</span> },
+                { key: 'attendanceRate',  label: 'Att. Rate', render: v => <span className="font-semibold text-gray-800 dark:text-gray-100">{v != null ? `${v}%` : '0%'}</span> },
+                { key: 'presentCount',    label: 'Present',  render: v => <span className="text-green-600 font-medium">{v || 0}</span> },
+                { key: 'absentCount',     label: 'Absent',   render: v => <span className="text-red-600 font-medium">{v || 0}</span> },
+                { key: 'excusedCount',    label: 'Excused',  render: v => <span className="text-blue-600 font-medium">{v || 0}</span> },
+                { key: 'lateCount',       label: 'Late',     render: v => <span className="text-yellow-600 font-medium">{v || 0}</span> },
+                { key: 'active',          label: 'Status',   render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} label={v ? 'Active' : 'Archived'} /> },
+                { key: 'actions',         label: 'Actions',   render: (_, row) => (
+                  <div className="flex gap-1.5 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => { setViewCohort(row); setMemQ(''); setMemPage(0); }}>View</Button>
+                    <Button size="sm" variant="outline" onClick={() => openEditModal(row)}>Edit</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleToggleArchive(row)}>{row.active ? 'Archive' : 'Restore'}</Button>
+                    <Button size="sm" variant="outline" className="!text-red-600 !border-red-200 hover:!bg-red-50" onClick={() => setDeleteTarget(row)}>Delete</Button>
+                  </div>
+                )},
+              ]}
+              rows={cohorts}
+            />
+          )}
+          <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
       </div>
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Cohort">
+
+      {/* Add / Edit Cohort Modal */}
+      <Modal open={modal === 'add' || modal === 'edit'} onClose={() => { setModal(null); setEditTarget(null); }} title={modal === 'edit' ? `Edit Cohort — ${editTarget?.name}` : 'Add Cohort'}>
         <Input label="Cohort Name *" value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} placeholder="e.g. Cohort 32" />
-        <Select label="Facilitator *" value={form.facilitatorId} onChange={e => setForm(p => ({...p, facilitatorId: e.target.value}))}>
-          {facilitators.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        <Select label="Assigned Facilitator *" value={form.facilitatorId} onChange={e => setForm(p => ({...p, facilitatorId: e.target.value}))}>
+          <option value="">Select Facilitator</option>
+          {facilitators.map(f => (
+            <option key={f.id} value={f.id}>{f.name} ({f.email})</option>
+          ))}
         </Select>
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
-          <Button loading={saving} onClick={add}>Create Cohort</Button>
+        <Input label="Schedule" value={form.schedule} onChange={e => setForm(p => ({...p, schedule: e.target.value}))} placeholder="7:00 AM – 8:30 AM" />
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="outline" onClick={() => { setModal(null); setEditTarget(null); }}>Cancel</Button>
+          <Button loading={saving} onClick={modal === 'edit' ? handleUpdate : handleCreate}>
+            {modal === 'edit' ? 'Save Changes' : 'Create Cohort'}
+          </Button>
         </div>
       </Modal>
 
-      {/* Cohort members drill-down */}
-      <Modal open={!!viewCohort} onClose={() => setViewCohort(null)} title={`${viewCohort?.name || ''} — Students`}>
-        <Input
-          placeholder="Search students..."
-          value={memQ}
-          onChange={e => setMemQ(e.target.value)}
-          className="!mb-3"
-        />
-        {memLoading && <Skeleton rows={3} height={22} />}
-        {!memLoading && (
-          <>
-            <Table
-              columns={[
-                { key: 'name', label: `Name${sortArrow('name')}`, strong: true, render: (_, row) => <button className={sortableBtn} onClick={() => toggleSort('name')}>{row.name}</button> },
-                { key: 'email', label: 'Email', render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
-                { key: 'registrationNumber', label: 'Reg. No.', render: v => <span className="font-mono text-[11px]">{v || '—'}</span> },
-                { key: 'rate', label: `Rate${sortArrow('rate')}`, render: (_, row) => {
-                  const r = Math.round(row.attendanceSummary?.rate ?? row.analytics?.attendanceRate ?? 0)
-                  return <button className={sortableBtn} onClick={() => toggleSort('rate')}>{r ? `${r}%` : '—'}</button>
-                } },
-                { key: 'active', label: 'Status', render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
-              ]}
-              rows={members.content || []}
-              emptyMessage="No students in this cohort"
-            />
-            <Pagination page={memPage} totalPages={Math.max(members.totalPages || 1, 1)} totalElements={members.totalElements || 0} size={memSize} onChange={(p, s) => { setMemPage(p); if (s) setMemSize(s) }} pageSizeOptions={[5, 10, 20]} />
-          </>
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Cohort">
+        <div className="py-2">
+          <Alert type="warning" message={`Are you sure you want to delete ${deleteTarget?.name}? All students assigned to this cohort will be unassigned safely. Attendance history will be preserved. This action cannot be undone.`} />
+        </div>
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button variant="danger" loading={deleting} onClick={handleDelete}>Delete Cohort</Button>
+        </div>
+      </Modal>
+
+      {/* Cohort Details & Paginated Students Modal */}
+      <Modal open={!!viewCohort} onClose={() => setViewCohort(null)} title={`Cohort Details — ${viewCohort?.name || ''}`} maxWidth="max-w-4xl">
+        {viewCohort && (
+          <div className="space-y-4">
+            {/* Overview & Performance Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <div>
+                <span className="text-[11px] text-gray-500 font-medium block">Facilitator</span>
+                <span className="text-xs font-semibold text-gray-800">{viewCohort.facilitatorName || 'Unassigned'}</span>
+                {viewCohort.facilitatorEmail && <span className="text-[10px] text-gray-400 block font-mono">{viewCohort.facilitatorEmail}</span>}
+                {viewCohort.facilitatorPhone && <span className="text-[10px] text-gray-400 block">{viewCohort.facilitatorPhone}</span>}
+              </div>
+              <div>
+                <span className="text-[11px] text-gray-500 font-medium block">Total Students</span>
+                <span className="text-lg font-bold text-gray-900">{viewCohort.studentCount || 0}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-gray-500 font-medium block">Attendance Rate</span>
+                <span className="text-lg font-bold text-green-600">{viewCohort.attendanceRate != null ? `${viewCohort.attendanceRate}%` : '0%'}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-gray-500 font-medium block">Avg Daily Att.</span>
+                <span className="text-lg font-bold text-blue-600">{viewCohort.averageDailyAttendance || 0}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+              <div className="bg-green-50 p-2 rounded-lg border border-green-100">
+                <span className="text-green-700 font-bold block">{viewCohort.presentCount || 0} ({viewCohort.presentRate || 0}%)</span>
+                <span className="text-[10px] text-green-600">Present</span>
+              </div>
+              <div className="bg-yellow-50 p-2 rounded-lg border border-yellow-100">
+                <span className="text-yellow-700 font-bold block">{viewCohort.lateCount || 0} ({viewCohort.lateRate || 0}%)</span>
+                <span className="text-[10px] text-yellow-600">Late</span>
+              </div>
+              <div className="bg-red-50 p-2 rounded-lg border border-red-100">
+                <span className="text-red-700 font-bold block">{viewCohort.absentCount || 0} ({viewCohort.absentRate || 0}%)</span>
+                <span className="text-[10px] text-red-600">Absent</span>
+              </div>
+              <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
+                <span className="text-blue-700 font-bold block">{viewCohort.excusedCount || 0} ({viewCohort.excusedRate || 0}%)</span>
+                <span className="text-[10px] text-blue-600">Excused</span>
+              </div>
+              <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                <span className="text-gray-700 font-bold block">{viewCohort.totalRecords || 0}</span>
+                <span className="text-[10px] text-gray-500">Total Recs</span>
+              </div>
+            </div>
+
+            <hr className="border-gray-100 my-2" />
+
+            {/* Students List in Cohort */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Students in Cohort</h4>
+                <Input
+                  placeholder="Search student..."
+                  value={memQ}
+                  onChange={e => setMemQ(e.target.value)}
+                  className="!mb-0 max-w-[200px]"
+                />
+              </div>
+
+              {memLoading ? (
+                <Skeleton rows={4} height={30} />
+              ) : (
+                <>
+                  <Table
+                    columns={[
+                      { key: 'name',               label: 'Student Name', strong: true },
+                      { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-[11px] text-gray-600">{v || '—'}</span> },
+                      { key: 'email',              label: 'Email',  render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
+                      { key: 'attendanceRate',     label: 'Rate',   render: v => <span className="font-semibold text-gray-800">{v != null ? `${v}%` : '—'}</span> },
+                      { key: 'presentDays',        label: 'Present', render: v => <span className="text-green-600 font-medium">{v || 0}</span> },
+                      { key: 'absentDays',         label: 'Absent',  render: v => <span className="text-red-600 font-medium">{v || 0}</span> },
+                      { key: 'excusedDays',        label: 'Excused', render: v => <span className="text-blue-600 font-medium">{v || 0}</span> },
+                      { key: 'lateDays',           label: 'Late',    render: v => <span className="text-yellow-600 font-medium">{v || 0}</span> },
+                    ]}
+                    rows={members.content || []}
+                    emptyMessage="No students in this cohort"
+                  />
+                  <Pagination page={memPage} totalPages={Math.max(members.totalPages || 1, 1)} totalElements={members.totalElements || 0} size={memSize} onChange={(p, s) => { setMemPage(p); if (s) setSize(s) }} pageSizeOptions={[5, 10, 20]} />
+                </>
+              )}
+            </div>
+          </div>
         )}
       </Modal>
     </>
@@ -532,51 +872,162 @@ export function AdminCohorts() {
 
 // ── Devices ──────────────────────────────────────────────
 export function AdminDevices() {
-  const [students, setStudents] = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [students, setStudents]       = useState([])
+  const [loading, setLoading]         = useState(true)
+
+  // Search & Pagination
+  const [q, setQ]                     = useState('')
+  const [page, setPage]               = useState(0)
+  const [size, setSize]               = useState(10)
+  const [total, setTotal]             = useState(0)
+  const [totalPages, setTotalPages]   = useState(1)
+  const debouncedQ                    = useDebounce(q, 400)
+
+  // Modals for Reset Device & Reset Password
+  const [resetDeviceTarget, setResetDeviceTarget] = useState(null)
+  const [resetPwdTarget, setResetPwdTarget]       = useState(null)
+  const [newPassword, setNewPassword]             = useState('')
+  const [resettingDev, setResettingDev]           = useState(false)
+  const [resettingPwd, setResettingPwd]           = useState(false)
 
   const load = useCallback(() => {
-    adminApi.listUsers('student').then(r => setStudents(r.data)).finally(() => setLoading(false))
-  }, [])
+    setLoading(true)
+    adminApi.searchDevices({
+      q: debouncedQ || undefined,
+      page,
+      size,
+      sort: 'name',
+      order: 'asc',
+    }).then(r => {
+      setStudents(r.data.content || [])
+      setTotal(r.data.totalElements || 0)
+      setTotalPages(Math.max(r.data.totalPages || 1, 1))
+    }).catch(() => toast.error('Failed to load device registry'))
+      .finally(() => setLoading(false))
+  }, [debouncedQ, page, size])
+
+  useEffect(() => { setPage(0) }, [debouncedQ])
   useEffect(() => { load() }, [load])
 
-  const unlock = async id => { await adminApi.unlockDevice(id); toast.success('Device unlocked'); load() }
-
-  const register = async (studentId, fingerprint) => {
-    await adminApi.registerDevice({ studentId, fingerprint, userAgent: navigator.userAgent })
-    toast.success('Device registered'); load()
+  const confirmResetDevice = async () => {
+    if (!resetDeviceTarget) return
+    setResettingDev(true)
+    try {
+      await adminApi.unlockDevice(resetDeviceTarget.id)
+      toast.success(`Device association cleared for ${resetDeviceTarget.name}`)
+      setResetDeviceTarget(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reset device')
+    } finally { setResettingDev(false) }
   }
 
-  if (loading) return <LoadingPage />
+  const confirmResetPassword = async () => {
+    if (!resetPwdTarget) return
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long')
+      return
+    }
+    setResettingPwd(true)
+    try {
+      await adminApi.resetPassword({ userId: resetPwdTarget.id, newPassword })
+      toast.success(`Password reset successfully for ${resetPwdTarget.name}`)
+      setResetPwdTarget(null)
+      setNewPassword('')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reset password')
+    } finally { setResettingPwd(false) }
+  }
+
+  const register = async (studentId, fingerprint) => {
+    try {
+      await adminApi.registerDevice({ studentId, fingerprint, userAgent: navigator.userAgent })
+      toast.success('Device registered successfully')
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to register device')
+    }
+  }
+
   const withDevices = students.filter(s => s.device)
   const locked      = withDevices.filter(s => s.device?.locked).length
   const unlocked    = withDevices.filter(s => !s.device?.locked).length
 
   return (
     <>
-      <PageHeader title="Devices" subtitle="Student device registry" />
+      <PageHeader title="Devices" subtitle={`${total} registered student devices`} />
       <div className="p-4 sm:p-6 animate-fade-in">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <StatCard label="Total Devices"  value={withDevices.length} />
-          <StatCard label="Registered"     value={locked}   badgeColor="green" badge="Active" />
-          <StatCard label="Unlocked"       value={unlocked} badgeColor="red"   badge="Needs action" color={unlocked > 0 ? 'var(--red)' : undefined} />
+          <StatCard label="Registered & Locked" value={locked} badgeColor="green" badge="Active" />
+          <StatCard label="Unlocked / Needs Reset" value={unlocked} badgeColor="red" badge="Cleared" color={unlocked > 0 ? 'var(--red)' : undefined} />
         </div>
         <Card>
-          <Table
-            columns={[
-              { key: 'name',        label: 'Student',      strong: true },
-              { key: 'device',      label: 'Fingerprint',  render: (v) => v?.fingerprint ? <span className="font-mono text-[11px]">{v.fingerprint}</span> : '—' },
-              { key: 'device2',     label: 'Status',       render: (_, row) => <Badge status={row.device?.locked ? 'ACTIVE' : 'ABSENT'} /> },
-              { key: 'device3',     label: 'Registered',   render: (_, row) => row.device?.registeredAt ? format(new Date(row.device.registeredAt), 'dd MMM yyyy') : '—' },
-              { key: 'action',      label: '',             render: (_, row) => row.device?.locked
-                ? <Button size="sm" variant="outline" onClick={() => unlock(row.id)}>Unlock</Button>
-                : <Button size="sm" onClick={() => register(row.id, 'FP-' + row.id.substring(0,8).toUpperCase())}>Register</Button>
-              },
-            ]}
-            rows={students}
-          />
+          <div className="flex gap-3 mb-4 flex-wrap items-center">
+            <Input
+              placeholder="Search by student name or email address..."
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              className="!mb-0 flex-1 min-w-[240px]"
+            />
+            <div className="text-xs text-gray-500 font-medium px-2">
+              Showing {students.length} of {total} device records
+            </div>
+          </div>
+
+          {loading ? (
+            <Skeleton rows={6} height={40} />
+          ) : (
+            <Table
+              columns={[
+                { key: 'name',   label: 'Student Name', strong: true },
+                { key: 'email',  label: 'Email Address', render: v => <span className="font-mono text-[11px] text-gray-500 dark:text-gray-300">{v}</span> },
+                { key: 'device', label: 'Fingerprint / Device ID', render: (v) => v?.fingerprint ? <span className="font-mono text-[11px] text-gray-600 dark:text-gray-300">{v.fingerprint}</span> : <span className="text-gray-400 font-italic">Not bound</span> },
+                { key: 'deviceStatus', label: 'Status', render: (_, row) => <Badge status={row.device?.locked ? 'ACTIVE' : 'ABSENT'} label={row.device?.locked ? 'Locked' : 'Unlocked'} /> },
+                { key: 'deviceReg', label: 'Registered On', render: (_, row) => row.device?.registeredAt ? format(new Date(row.device.registeredAt), 'dd MMM yyyy') : '—' },
+                { key: 'actions', label: 'Actions', render: (_, row) => (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {row.device?.locked ? (
+                      <Button size="sm" variant="outline" className="!text-yellow-600 !border-yellow-200 hover:!bg-yellow-50" onClick={() => setResetDeviceTarget(row)}>Reset Device</Button>
+                    ) : (
+                      <Button size="sm" onClick={() => register(row.id, 'FP-' + row.id.substring(0,8).toUpperCase())}>Register</Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => { setResetPwdTarget(row); setNewPassword(''); }}>Reset Pwd</Button>
+                  </div>
+                )},
+              ]}
+              rows={students}
+            />
+          )}
+          <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={(p, s) => { setPage(p); if (s) setSize(s) }} />
         </Card>
       </div>
+
+      {/* Reset Device Confirmation Modal */}
+      <Modal open={!!resetDeviceTarget} onClose={() => setResetDeviceTarget(null)} title="Reset Student Device">
+        <div className="py-2">
+          <Alert type="warning" message={`Are you sure you want to reset the device binding for ${resetDeviceTarget?.name}? The student will be required to bind a new device upon next attendance scan.`} />
+        </div>
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="outline" onClick={() => setResetDeviceTarget(null)}>Cancel</Button>
+          <Button variant="danger" loading={resettingDev} onClick={confirmResetDevice}>Reset Device</Button>
+        </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal open={!!resetPwdTarget} onClose={() => setResetPwdTarget(null)} title={`Reset Password — ${resetPwdTarget?.name}`}>
+        <Input
+          label="New Password *"
+          type="password"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          placeholder="Enter new password (min 6 characters)"
+        />
+        <div className="flex gap-2 justify-end mt-4">
+          <Button variant="outline" onClick={() => setResetPwdTarget(null)}>Cancel</Button>
+          <Button loading={resettingPwd} onClick={confirmResetPassword}>Reset Password</Button>
+        </div>
+      </Modal>
     </>
   )
 }

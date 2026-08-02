@@ -13,7 +13,7 @@ services:
       - mongo_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     ports:
-      - "27017:27017"
+      - "27018:27017"
     networks:
       - qrs_net
     healthcheck:

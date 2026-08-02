@@ -16,22 +16,27 @@ import java.util.Optional;
 public interface AttendanceRepository extends MongoRepository<Attendance, String> {
     Optional<Attendance> findByStudentIdAndDate(String studentId, LocalDate date);
     List<Attendance> findByStudentId(String studentId);
+    Page<Attendance> findByStudentId(String studentId, Pageable pageable);
     List<Attendance> findByStudentIdIn(Collection<String> studentIds);
     List<Attendance> findByStudentIdOrderByDateAsc(String studentId);
     List<Attendance> findByCohortIdAndDate(String cohortId, LocalDate date);
     List<Attendance> findByCohortId(String cohortId);
     List<Attendance> findByCohortIdIn(Collection<String> cohortIds);
     List<Attendance> findByDate(LocalDate date);
-    @Query("{'date': {'$gte': ?1, '$lte': ?2}}")
+
+    @Query("{'cohortId': ?0, 'date': {'$gte': ?1, '$lte': ?2}}")
     List<Attendance> findByCohortIdAndDateBetween(String cohortId, LocalDate start, LocalDate end);
 
     @Query("{'date': {'$gte': ?0, '$lte': ?1}}")
     List<Attendance> findByDateBetween(LocalDate start, LocalDate end);
 
-    @Query("{'date': {'$gte': ?1, '$lte': ?2}}")
+    @Query("{'studentId': ?0, 'date': {'$gte': ?1, '$lte': ?2}}")
     List<Attendance> findByStudentIdAndDateBetween(String studentId, LocalDate start, LocalDate end);
 
-    @Query("{'date': {'$gte': ?1, '$lte': ?2}}")
+    @Query("{'studentId': {'$in': ?0}, 'date': {'$gte': ?1, '$lte': ?2}}")
+    List<Attendance> findByStudentIdInAndDateBetween(Collection<String> studentIds, LocalDate start, LocalDate end);
+
+    @Query("{'cohortId': ?0, 'date': {'$gte': ?1, '$lte': ?2}}")
     Page<Attendance> findByCohortIdAndDateBetween(String cohortId, LocalDate start, LocalDate end, Pageable pageable);
 
     @Query("{'date': {'$gte': ?0, '$lte': ?1}}")

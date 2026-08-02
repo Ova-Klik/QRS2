@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -102,10 +101,181 @@ public class CohortService {
         User fac = c.getFacilitatorId() != null ? facById.get(c.getFacilitatorId()) : null;
         long count = studentCountByCohort.getOrDefault(c.getId(), 0L);
         List<Attendance> att = attendanceByCohort.getOrDefault(c.getId(), List.of());
-        long distinctStudents = att.stream().map(Attendance::getStudentId).distinct().count();
-        double rate = count > 0 ? (double) att.stream().filter(a -> a.getStatus() != Attendance.AttendanceStatus.ABSENT).count() / count * 100 : 0;
-        return new CohortDto.CohortResponse(c.getId(), c.getName(), c.getFacilitatorId(),
-                fac != null ? fac.getName() : null, c.getSchedule(), c.isActive(), (int) count, rate, c.getCreatedAt());
+
+        int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+        int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+        int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
+        int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+        int totalRecs = att.size();
+
+        double attendanceRate = totalRecs > 0 ? (double) (present + late) / totalRecs * 100.0 : 0.0;
+        double presentRate = totalRecs > 0 ? (double) present / totalRecs * 100.0 : 0.0;
+        double absentRate = totalRecs > 0 ? (double) absent / totalRecs * 100.0 : 0.0;
+        double excusedRate = totalRecs > 0 ? (double) excused / totalRecs * 100.0 : 0.0;
+        double lateRate = totalRecs > 0 ? (double) late / totalRecs * 100.0 : 0.0;
+
+        long uniqueDays = att.stream().map(Attendance::getDate).filter(java.util.Objects::nonNull).distinct().count();
+        double avgDaily = uniqueDays > 0 ? (double) (present + late + excused) / uniqueDays : 0.0;
+
+        CohortDto.CohortResponse resp = new CohortDto.CohortResponse();
+        resp.setId(c.getId());
+        resp.setName(c.getName());
+        resp.setFacilitatorId(c.getFacilitatorId());
+        resp.setFacilitatorName(fac != null ? fac.getName() : null);
+        resp.setFacilitatorEmail(fac != null ? fac.getEmail() : null);
+        resp.setFacilitatorPhone(fac != null ? fac.getPhone() : null);
+        resp.setSchedule(c.getSchedule());
+        resp.setActive(c.isActive());
+        resp.setStudentCount((int) count);
+        resp.setAttendanceRate(Math.round(attendanceRate * 10.0) / 10.0);
+        resp.setPresentCount(present);
+        resp.setAbsentCount(absent);
+        resp.setExcusedCount(excused);
+        resp.setLateCount(late);
+        resp.setTotalRecords(totalRecs);
+        resp.setPresentRate(Math.round(presentRate * 10.0) / 10.0);
+        resp.setAbsentRate(Math.round(absentRate * 10.0) / 10.0);
+        resp.setExcusedRate(Math.round(excusedRate * 10.0) / 10.0);
+        resp.setLateRate(Math.round(lateRate * 10.0) / 10.0);
+        resp.setAverageDailyAttendance(Math.round(avgDaily * 10.0) / 10.0);
+        resp.setCreatedAt(c.getCreatedAt());
+        return resp;
+    }
+
+    public AnalyticsDto.PageResponse<CohortDto.CohortResponse> searchCohorts(
+            String query, String statusStr, int page, int size, String sort, String order) {
+
+        List<Cohort> allCohorts = cohortRepository.findAll();
+
+        List<Cohort> filtered = allCohorts.stream().filter(c -> {
+            if ("ACTIVE".equalsIgnoreCase(statusStr)) return c.isActive();
+            if ("ARCHIVED".equalsIgnoreCase(statusStr)) return !c.isActive();
+            return true;
+        }).collect(Collectors.toList());
+
+        Set<String> facilitatorIds = filtered.stream()
+                .map(Cohort::getFacilitatorId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, User> facById = facilitatorIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(facilitatorIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        String q = query == null ? "" : query.trim().toLowerCase();
+        if (!q.isEmpty()) {
+            filtered = filtered.stream().filter(c -> {
+                boolean nameMatch = c.getName() != null && c.getName().toLowerCase().contains(q);
+                User fac = c.getFacilitatorId() != null ? facById.get(c.getFacilitatorId()) : null;
+                boolean facMatch = fac != null && fac.getName() != null && fac.getName().toLowerCase().contains(q);
+                return nameMatch || facMatch;
+            }).collect(Collectors.toList());
+        }
+
+        List<CohortDto.CohortResponse> responses = toResponses(filtered);
+
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
+        java.util.Comparator<CohortDto.CohortResponse> cmp;
+        switch (sortKey) {
+            case "students":
+            case "studentcount":
+                cmp = java.util.Comparator.comparingInt(CohortDto.CohortResponse::getStudentCount);
+                break;
+            case "rate":
+            case "attendancerate":
+                cmp = java.util.Comparator.comparingDouble(CohortDto.CohortResponse::getAttendanceRate);
+                break;
+            case "createdat":
+            case "date":
+                cmp = java.util.Comparator.comparing(CohortDto.CohortResponse::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
+                break;
+            default:
+                cmp = java.util.Comparator.comparing(CohortDto.CohortResponse::getName, java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+        responses.sort(asc ? cmp : cmp.reversed());
+
+        int total = responses.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<CohortDto.CohortResponse> content = responses.subList(from, to);
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    public CohortDto.CohortResponse updateCohort(String actorId, String actorName, String cohortId,
+                                                CohortDto.UpdateCohortRequest request) {
+        Cohort cohort = cohortRepository.findById(cohortId)
+                .orElseThrow(() -> AppException.notFound("Cohort not found"));
+
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            throw AppException.badRequest("Cohort name cannot be empty");
+        }
+
+        String newName = request.getName().trim();
+        cohortRepository.findByNameIgnoreCase(newName).ifPresent(existing -> {
+            if (!existing.getId().equals(cohortId)) {
+                throw AppException.badRequest("A cohort with the name '" + newName + "' already exists");
+            }
+        });
+
+        cohort.setName(newName);
+        if (request.getSchedule() != null) cohort.setSchedule(request.getSchedule());
+        if (request.getDescription() != null) cohort.setDescription(request.getDescription());
+
+        if (request.getFacilitatorId() != null) {
+            String oldFacId = cohort.getFacilitatorId();
+            cohort.setFacilitatorId(request.getFacilitatorId());
+
+            userRepository.findById(request.getFacilitatorId()).ifPresent(fac -> {
+                if (fac.getAssignedCohortIds() == null) fac.setAssignedCohortIds(new java.util.ArrayList<>());
+                if (!fac.getAssignedCohortIds().contains(cohortId)) {
+                    fac.getAssignedCohortIds().add(cohortId);
+                    userRepository.save(fac);
+                }
+            });
+
+            if (!request.getFacilitatorId().equals(oldFacId)) {
+                auditService.log(actorId, actorName, "SUPER_ADMIN",
+                        AuditLog.ActionType.FACILITATOR_REASSIGNED, cohortId, cohort.getName(),
+                        "Facilitator reassigned for cohort " + cohort.getName(), null);
+            }
+        }
+
+        Cohort saved = cohortRepository.save(cohort);
+        auditService.log(actorId, actorName, "SUPER_ADMIN",
+                AuditLog.ActionType.COHORT_UPDATED, cohortId, saved.getName(),
+                "Cohort updated: " + saved.getName(), null);
+
+        return toResponse(saved);
+    }
+
+    public void deleteCohort(String actorId, String actorName, String cohortId) {
+        Cohort cohort = cohortRepository.findById(cohortId)
+                .orElseThrow(() -> AppException.notFound("Cohort not found"));
+
+        List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
+        for (User s : students) {
+            s.setCohortId(null);
+        }
+        if (!students.isEmpty()) {
+            userRepository.saveAll(students);
+        }
+
+        cohortRepository.delete(cohort);
+
+        auditService.log(actorId, actorName, "SUPER_ADMIN",
+                AuditLog.ActionType.COHORT_DELETED, cohortId, cohort.getName(),
+                "Cohort deleted: " + cohort.getName(), null);
+    }
+
+    public CohortDto.CohortResponse getCohortById(String cohortId) {
+        Cohort cohort = cohortRepository.findById(cohortId)
+                .orElseThrow(() -> AppException.notFound("Cohort not found"));
+        return toResponse(cohort);
     }
 
     public CohortDto.CohortResponse toggleCohort(String actorId, String actorName, String cohortId) {

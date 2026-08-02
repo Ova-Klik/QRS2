@@ -6,8 +6,6 @@ import com.techschool.attendance.model.User;
 import com.techschool.attendance.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -64,17 +62,49 @@ public class AdminController {
                 userService.updateUser(adminId, admin.getName(), "SUPER_ADMIN", id, request));
     }
 
-    // ── Student Search & Pagination ───────────────────────
+    // ── Student Search, Management & Export ───────────────
 
     @GetMapping("/students/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.UserResponse>> searchStudents(
+    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse>> searchStudents(
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false) LocalDate start,
+            @RequestParam(required = false) LocalDate end,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "0") int page,
-            @RequestParam(required = false, defaultValue = "20") int size,
+            @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false, defaultValue = "name") String sort,
             @RequestParam(required = false, defaultValue = "asc") String order) {
-        return ResponseEntity.ok(userService.searchStudents(cohortId, q, page, size, sort, order));
+        return ResponseEntity.ok(userService.searchStudentsAdmin(cohortId, q, start, end, status, page, size, sort, order));
+    }
+
+    @DeleteMapping("/students/{id}")
+    public ResponseEntity<Void> deleteStudent(
+            @AuthenticationPrincipal String adminId,
+            @PathVariable String id) {
+        var admin = userService.getById(adminId);
+        userService.deleteStudent(adminId, admin.getName(), "SUPER_ADMIN", id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(
+            @AuthenticationPrincipal String adminId,
+            @PathVariable String id) {
+        var admin = userService.getById(adminId);
+        userService.deleteStudent(adminId, admin.getName(), "SUPER_ADMIN", id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/students/export")
+    public ResponseEntity<byte[]> exportStudents(
+            @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false) LocalDate start,
+            @RequestParam(required = false) LocalDate end,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "csv") String format) {
+        return userService.exportStudentsAdmin(cohortId, q, start, end, status, format, exportService);
     }
 
     @GetMapping("/cohorts/{id}/students")
@@ -118,6 +148,16 @@ public class AdminController {
                 body.get("userAgent")));
     }
 
+    @GetMapping("/devices/search")
+    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.UserResponse>> searchDevices(
+            @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "10") int size,
+            @RequestParam(required = false, defaultValue = "name") String sort,
+            @RequestParam(required = false, defaultValue = "asc") String order) {
+        return ResponseEntity.ok(userService.searchDevices(q, page, size, sort, order));
+    }
+
     @PostMapping("/devices/unlock/{studentId}")
     public ResponseEntity<Void> unlockDevice(
             @AuthenticationPrincipal String adminId,
@@ -134,6 +174,22 @@ public class AdminController {
         return ResponseEntity.ok(cohortService.getAllCohorts());
     }
 
+    @GetMapping("/cohorts/search")
+    public ResponseEntity<AnalyticsDto.PageResponse<CohortDto.CohortResponse>> searchCohorts(
+            @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false, defaultValue = "ALL") String status,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "10") int size,
+            @RequestParam(required = false, defaultValue = "name") String sort,
+            @RequestParam(required = false, defaultValue = "asc") String order) {
+        return ResponseEntity.ok(cohortService.searchCohorts(q, status, page, size, sort, order));
+    }
+
+    @GetMapping("/cohorts/{id}")
+    public ResponseEntity<CohortDto.CohortResponse> getCohort(@PathVariable String id) {
+        return ResponseEntity.ok(cohortService.getCohortById(id));
+    }
+
     @PostMapping("/cohorts")
     public ResponseEntity<CohortDto.CohortResponse> createCohort(
             @AuthenticationPrincipal String adminId,
@@ -141,6 +197,24 @@ public class AdminController {
         var admin = userService.getById(adminId);
         return ResponseEntity.status(201).body(
                 cohortService.createCohort(adminId, admin.getName(), request));
+    }
+
+    @PutMapping("/cohorts/{id}")
+    public ResponseEntity<CohortDto.CohortResponse> updateCohort(
+            @AuthenticationPrincipal String adminId,
+            @PathVariable String id,
+            @Valid @RequestBody CohortDto.UpdateCohortRequest request) {
+        var admin = userService.getById(adminId);
+        return ResponseEntity.ok(cohortService.updateCohort(adminId, admin.getName(), id, request));
+    }
+
+    @DeleteMapping("/cohorts/{id}")
+    public ResponseEntity<Void> deleteCohort(
+            @AuthenticationPrincipal String adminId,
+            @PathVariable String id) {
+        var admin = userService.getById(adminId);
+        cohortService.deleteCohort(adminId, admin.getName(), id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/cohorts/{id}/toggle")
