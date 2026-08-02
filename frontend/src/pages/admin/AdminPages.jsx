@@ -593,12 +593,19 @@ export function AdminCohorts() {
       }),
       adminApi.listUsers('facilitator'),
     ]).then(([cRes, fRes]) => {
-      setCohorts(cRes.data.content || [])
-      setTotal(cRes.data.totalElements || 0)
-      setTotalPages(Math.max(cRes.data.totalPages || 1, 1))
-      setFacs(fRes.data || [])
-    }).catch(() => toast.error('Failed to load cohorts'))
-      .finally(() => setLoading(false))
+      const cList = Array.isArray(cRes.data) ? cRes.data : (cRes.data?.content || [])
+      const totalCount = Array.isArray(cRes.data) ? cRes.data.length : (cRes.data?.totalElements || 0)
+      const pagesCount = Array.isArray(cRes.data) ? 1 : Math.max(cRes.data?.totalPages || 1, 1)
+      const fList = Array.isArray(fRes.data) ? fRes.data : (fRes.data?.content || [])
+
+      setCohorts(cList)
+      setTotal(totalCount)
+      setTotalPages(pagesCount)
+      setFacs(fList)
+    }).catch(err => {
+      console.error('Cohort load error:', err)
+      toast.error('Failed to load cohorts')
+    }).finally(() => setLoading(false))
   }, [debouncedQ, statusFilter, page, size])
 
   useEffect(() => { setPage(0) }, [debouncedQ, statusFilter])
@@ -614,8 +621,12 @@ export function AdminCohorts() {
       size: memSize,
       sort: 'name',
       order: 'asc',
-    }).then(r => setMembers(r.data))
-      .catch(() => toast.error('Failed to load cohort students'))
+    }).then(r => {
+      const mList = Array.isArray(r.data) ? r.data : (r.data?.content || [])
+      const mTotal = Array.isArray(r.data) ? r.data.length : (r.data?.totalElements || 0)
+      const mPages = Array.isArray(r.data) ? 1 : Math.max(r.data?.totalPages || 1, 1)
+      setMembers({ content: mList, totalElements: mTotal, totalPages: mPages })
+    }).catch(() => toast.error('Failed to load cohort students'))
       .finally(() => setMemLoading(false))
   }, [viewCohort, debouncedMemQ, memPage, memSize])
 

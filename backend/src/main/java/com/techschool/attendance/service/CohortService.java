@@ -67,7 +67,14 @@ public class CohortService {
     }
 
     public List<CohortDto.CohortResponse> getCohortsByFacilitator(String facId) {
-        return toResponses(cohortRepository.findByFacilitatorId(facId));
+        User fac = userRepository.findById(facId).orElse(null);
+        Set<String> cohortIds = new java.util.HashSet<>();
+        cohortRepository.findByFacilitatorId(facId).forEach(c -> cohortIds.add(c.getId()));
+        if (fac != null && fac.getAssignedCohortIds() != null) {
+            cohortIds.addAll(fac.getAssignedCohortIds());
+        }
+        if (cohortIds.isEmpty()) return List.of();
+        return toResponses(cohortRepository.findAllById(cohortIds));
     }
 
     /** Batched cohort mapping — zero per-cohort queries. */
