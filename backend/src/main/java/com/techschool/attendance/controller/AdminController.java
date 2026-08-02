@@ -241,6 +241,22 @@ public class AdminController {
         return ResponseEntity.ok(auditService.getLogs(action, actorName, detail, from, to, page, size, sort, order));
     }
 
+    @DeleteMapping("/audit/purge")
+    public ResponseEntity<Map<String, Object>> purgeOldAuditLogs(
+            @AuthenticationPrincipal String adminId,
+            @RequestParam(defaultValue = "30") int daysOld) {
+        var admin = userService.getById(adminId);
+        long deletedCount = auditService.deleteOldLogs(daysOld);
+        auditService.log(adminId, admin.getName(), "SUPER_ADMIN",
+                AuditLog.ActionType.USER_UPDATED, null, "Audit Trail",
+                "Purged " + deletedCount + " audit logs older than " + daysOld + " days", null);
+        return ResponseEntity.ok(Map.of(
+                "deletedCount", deletedCount,
+                "daysOld", daysOld,
+                "message", "Successfully purged audit logs older than " + daysOld + " days"
+        ));
+    }
+
     // ── Network Settings ──────────────────────────────────
 
     @GetMapping("/settings/network")

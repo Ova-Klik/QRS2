@@ -93,6 +93,7 @@ export const adminApi = {
   exportStudents: (params)            => api.get('/admin/students/export', { params, responseType: 'blob' }),
   // Audit
   auditLogs:      (params)            => api.get('/admin/audit', { params }),
+  purgeAuditLogs: (daysOld = 30)      => api.delete('/admin/audit/purge', { params: { daysOld } }),
   // Stats
   schoolStats:    (cohortId)          => api.get('/admin/analytics/school', { params: { cohortId } }),
   calendarMonth:  (params)            => api.get('/admin/analytics/calendar', { params }),

@@ -104,6 +104,12 @@ public class AuditService {
                 (int) Math.ceil((double) total / safeSize));
     }
 
+    public long deleteOldLogs(int daysOld) {
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofDays(daysOld));
+        Query query = new Query(Criteria.where("createdAt").lt(cutoff));
+        return mongoTemplate.remove(query, AuditLog.class).getDeletedCount();
+    }
+
     private Instant parseStartOfDay(String date) {
         return LocalDate.parse(date).atStartOfDay().toInstant(ZoneOffset.UTC);
     }

@@ -1075,6 +1075,8 @@ export function AdminAudit() {
   const [totalPages, setTotalPages] = useState(1)
   const [sort, setSort]         = useState('createdAt')
   const [order, setOrder]       = useState('desc')
+  const [purgeModal, setPurgeModal] = useState(false)
+  const [purging, setPurging]   = useState(false)
   const debouncedActor = useDebounce(actor, 350)
   const debouncedDetail = useDebounce(detail, 350)
 
@@ -1096,6 +1098,7 @@ export function AdminAudit() {
       setTotalPages(Math.max(r.data.totalPages || 1, 1))
     }).catch(() => toast.error('Failed to load audit logs')).finally(() => setLoading(false))
   }, [action, debouncedActor, debouncedDetail, from, to, page, size, sort, order])
+
   useEffect(() => { setPage(0) }, [action, debouncedActor, debouncedDetail, from, to, size, sort, order])
   useEffect(() => { load() }, [load])
 
@@ -1105,11 +1108,34 @@ export function AdminAudit() {
   }
   const arrow = key => sort === key ? (order === 'asc' ? ' ▲' : ' ▼') : ''
 
+  const handlePurge = async () => {
+    setPurging(true)
+    try {
+      const res = await adminApi.purgeAuditLogs(30)
+      const count = res.data?.deletedCount ?? 0
+      toast.success(`Purged ${count} audit logs older than 30 days`)
+      setPurgeModal(false)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to purge audit logs')
+    } finally {
+      setPurging(false)
+    }
+  }
+
   if (loading && logs.length === 0) return <LoadingPage />
 
   return (
     <>
-      <PageHeader title="Audit Logs" subtitle="Full system activity trail" />
+      <PageHeader
+        title="Audit Logs"
+        subtitle="Full system activity trail"
+        actions={
+          <Button variant="outline" className="!text-red-600 !border-red-200 hover:!bg-red-50" onClick={() => setPurgeModal(true)}>
+            🗑️ Clear Logs (&gt; 30 Days)
+          </Button>
+        }
+      />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <div className="flex gap-3 mb-4 flex-wrap">
@@ -1141,23 +1167,48 @@ export function AdminAudit() {
           )}
         </Card>
       </div>
+
+      {/* Clear Logs Modal */}
+      <Modal open={purgeModal} onClose={() => setPurgeModal(false)} title="Clear Audits Older Than 1 Month">
+        <div className="py-2">
+          <Alert type="warning">
+            Are you sure you want to clear all audit logs older than 30 days? This action permanently removes old system logs and cannot be undone.
+          </Alert>
+          <div className="flex gap-2 justify-end mt-4">
+            <Button variant="outline" onClick={() => setPurgeModal(false)}>Cancel</Button>
+            <Button variant="danger" loading={purging} onClick={handlePurge}>Clear Old Logs</Button>
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }
 
 // ── Analytics ────────────────────────────────────────────
 export function AdminAnalytics() {
-  const [data, setData]     = useState(null)
+  const [data, setData]         = useState(null)
   const [students, setStudents] = useState([])
-  const [cohorts, setCohorts] = useState([])
+  const [cohorts, setCohorts]   = useState([])
   const [cohortId, setCohortId] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(10)
+
   useEffect(() => {
     Promise.all([adminApi.schoolStats(cohortId || undefined), adminApi.listUsers('student'), adminApi.listCohorts()]).then(([s, u, c]) => { setData(s.data); setStudents(u.data); setCohorts(c.data) }).finally(() => setLoading(false))
   }, [cohortId])
+
+  useEffect(() => {
+    setPage(0)
+  }, [cohortId])
+
   if (loading && !data) return <LoadingPage />
   const d = data || {}
   const behaviourList = d.studentBehaviour || []
+
+  const totalElements = behaviourList.length
+  const totalPages    = Math.ceil(totalElements / size) || 1
+  const paginatedBehaviourList = behaviourList.slice(page * size, (page + 1) * size)
 
   const dayOfWeekChartData = Object.entries(d.dayOfWeekBreakdown || {}).map(([day, map]) => ({
     day: day.charAt(0) + day.slice(1, 3).toLowerCase(),
@@ -1245,18 +1296,26 @@ export function AdminAnalytics() {
                 const r = Math.round(v || 0)
                 return (
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-xs">{r}%</span>
-                    <div className="w-[50px] h-1 bg-gray-100 rounded-[2px]">
+                    <span className="font-medium text-xs dark:text-white">{r}%</span>
+                    <div className="w-[50px] h-1 bg-gray-100 dark:bg-gray-700 rounded-[2px]">
                       <div className="h-full rounded-[2px]" style={{ width: `${r}%`, background: r>=80?'var(--green)':r>=60?'#f59e0b':'var(--red)' }} />
                     </div>
                   </div>
                 )
               }},
               { key: 'behaviorTag',        label: 'Behavior Pattern', render: (v) => renderTagBadge(v) },
-              { key: 'behaviorInsightText',label: 'Behavioral Observation', render: v => <span className="text-xs text-gray-600">{v}</span> },
+              { key: 'behaviorInsightText',label: 'Behavioral Observation', render: v => <span className="text-xs text-gray-600 dark:text-gray-300">{v}</span> },
             ]}
-            rows={behaviourList}
+            rows={paginatedBehaviourList}
             emptyMessage="No student behavioral data available yet"
+          />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            size={size}
+            onChange={(p, s) => { setPage(p); if (s) setSize(s) }}
+            pageSizeOptions={[10, 20, 50]}
           />
         </Card>
       </div>
