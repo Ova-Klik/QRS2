@@ -29,6 +29,7 @@ public class AttendanceDto {
         private String id;
         private String studentId;
         private String studentName;
+        private String registrationNumber;
         private String cohortId;
         private String cohortName;
         private LocalDate date;
@@ -37,6 +38,21 @@ public class AttendanceDto {
         private boolean manual;
         private String manualReason;
         private String deviceUsed;
+    }
+
+    @Data @NoArgsConstructor @AllArgsConstructor
+    public static class ManualStudentAttendanceResponse {
+        private String studentId;
+        private String studentName;
+        private String registrationNumber;
+        private String email;
+        private String cohortId;
+        private String cohortName;
+        private LocalDate date;
+        private String status;
+        private Instant markedAt;
+        private boolean manual;
+        private String manualReason;
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor

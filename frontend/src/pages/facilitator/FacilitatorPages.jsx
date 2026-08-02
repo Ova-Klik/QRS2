@@ -1,50 +1,109 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { facilitatorApi, adminApi } from '../../api/client'
-import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Select, Textarea, Modal } from '../../components/common/UI'
+import { facilitatorApi } from '../../api/client'
+import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Select, Textarea, Modal, Pagination, Input } from '../../components/common/UI'
 import { useSchool } from '../../context/SchoolContext'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
 // ── Dashboard ────────────────────────────────────────────
 export function FacilitatorDashboard() {
-  const [data, setData]     = useState(null)
-  const [loading, setLoading] = useState(true)
-  const reload = useCallback(() => {
-    facilitatorApi.dashboard().then(r => setData(r.data)).catch(() => toast.error('Failed to load')).finally(() => setLoading(false))
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [cohorts, setCohorts]   = useState([])
+  const [cohortId, setCohortId] = useState('')
+  const [query, setQuery]       = useState('')
+  const [debouncedQ, setDebQ]   = useState('')
+  const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(10)
+
+  useEffect(() => {
+    facilitatorApi.myCohorts().then(r => setCohorts(r.data || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebQ(query), 400)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const reload = useCallback(() => {
+    setLoading(true)
+    facilitatorApi.dashboard({ cohortId: cohortId || undefined, q: debouncedQ || undefined, date, page, size })
+      .then(r => setData(r.data))
+      .catch(() => toast.error('Failed to load dashboard'))
+      .finally(() => setLoading(false))
+  }, [cohortId, debouncedQ, date, page, size])
+
   useEffect(() => { reload() }, [reload])
 
-  if (loading) return <LoadingPage />
+  const isWeekendSelected = () => {
+    if (!date) return false
+    const d = new Date(date + 'T00:00:00')
+    const day = d.getDay()
+    return day === 0 || day === 6
+  }
+
   const d = data || {}
+  const pageResp = d.todayRecordsPage || { content: d.todayRecords || [], page: 0, size: 10, totalElements: (d.todayRecords || []).length, totalPages: 1 }
 
   return (
     <>
       <PageHeader title="Facilitator Dashboard" subtitle={format(new Date(), "EEEE, dd MMM yyyy")}
         actions={<Button variant="outline" size="sm" onClick={reload}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
-        {d.qrSessionActive
-          ? <Alert type="success"><strong>QR Session is active</strong> — Students can scan until the session expires.</Alert>
-          : <Alert type="warning"><strong>No active QR session.</strong> Go to QR Generator to open today's session.</Alert>
-        }
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+        {isWeekendSelected() ? (
+          <Alert type="warning" className="mb-4"><strong>Weekend Selected:</strong> No attendance scheduled for Saturdays and Sundays.</Alert>
+        ) : d.qrSessionActive ? (
+          <Alert type="success" className="mb-4"><strong>QR Session is active</strong> — Students can scan until the session expires.</Alert>
+        ) : (
+          <Alert type="warning" className="mb-4"><strong>No active QR session.</strong> Go to QR Generator to open today's session (07:00 AM – 12:00 PM Mon-Fri).</Alert>
+        )}
+
+        <Card className="mb-5 !p-3.5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select label="Cohort Filter" value={cohortId} onChange={e => { setCohortId(e.target.value); setPage(0) }} className="!mb-0 min-w-[200px] flex-1 max-w-[280px]">
+              <option value="">All Assigned Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
+            </Select>
+            <Input label="Student Search" placeholder="Search by name..." value={query} onChange={e => { setQuery(e.target.value); setPage(0) }} className="!mb-0 min-w-[200px] flex-1 max-w-[280px]" />
+            <Input label="Attendance Date" type="date" value={date} onChange={e => { setDate(e.target.value); setPage(0) }} className="!mb-0 min-w-[160px]" />
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-5">
           <StatCard label="Total Students" value={d.totalStudents || 0} />
           <StatCard label="Present"  value={d.presentToday || 0} badgeColor="green" badge="On time" />
-          <StatCard label="Late"     value={d.lateToday    || 0} badgeColor="yellow" badge="After 7:30" />
+          <StatCard label="Late"     value={d.lateToday    || 0} badgeColor="yellow" badge="After threshold" />
+          <StatCard label="Excused"  value={d.excusedToday || 0} badgeColor="gray" badge="Approved" />
           <StatCard label="Absent"   value={d.absentToday  || 0} badgeColor="red" badge="No record" color={d.absentToday > 0 ? 'var(--red)' : undefined} />
         </div>
+
         <Card>
-          <div className="font-semibold mb-4">Today's Live Attendance</div>
-          <Table
-            columns={[
-              { key: 'studentName', label: 'Student',  strong: true },
-              { key: 'cohortName',  label: 'Cohort' },
-              { key: 'status',      label: 'Status',  render: v => <Badge status={v} /> },
-              { key: 'markedAt',    label: 'Time',    render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
-              { key: 'manual',      label: 'Type',    render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
-            ]}
-            rows={d.todayRecords || []}
-            emptyMessage="No attendance records yet today"
-          />
+          <div className="font-semibold mb-4">Live Attendance List ({date})</div>
+          {loading ? <LoadingPage /> : (
+            <>
+              <Table
+                columns={[
+                  { key: 'studentName',        label: 'Student',  strong: true },
+                  { key: 'registrationNumber', label: 'Reg No',   render: v => <span className="font-mono text-xs text-gray-500">{v || '—'}</span> },
+                  { key: 'cohortName',         label: 'Cohort' },
+                  { key: 'status',             label: 'Status',  render: v => <Badge status={v} /> },
+                  { key: 'markedAt',           label: 'Time',    render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
+                  { key: 'manual',             label: 'Type',    render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
+                ]}
+                rows={pageResp.content || []}
+                emptyMessage="No attendance records found"
+              />
+              <Pagination
+                page={pageResp.page || 0}
+                totalPages={pageResp.totalPages || 1}
+                totalElements={pageResp.totalElements || 0}
+                size={pageResp.size || 10}
+                onChange={(p, s) => { setPage(p); if (s) setSize(s) }}
+                pageSizeOptions={[10, 20, 50]}
+              />
+            </>
+          )}
         </Card>
       </div>
     </>
@@ -62,10 +121,15 @@ export function FacilitatorQR() {
   const [remaining, setRemaining]   = useState(0)
   const [windowRemaining, setWindowRemaining] = useState(0)
 
+  const isWeekend = () => {
+    const day = new Date().getDay()
+    return day === 0 || day === 6
+  }
+
   useEffect(() => {
     facilitatorApi.myCohorts().then(r => {
-      setCohorts(r.data)
-      if (r.data.length > 0) setSelected(r.data[0].id)
+      setCohorts(r.data || [])
+      if (r.data?.length > 0) setSelected(r.data[0].id)
     })
   }, [])
 
@@ -83,7 +147,6 @@ export function FacilitatorQR() {
       .catch(() => setSession(null))
   }, [selectedCohort])
 
-  // Timer for active session countdown
   useEffect(() => {
     if (!session || session.state !== 'ACTIVE') return
     const tick = () => {
@@ -98,7 +161,6 @@ export function FacilitatorQR() {
     return () => clearInterval(t)
   }, [session?.sessionId, session?.state])
 
-  // Timer for daily window countdown
   useEffect(() => {
     const tick = () => {
       const now = new Date()
@@ -114,6 +176,7 @@ export function FacilitatorQR() {
 
   const generate = async () => {
     if (!selectedCohort) { toast.error('Select a cohort'); return }
+    if (isWeekend()) { toast.error('Attendance QR codes cannot be generated on weekends'); return }
     setGenerating(true)
     try {
       const parsedDuration = durationMinutes ? parseInt(durationMinutes) : null
@@ -145,10 +208,14 @@ export function FacilitatorQR() {
 
   return (
     <>
-      <PageHeader title="QR Generator" subtitle="Generate or stop daily attendance QR codes with custom session durations" />
-        <div className="p-4 sm:p-6 animate-fade-in">
+      <PageHeader title="QR Generator" subtitle="Generate or stop daily attendance QR codes (07:00 AM – 12:00 PM Mon-Fri)" />
+      <div className="p-4 sm:p-6 animate-fade-in">
+        {isWeekend() && (
+          <Alert type="warning" className="mb-4">
+            <strong>Attendance Disabled on Weekends:</strong> QR code generation is unavailable on Saturdays and Sundays.
+          </Alert>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-[800px]">
-            {/* Controls */}
           <Card>
             <div className="font-semibold mb-4">Manage QR Session</div>
             <Select label="Cohort" value={selectedCohort} onChange={e => setSelected(e.target.value)}>
@@ -161,7 +228,6 @@ export function FacilitatorQR() {
               <option value="45">45 Minutes</option>
               <option value="60">60 Minutes (1 Hour)</option>
               <option value="120">120 Minutes (2 Hours)</option>
-              <option value="180">180 Minutes (3 Hours)</option>
             </Select>
             <div className="bg-off rounded p-3 mb-4">
               <div className="text-[11px] text-gray-400 mb-1">SESSION STATUS</div>
@@ -173,7 +239,7 @@ export function FacilitatorQR() {
                 {isActive ? '10-second dynamic TOTP rolling rotation enabled' : 'Select cohort & duration to generate session'}
               </div>
             </div>
-            <Button onClick={generate} loading={generating} className="w-full justify-center">
+            <Button onClick={generate} loading={generating} disabled={isWeekend()} className="w-full justify-center">
               {isActive ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               ) : (
@@ -189,7 +255,6 @@ export function FacilitatorQR() {
             )}
           </Card>
 
-          {/* QR Display */}
           <Card className="text-center">
             <div className="font-semibold mb-4">Session QR</div>
             {session ? (
@@ -245,23 +310,38 @@ export function FacilitatorQR() {
 export function FacilitatorManual() {
   const [cohorts, setCohorts]   = useState([])
   const [selected, setSelected] = useState('')
-  const [summary, setSummary]   = useState(null)
-  const [modal, setModal]       = useState(null) // { studentId, studentName }
+  const [query, setQuery]       = useState('')
+  const [debouncedQ, setDebQ]   = useState('')
+  const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [pageResponse, setPageResponse] = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(10)
+  const [modal, setModal]       = useState(null)
   const [form, setForm]         = useState({ status: 'PRESENT', reason: '' })
   const [saving, setSaving]     = useState(false)
 
   useEffect(() => {
     facilitatorApi.myCohorts().then(r => {
-      setCohorts(r.data)
-      if (r.data.length > 0) { setSelected(r.data[0].id); loadSummary(r.data[0].id) }
+      setCohorts(r.data || [])
+      if (r.data?.length > 0) setSelected(r.data[0].id)
     })
   }, [])
 
-  const loadSummary = id => {
-    facilitatorApi.todaySummary(id).then(r => setSummary(r.data)).catch(() => {})
-  }
+  useEffect(() => {
+    const timer = setTimeout(() => setDebQ(query), 400)
+    return () => clearTimeout(timer)
+  }, [query])
 
-  const handleCohortChange = id => { setSelected(id); loadSummary(id) }
+  const loadList = useCallback(() => {
+    setLoading(true)
+    facilitatorApi.manualAttendanceList({ cohortId: selected || undefined, q: debouncedQ || undefined, date, page, size })
+      .then(r => setPageResponse(r.data))
+      .catch(() => toast.error('Failed to load manual attendance list'))
+      .finally(() => setLoading(false))
+  }, [selected, debouncedQ, date, page, size])
+
+  useEffect(() => { loadList() }, [loadList])
 
   const save = async () => {
     if (!form.reason.trim()) { toast.error('Reason is required'); return }
@@ -270,7 +350,7 @@ export function FacilitatorManual() {
       await facilitatorApi.manualAttend({ studentId: modal.studentId, status: form.status, reason: form.reason })
       toast.success(`Attendance updated — ${form.status}`)
       setModal(null)
-      loadSummary(selected)
+      loadList()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save')
     } finally {
@@ -278,46 +358,71 @@ export function FacilitatorManual() {
     }
   }
 
-  const statusMap = summary?.records?.reduce((m, r) => { m[r.studentId] = r; return m }, {}) || {}
+  const isWeekendSelected = () => {
+    if (!date) return false
+    const d = new Date(date + 'T00:00:00')
+    const day = d.getDay()
+    return day === 0 || day === 6
+  }
+
+  const p = pageResponse || { content: [], page: 0, size: 10, totalElements: 0, totalPages: 1 }
 
   return (
     <>
-      <PageHeader title="Manual Attendance" subtitle="Override attendance for exceptional cases" />
+      <PageHeader title="Manual Attendance" subtitle="Override attendance for exceptional cases (Server-side paginated)" />
       <div className="p-4 sm:p-6 animate-fade-in">
-        <Alert type="warning">Manual attendance requires a reason and is fully logged in the audit trail.</Alert>
+        {isWeekendSelected() ? (
+          <Alert type="warning" className="mb-4"><strong>Weekend Date Selected:</strong> Weekend attendance cannot be modified.</Alert>
+        ) : (
+          <Alert type="warning" className="mb-4">Manual attendance overrides require a mandatory reason and are logged in the audit trail.</Alert>
+        )}
         <Card className="mb-4">
           <div className="flex gap-3 items-center flex-wrap">
-            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} className="mb-0 min-w-[180px]">
+            <Select label="Cohort" value={selected} onChange={e => { setSelected(e.target.value); setPage(0) }} className="mb-0 min-w-[180px] flex-1 max-w-[280px]">
+              <option value="">All Assigned Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
-            <Button variant="outline" size="sm" onClick={() => loadSummary(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
+            <Input label="Search Student" placeholder="Search name or reg no..." value={query} onChange={e => { setQuery(e.target.value); setPage(0) }} className="mb-0 min-w-[200px] flex-1 max-w-[280px]" />
+            <Input label="Attendance Date" type="date" value={date} onChange={e => { setDate(e.target.value); setPage(0) }} className="mb-0 min-w-[160px]" />
+            <Button variant="outline" size="sm" onClick={loadList} className="mt-5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
           </div>
         </Card>
-        {summary && (
-          <Card>
-            <div className="flex gap-3 mb-4 flex-wrap">
-              {[['Present', summary.present, 'green'], ['Late', summary.late, 'yellow'], ['Absent', summary.absent, 'red']].map(([l, v, c]) => (
-                <div key={l} className={`px-4 py-2 rounded ${c === 'green' ? 'bg-green-light border-[#a8dbb8]' : c === 'yellow' ? 'bg-yellow-light border-[#f3dfa8]' : 'bg-red-light border-red-mid'}`}>
-                  <div className="text-xl font-semibold">{v}</div>
-                  <div className="text-[11px] text-gray-400">{l}</div>
-                </div>
-              ))}
-            </div>
-            <Table
-              columns={[
-                { key: 'studentName', label: 'Student', strong: true },
-                { key: 'status',      label: 'Status',  render: (_, row) => <Badge status={statusMap[row.studentId]?.status || 'ABSENT'} /> },
-                { key: 'markedAt',    label: 'Time',    render: (_, row) => statusMap[row.studentId]?.markedAt ? format(new Date(statusMap[row.studentId].markedAt), 'HH:mm') : '—' },
-                { key: 'action',      label: '',        render: (_, row) => <Button size="sm" variant="outline" onClick={() => { setModal({ studentId: row.studentId, studentName: row.studentName }); setForm({ status: 'PRESENT', reason: '' }) }}>Edit</Button> },
-              ]}
-              rows={(summary.records || []).map(r => ({ ...r, studentId: r.studentId, studentName: r.studentName }))}
-            />
-          </Card>
-        )}
+
+        <Card>
+          {loading ? <LoadingPage /> : (
+            <>
+              <Table
+                columns={[
+                  { key: 'studentName',        label: 'Student', strong: true },
+                  { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-xs text-gray-500">{v || '—'}</span> },
+                  { key: 'cohortName',         label: 'Cohort' },
+                  { key: 'status',             label: 'Status',  render: v => <Badge status={v || 'ABSENT'} /> },
+                  { key: 'markedAt',           label: 'Time',    render: v => v ? format(new Date(v), 'HH:mm') : '—' },
+                  { key: 'manualReason',       label: 'Note',    render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : null },
+                  { key: 'action',             label: '',        render: (_, row) => (
+                    <Button size="sm" variant="outline" disabled={isWeekendSelected()} onClick={() => { setModal({ studentId: row.studentId, studentName: row.studentName }); setForm({ status: row.status || 'PRESENT', reason: '' }) }}>
+                      Edit
+                    </Button>
+                  ) },
+                ]}
+                rows={p.content || []}
+                emptyMessage="No student records found"
+              />
+              <Pagination
+                page={p.page || 0}
+                totalPages={p.totalPages || 1}
+                totalElements={p.totalElements || 0}
+                size={p.size || 10}
+                onChange={(pg, sz) => { setPage(pg); if (sz) setSize(sz) }}
+                pageSizeOptions={[10, 20, 50]}
+              />
+            </>
+          )}
+        </Card>
       </div>
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={`Manual Attendance — ${modal?.studentName}`}>
-        <p className="text-[13px] text-gray-400 mb-4">This will be saved and logged in the audit trail.</p>
+        <p className="text-[13px] text-gray-400 mb-4">This will update attendance for {date} and log into the audit trail.</p>
         <Select label="Status" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
           <option value="PRESENT">Present</option>
           <option value="LATE">Late</option>
@@ -336,68 +441,109 @@ export function FacilitatorManual() {
 
 // ── Reports ──────────────────────────────────────────────
 export function FacilitatorReports() {
-  const [cohorts, setCohorts] = useState([])
+  const [cohorts, setCohorts]   = useState([])
   const [selected, setSelected] = useState('')
-  const [summary, setSummary]   = useState(null)
-  const [loading, setLoading]   = useState(false)
+  const [query, setQuery]       = useState('')
+  const [debouncedQ, setDebQ]   = useState('')
+  const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [pageResponse, setPageResponse] = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [page, setPage]         = useState(0)
+  const [size, setSize]         = useState(10)
 
   useEffect(() => {
     facilitatorApi.myCohorts().then(r => {
-      setCohorts(r.data)
-      if (r.data.length > 0) { setSelected(r.data[0].id); load(r.data[0].id) }
+      setCohorts(r.data || [])
+      if (r.data?.length > 0) setSelected(r.data[0].id)
     })
   }, [])
 
-  const load = id => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebQ(query), 400)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const load = useCallback(() => {
     setLoading(true)
-    facilitatorApi.todaySummary(id).then(r => setSummary(r.data)).finally(() => setLoading(false))
+    facilitatorApi.reports({ cohortId: selected || undefined, q: debouncedQ || undefined, date, page, size })
+      .then(r => setPageResponse(r.data))
+      .catch(() => toast.error('Failed to load reports'))
+      .finally(() => setLoading(false))
+  }, [selected, debouncedQ, date, page, size])
+
+  useEffect(() => { load() }, [load])
+
+  const exportCSV = async () => {
+    try {
+      const res = await facilitatorApi.exportReports({ cohortId: selected || undefined, date, format: 'csv' })
+      const blob = new Blob([res.data], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `attendance_report_${date}.csv`
+      a.click()
+      toast.success('CSV Report exported')
+    } catch {
+      toast.error('Failed to export CSV')
+    }
   }
 
-  const exportCSV = () => {
-    if (!summary?.records?.length) return
-    const rows = [['Student', 'Cohort', 'Date', 'Status', 'Type', 'Reason']]
-    summary.records.forEach(r => rows.push([r.studentName, r.cohortName, r.date, r.status, r.manual ? 'Manual' : 'QR', r.manualReason || '']))
-    const csv = rows.map(r => r.map(c => `"${c ?? ''}"`).join(',')).join('\n')
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `attendance_${selected}_${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click()
-    toast.success('CSV exported')
+  const isWeekendSelected = () => {
+    if (!date) return false
+    const d = new Date(date + 'T00:00:00')
+    const day = d.getDay()
+    return day === 0 || day === 6
   }
+
+  const p = pageResponse || { content: [], page: 0, size: 10, totalElements: 0, totalPages: 1 }
 
   return (
     <>
-      <PageHeader title="Reports" subtitle="Attendance data for your cohorts"
+      <PageHeader title="Reports" subtitle="Attendance data for your assigned cohorts"
         actions={<Button variant="outline" size="sm" onClick={exportCSV}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
-        <div className="flex gap-3 mb-4 flex-wrap">
-          <Select value={selected} onChange={e => { setSelected(e.target.value); load(e.target.value) }} className="mb-0 min-w-[200px]">
-            {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
-          </Select>
-            <Button variant="outline" size="sm" onClick={() => load(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
-        </div>
-        {summary && (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-              <StatCard label="Total"   value={summary.total}   />
-              <StatCard label="Present" value={summary.present} badgeColor="green" progress={summary.total ? summary.present / summary.total * 100 : 0} />
-              <StatCard label="Late"    value={summary.late}    badgeColor="yellow" />
-              <StatCard label="Absent"  value={summary.absent}  badgeColor="red" />
-              <StatCard label="Rate"    value={`${Math.round(summary.rate)}%`} progress={summary.rate} />
-            </div>
-            <Card>
-              {loading ? <div className="text-center p-8"><div className="inline-block h-9 w-9 rounded-full border-[3px] border-gray-200 border-t-red animate-spin" /></div> : (
-                <Table
-                  columns={[
-                    { key: 'studentName', label: 'Student', strong: true },
-                    { key: 'status',      label: 'Status',  render: v => <Badge status={v} /> },
-                    { key: 'markedAt',    label: 'Time',    render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm')}</span> : '—' },
-                    { key: 'manual',      label: 'Type',    render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
-                    { key: 'manualReason',label: 'Note',    render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : null },
-                  ]}
-                  rows={summary.records || []}
-                />
-              )}
-            </Card>
-          </>
+        {isWeekendSelected() && (
+          <Alert type="warning" className="mb-4"><strong>Weekend Selected:</strong> No attendance scheduled for Saturdays and Sundays.</Alert>
         )}
+        <Card className="mb-4">
+          <div className="flex gap-3 items-center flex-wrap">
+            <Select label="Cohort" value={selected} onChange={e => { setSelected(e.target.value); setPage(0) }} className="mb-0 min-w-[180px] flex-1 max-w-[280px]">
+              <option value="">All Assigned Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
+            </Select>
+            <Input label="Search Student" placeholder="Search name or reg no..." value={query} onChange={e => { setQuery(e.target.value); setPage(0) }} className="mb-0 min-w-[200px] flex-1 max-w-[280px]" />
+            <Input label="Attendance Date" type="date" value={date} onChange={e => { setDate(e.target.value); setPage(0) }} className="mb-0 min-w-[160px]" />
+            <Button variant="outline" size="sm" onClick={load} className="mt-5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
+          </div>
+        </Card>
+
+        <Card>
+          {loading ? <LoadingPage /> : (
+            <>
+              <Table
+                columns={[
+                  { key: 'studentName',        label: 'Student', strong: true },
+                  { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-xs text-gray-500">{v || '—'}</span> },
+                  { key: 'cohortName',         label: 'Cohort' },
+                  { key: 'status',             label: 'Status',  render: v => <Badge status={v} /> },
+                  { key: 'markedAt',           label: 'Check-in Time', render: v => v ? <span className="font-mono text-xs">{format(new Date(v), 'HH:mm:ss')}</span> : '—' },
+                  { key: 'manual',             label: 'Source',   render: v => <Badge status={v ? 'MANUAL' : 'ACTIVE'} /> },
+                  { key: 'manualReason',       label: 'Excuse / Note', render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : '—' },
+                ]}
+                rows={p.content || []}
+                emptyMessage="No report data found for this date"
+              />
+              <Pagination
+                page={p.page || 0}
+                totalPages={p.totalPages || 1}
+                totalElements={p.totalElements || 0}
+                size={p.size || 10}
+                onChange={(pg, sz) => { setPage(pg); if (sz) setSize(sz) }}
+                pageSizeOptions={[10, 20, 50]}
+              />
+            </>
+          )}
+        </Card>
       </div>
     </>
   )
@@ -409,14 +555,14 @@ export function FacilitatorExcuses() {
   const [selected, setSelected]   = useState('')
   const [requests, setRequests]   = useState([])
   const [loading, setLoading]     = useState(true)
-  const [reviewModal, setReview]  = useState(null) // { id, studentName }
+  const [reviewModal, setReview]  = useState(null)
   const [form, setForm]           = useState({ status: 'ACCEPTED', notes: '' })
   const [saving, setSaving]       = useState(false)
 
   useEffect(() => {
     facilitatorApi.myCohorts().then(r => {
-      setCohorts(r.data)
-      if (r.data.length > 0) { setSelected(r.data[0].id); load(r.data[0].id) }
+      setCohorts(r.data || [])
+      if (r.data?.length > 0) { setSelected(r.data[0].id); load(r.data[0].id) }
     }).finally(() => setLoading(false))
   }, [])
 
@@ -454,10 +600,10 @@ export function FacilitatorExcuses() {
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card className="mb-4">
           <div className="flex gap-3 items-center flex-wrap">
-            <Select label="" value={selected} onChange={e => handleCohortChange(e.target.value)} className="mb-0 min-w-[200px]">
+            <Select label="Cohort" value={selected} onChange={e => handleCohortChange(e.target.value)} className="mb-0 min-w-[200px]">
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
-          <Button variant="outline" size="sm" onClick={() => load(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
+            <Button variant="outline" size="sm" onClick={() => load(selected)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
           </div>
         </Card>
         <Card>

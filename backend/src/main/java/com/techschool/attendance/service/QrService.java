@@ -59,7 +59,24 @@ public class QrService {
             throw AppException.badRequest("Cohort is not active");
         }
 
-        LocalDate today = LocalDate.now(ZoneId.of(timezone));
+        ZoneId zone = ZoneId.of(timezone);
+        ZonedDateTime nowZone = ZonedDateTime.now(zone);
+        java.time.DayOfWeek dayOfWeek = nowZone.getDayOfWeek();
+        if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+            throw AppException.badRequest("Attendance QR codes cannot be generated on weekends (Saturday/Sunday).");
+        }
+
+        java.time.LocalTime currentTime = nowZone.toLocalTime();
+        String windowStartStr = getSetting("qr_window_start", windowStartDefault);
+        String windowEndStr = getSetting("qr_window_end", windowEndDefault);
+        java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
+        java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
+
+        if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
+            throw AppException.badRequest("Attendance QR generation is only permitted between " + windowStartStr + " and " + windowEndStr + " (Mon-Fri).");
+        }
+
+        LocalDate today = nowZone.toLocalDate();
 
         // Check for existing active session & expire it to allow generating a new session
         Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
@@ -70,7 +87,6 @@ public class QrService {
         }
 
         // Build session window & custom duration
-        ZoneId zone = ZoneId.of(timezone);
         ZonedDateTime activeFrom = ZonedDateTime.now(zone);
         ZonedDateTime expiresAt;
 
@@ -79,11 +95,11 @@ public class QrService {
         } else {
             String windowEnd = getSetting("qr_window_end", windowEndDefault);
             String[] endParts = windowEnd.split(":");
-            LocalTime endTime = LocalTime.of(Integer.parseInt(endParts[0]), Integer.parseInt(endParts[1]));
-            if (endTime.getHour() == 23 && endTime.getMinute() == 59) {
-                endTime = LocalTime.of(23, 59, 59);
+            LocalTime windowEndTime = LocalTime.of(Integer.parseInt(endParts[0]), Integer.parseInt(endParts[1]));
+            if (windowEndTime.getHour() == 23 && windowEndTime.getMinute() == 59) {
+                windowEndTime = LocalTime.of(23, 59, 59);
             }
-            expiresAt = ZonedDateTime.of(today, endTime, zone);
+            expiresAt = ZonedDateTime.of(today, windowEndTime, zone);
         }
 
         // Generate master token

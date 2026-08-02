@@ -11,4 +11,5 @@ public interface ExcuseRequestRepository extends MongoRepository<ExcuseRequest, 
     List<ExcuseRequest> findByStudentIdOrderByCreatedAtDesc(String studentId);
     List<ExcuseRequest> findByCohortIdOrderByCreatedAtDesc(String cohortId);
     List<ExcuseRequest> findByCohortIdAndStatus(String cohortId, ExcuseRequest.Status status);
+    List<ExcuseRequest> findByStudentIdIn(java.util.Collection<String> studentIds);
 }

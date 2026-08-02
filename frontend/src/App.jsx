@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/layout/AppLayout'
 import RegisterPage from './pages/auth/RegisterPage'
+import RegisterFacilitatorPage from './pages/auth/RegisterFacilitatorPage'
 import { StudentDashboard, StudentScan, StudentHistory, StudentExcuse } from './pages/student/StudentPages'
 import { FacilitatorDashboard, FacilitatorQR, FacilitatorManual, FacilitatorReports, FacilitatorExcuses } from './pages/facilitator/FacilitatorPages'
 import { AdminDashboard, AdminStudents, AdminFacilitators, AdminCohorts, AdminDevices, AdminAudit, AdminAnalytics } from './pages/admin/AdminPages'
@@ -49,6 +50,8 @@ export default function App() {
         {/* Public */}
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register/student" element={<RegisterPage />} />
+        <Route path="/register/facilitator" element={<RegisterFacilitatorPage />} />
         <Route path="/project" element={<ProjectionPage />} />
         <Route path="/tester" element={<TesterPage />} />
         <Route path="/" element={<LandingPage />} />

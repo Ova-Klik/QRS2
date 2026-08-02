@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/facilitator")
@@ -160,11 +161,53 @@ public class FacilitatorController {
         return ResponseEntity.ok(userService.updateNetworkSettings(facId, fac.getName(), settings));
     }
 
+    @GetMapping("/attendance/manual-list")
+    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.ManualStudentAttendanceResponse>> getManualAttendanceList(
+            @AuthenticationPrincipal String facId,
+            @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        var myCohorts = cohortService.getCohortsByFacilitator(facId);
+        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        return ResponseEntity.ok(attendanceService.getManualAttendancePage(assignedCohortIds, cohortId, q, date, page, size));
+    }
+
+    @GetMapping("/attendance/reports")
+    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> getReports(
+            @AuthenticationPrincipal String facId,
+            @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        var myCohorts = cohortService.getCohortsByFacilitator(facId);
+        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        return ResponseEntity.ok(attendanceService.getFacilitatorReportPage(assignedCohortIds, cohortId, q, date, page, size));
+    }
+
+    @GetMapping("/attendance/reports/export")
+    public ResponseEntity<byte[]> exportFacilitatorReport(
+            @AuthenticationPrincipal String facId,
+            @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "csv") String format) {
+        var myCohorts = cohortService.getCohortsByFacilitator(facId);
+        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        return attendanceService.exportFacilitatorReport(assignedCohortIds, cohortId, date, format, exportService);
+    }
+
     // ── Dashboard ─────────────────────────────────────────
 
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardDto.FacilitatorStats> dashboard(
-            @AuthenticationPrincipal String facId) throws Exception {
-        return ResponseEntity.ok(cohortService.buildFacilitatorStats(facId));
+            @AuthenticationPrincipal String facId,
+            @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) throws Exception {
+        return ResponseEntity.ok(cohortService.buildFacilitatorStats(facId, cohortId, q, date, page, size));
     }
 }

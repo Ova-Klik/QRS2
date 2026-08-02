@@ -2,23 +2,16 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '../../api/client'
 import { useTheme } from '../../context/ThemeContext'
-import { Input, Select, Button, Alert } from '../../components/common/UI'
+import { Input, Button, Alert } from '../../components/common/UI'
 import toast from 'react-hot-toast'
 
-export default function RegisterPage() {
+export default function RegisterFacilitatorPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { dark, toggle } = useTheme()
-  const [cohorts, setCohorts] = useState([])
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '', cohortNumber: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    import('../../api/client').then(({ default: api }) => {
-      api.get('/auth/cohorts').then(r => setCohorts(r.data)).catch(() => {})
-    })
-  }, [])
 
   useEffect(() => {
     const qrs = searchParams.get('qrs')
@@ -33,32 +26,18 @@ export default function RegisterPage() {
     }
     if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
-    if (!form.cohortNumber.trim()) { setError('Please select your cohort'); return }
     setLoading(true)
     try {
-      const cohortNumber = form.cohortNumber.match(/\d+/)
-      const payload = {
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        password: form.password,
-        cohortNumber: cohortNumber ? cohortNumber[0] : form.cohortNumber.trim()
-      }
-
-      const { data } = await authApi.registerStudent(payload)
+      const payload = { name: form.name, email: form.email, phone: form.phone, password: form.password }
+      const { data } = await authApi.registerFacilitator(payload)
 
       localStorage.setItem('qrs_token', data.token)
-      toast.success(`Welcome, ${data.name}! Student account created.`)
+      toast.success(`Welcome, ${data.name}! Facilitator account created.`)
       const scanToken = localStorage.getItem('qrs_scan_token')
-      if (scanToken && data.role === 'STUDENT') {
-        localStorage.removeItem('qrs_scan_token')
-        navigate('/student/scan?token=' + encodeURIComponent(scanToken))
-        return
-      }
       if (scanToken) localStorage.removeItem('qrs_scan_token')
-      navigate('/student')
+      navigate('/facilitator')
     } catch (err) {
-      setError(err.response?.data?.message || 'Student registration failed')
+      setError(err.response?.data?.message || 'Facilitator registration failed')
     } finally {
       setLoading(false)
     }
@@ -93,25 +72,19 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <h1 className="text-[26px] font-semibold mb-1.5 text-gray-900">Student Registration</h1>
-        <p className="text-[13px] text-gray-400 mb-6">Create a dedicated student account to record attendance</p>
+        <h1 className="text-[26px] font-semibold mb-1.5 text-gray-900">Facilitator Registration</h1>
+        <p className="text-[13px] text-gray-400 mb-6">Create a dedicated facilitator account to manage cohorts and attendance</p>
 
         {error && <Alert type="error">{error}</Alert>}
 
         <form onSubmit={handleSubmit}>
-          <Input label="Full Name" placeholder="e.g. Ada Okafor" value={form.name} onChange={e => update('name', e.target.value)} />
-          <Input label="Email address" type="email" placeholder="you@example.com" value={form.email} onChange={e => update('email', e.target.value)} />
+          <Input label="Full Name" placeholder="e.g. Dr. James Ojo" value={form.name} onChange={e => update('name', e.target.value)} />
+          <Input label="Email address" type="email" placeholder="facilitator@school.edu" value={form.email} onChange={e => update('email', e.target.value)} />
           <Input label="Phone Number" type="tel" placeholder="+234 800 000 0000" value={form.phone} onChange={e => update('phone', e.target.value)} />
-          <Select label="Cohort" value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)}>
-            <option value="">Select a cohort</option>
-            {cohorts.map(c => (
-              <option key={c._id || c.id} value={c.name}>{c.name}</option>
-            ))}
-          </Select>
           <Input label="Password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />
           <Input label="Confirm Password" type="password" placeholder="Re-enter password" value={form.confirm} onChange={e => update('confirm', e.target.value)} />
           <Button type="submit" loading={loading} size="lg" className="w-full justify-center mt-2 !py-[16px] !text-base">
-            Create Student Account
+            Create Facilitator Account
           </Button>
         </form>
 

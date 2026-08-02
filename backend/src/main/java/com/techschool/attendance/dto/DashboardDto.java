@@ -51,9 +51,12 @@ public class DashboardDto {
         private int lateToday;
         private int absentToday;
         private int excusedToday;
+        private double rate;
         private boolean qrSessionActive;
+        private boolean isWeekend;
         private QrDto.QrResponse activeSession;
         private List<AttendanceDto.AttendanceRecord> todayRecords;
+        private AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> todayRecordsPage;
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor

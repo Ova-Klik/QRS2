@@ -34,9 +34,16 @@ public class AttendanceService {
     private final AuditService auditService;
     private final AuthService authService;
     private final HolidayService holidayService;
+    private final ExcuseRequestRepository excuseRepository;
 
     @Value("${app.attendance.late-threshold}")
     private String lateThreshold;
+
+    @Value("${app.attendance.qr-window-start:07:00}")
+    private String windowStartDefault;
+
+    @Value("${app.attendance.qr-window-end:12:00}")
+    private String windowEndDefault;
 
     @Value("${app.attendance.timezone}")
     private String timezone;
@@ -55,7 +62,23 @@ public class AttendanceService {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
 
-        LocalDate today = LocalDate.now(ZoneId.of(timezone));
+        ZonedDateTime nowZone = ZonedDateTime.now(ZoneId.of(timezone));
+        java.time.DayOfWeek dayOfWeek = nowZone.getDayOfWeek();
+        if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+            throw AppException.badRequest("Attendance recording is disabled on weekends (Saturday/Sunday).");
+        }
+
+        java.time.LocalTime currentTime = nowZone.toLocalTime();
+        String windowStartStr = getSetting("qr_window_start", windowStartDefault);
+        String windowEndStr = getSetting("qr_window_end", windowEndDefault);
+        java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
+        java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
+
+        if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
+            throw AppException.badRequest("Attendance is unavailable outside the permitted time window (" + windowStartStr + " – " + windowEndStr + " Mon-Fri).");
+        }
+
+        LocalDate today = nowZone.toLocalDate();
 
         // 1. Duplicate check
         if (attendanceRepository.existsByStudentIdAndDate(studentId, today)) {
@@ -640,6 +663,7 @@ public class AttendanceService {
         return new AttendanceDto.AttendanceRecord(
                 a.getId(), a.getStudentId(),
                 student != null ? student.getName() : a.getStudentId(),
+                student != null ? student.getRegistrationNumber() : null,
                 a.getCohortId(), cohort != null ? cohort.getName() : a.getCohortId(),
                 a.getDate(), a.getMarkedAt(),
                 a.getStatus() != null ? a.getStatus().name() : null,
@@ -674,10 +698,232 @@ public class AttendanceService {
             return new AttendanceDto.AttendanceRecord(
                     a.getId(), a.getStudentId(),
                     s != null ? s.getName() : a.getStudentId(),
+                    s != null ? s.getRegistrationNumber() : null,
                     a.getCohortId(), c != null ? c.getName() : a.getCohortId(),
                     a.getDate(), a.getMarkedAt(),
                     a.getStatus() != null ? a.getStatus().name() : null,
                     a.isManual(), a.getManualReason(), deviceUsed);
         }).collect(Collectors.toList());
+    }
+
+    public AnalyticsDto.PageResponse<AttendanceDto.ManualStudentAttendanceResponse> getManualAttendancePage(
+            List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, int page, int size) {
+        
+        LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
+
+        List<String> targetCohortIds = (cohortId != null && !cohortId.isBlank())
+                ? List.of(cohortId) : assignedCohortIds;
+
+        if (targetCohortIds.isEmpty()) {
+            return new AnalyticsDto.PageResponse<>(List.of(), page, size, 0, 1);
+        }
+
+        List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
+        String q = queryStr == null ? "" : queryStr.trim().toLowerCase();
+        if (!q.isEmpty()) {
+            students = students.stream().filter(s ->
+                (s.getName() != null && s.getName().toLowerCase().contains(q)) ||
+                (s.getEmail() != null && s.getEmail().toLowerCase().contains(q)) ||
+                (s.getRegistrationNumber() != null && s.getRegistrationNumber().toLowerCase().contains(q))
+            ).collect(Collectors.toList());
+        }
+
+        int total = students.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<User> pagedStudents = students.subList(from, to);
+        Set<String> pagedStudentIds = pagedStudents.stream().map(User::getId).collect(Collectors.toSet());
+
+        List<Attendance> existingAtt = pagedStudentIds.isEmpty() ? List.of()
+                : attendanceRepository.findByStudentIdIn(pagedStudentIds).stream()
+                .filter(a -> date.equals(a.getDate()))
+                .collect(Collectors.toList());
+        Map<String, Attendance> attByStudent = existingAtt.stream()
+                .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
+
+        List<ExcuseRequest> excuses = pagedStudentIds.isEmpty() ? List.of()
+                : excuseRepository.findByStudentIdIn(pagedStudentIds).stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .filter(e -> e.getStartDate() != null && !date.isBefore(e.getStartDate()) && !date.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                .collect(Collectors.toList());
+        Map<String, ExcuseRequest> excuseByStudent = excuses.stream()
+                .collect(Collectors.toMap(ExcuseRequest::getStudentId, Function.identity(), (a, b) -> a));
+
+        Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
+                .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
+
+        List<AttendanceDto.ManualStudentAttendanceResponse> content = pagedStudents.stream().map(s -> {
+            Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
+            Attendance a = attByStudent.get(s.getId());
+            ExcuseRequest exc = excuseByStudent.get(s.getId());
+
+            String status;
+            Instant markedAt = null;
+            boolean manual = false;
+            String manualReason = null;
+
+            if (a != null) {
+                status = a.getStatus() != null ? a.getStatus().name() : "ABSENT";
+                markedAt = a.getMarkedAt();
+                manual = a.isManual();
+                manualReason = a.getManualReason();
+            } else if (exc != null) {
+                status = "EXCUSED";
+                manualReason = "Approved excuse: " + exc.getReason();
+            } else if (date.getDayOfWeek().getValue() >= 6) {
+                status = "WEEKEND";
+            } else {
+                status = "ABSENT";
+            }
+
+            return new AttendanceDto.ManualStudentAttendanceResponse(
+                    s.getId(), s.getName(), s.getRegistrationNumber(), s.getEmail(),
+                    s.getCohortId(), c != null ? c.getName() : s.getCohortId(),
+                    date, status, markedAt, manual, manualReason
+            );
+        }).collect(Collectors.toList());
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getFacilitatorReportPage(
+            List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, int page, int size) {
+        
+        LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
+        List<String> targetCohortIds = (cohortId != null && !cohortId.isBlank())
+                ? List.of(cohortId) : assignedCohortIds;
+
+        if (targetCohortIds.isEmpty()) {
+            return new AnalyticsDto.PageResponse<>(List.of(), page, size, 0, 1);
+        }
+
+        List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
+        String q = queryStr == null ? "" : queryStr.trim().toLowerCase();
+        if (!q.isEmpty()) {
+            students = students.stream().filter(s ->
+                (s.getName() != null && s.getName().toLowerCase().contains(q)) ||
+                (s.getEmail() != null && s.getEmail().toLowerCase().contains(q)) ||
+                (s.getRegistrationNumber() != null && s.getRegistrationNumber().toLowerCase().contains(q))
+            ).collect(Collectors.toList());
+        }
+
+        int total = students.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<User> pagedStudents = students.subList(from, to);
+        Set<String> pagedStudentIds = pagedStudents.stream().map(User::getId).collect(Collectors.toSet());
+
+        List<Attendance> existingAtt = pagedStudentIds.isEmpty() ? List.of()
+                : attendanceRepository.findByStudentIdIn(pagedStudentIds).stream()
+                .filter(a -> date.equals(a.getDate()))
+                .collect(Collectors.toList());
+        Map<String, Attendance> attByStudent = existingAtt.stream()
+                .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
+
+        List<ExcuseRequest> excuses = pagedStudentIds.isEmpty() ? List.of()
+                : excuseRepository.findByStudentIdIn(pagedStudentIds).stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .filter(e -> e.getStartDate() != null && !date.isBefore(e.getStartDate()) && !date.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                .collect(Collectors.toList());
+        Map<String, ExcuseRequest> excuseByStudent = excuses.stream()
+                .collect(Collectors.toMap(ExcuseRequest::getStudentId, Function.identity(), (a, b) -> a));
+
+        Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
+                .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
+
+        List<AttendanceDto.AttendanceRecord> content = pagedStudents.stream().map(s -> {
+            Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
+            Attendance a = attByStudent.get(s.getId());
+            ExcuseRequest exc = excuseByStudent.get(s.getId());
+
+            boolean isWeekend = date.getDayOfWeek().getValue() >= 6;
+            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : (isWeekend ? "WEEKEND" : "ABSENT"))
+                          : (exc != null ? "EXCUSED" : (isWeekend ? "WEEKEND" : "ABSENT"));
+
+            return new AttendanceDto.AttendanceRecord(
+                    a != null ? a.getId() : null,
+                    s.getId(),
+                    s.getName(),
+                    s.getRegistrationNumber(),
+                    s.getCohortId(),
+                    c != null ? c.getName() : s.getCohortId(),
+                    date,
+                    a != null ? a.getMarkedAt() : null,
+                    status,
+                    a != null && a.isManual(),
+                    a != null ? a.getManualReason() : null,
+                    null
+            );
+        }).collect(Collectors.toList());
+
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+                (int) Math.ceil((double) total / safeSize));
+    }
+
+    public org.springframework.http.ResponseEntity<byte[]> exportFacilitatorReport(
+            List<String> assignedCohortIds, String cohortId, LocalDate targetDate, String format, ExportService exportService) {
+        
+        LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
+        List<String> targetCohortIds = (cohortId != null && !cohortId.isBlank())
+                ? List.of(cohortId) : assignedCohortIds;
+
+        List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
+        Set<String> studentIds = students.stream().map(User::getId).collect(Collectors.toSet());
+
+        List<Attendance> existingAtt = studentIds.isEmpty() ? List.of()
+                : attendanceRepository.findByStudentIdIn(studentIds).stream()
+                .filter(a -> date.equals(a.getDate()))
+                .collect(Collectors.toList());
+        Map<String, Attendance> attByStudent = existingAtt.stream()
+                .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
+
+        List<ExcuseRequest> excuses = studentIds.isEmpty() ? List.of()
+                : excuseRepository.findByStudentIdIn(studentIds).stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .filter(e -> e.getStartDate() != null && !date.isBefore(e.getStartDate()) && !date.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                .collect(Collectors.toList());
+        Map<String, ExcuseRequest> excuseByStudent = excuses.stream()
+                .collect(Collectors.toMap(ExcuseRequest::getStudentId, Function.identity(), (a, b) -> a));
+
+        Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
+                .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
+
+        List<List<Object>> table = new ArrayList<>();
+        java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of(timezone));
+        java.time.format.DateTimeFormatter dateTimeFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of(timezone));
+
+        for (User s : students) {
+            Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
+            Attendance a = attByStudent.get(s.getId());
+            ExcuseRequest exc = excuseByStudent.get(s.getId());
+
+            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
+                          : (exc != null ? "EXCUSED" : "ABSENT");
+            String checkInTime = (a != null && a.getMarkedAt() != null) ? timeFmt.format(a.getMarkedAt()) : "—";
+            String timeRecorded = (a != null && a.getMarkedAt() != null) ? dateTimeFmt.format(a.getMarkedAt()) : "—";
+            String excuseStatus = exc != null ? "Approved Excuse (" + exc.getReason() + ")" : "N/A";
+
+            table.add(List.of(
+                    s.getName() != null ? s.getName() : "",
+                    s.getRegistrationNumber() != null ? s.getRegistrationNumber() : "",
+                    c != null ? c.getName() : "",
+                    status,
+                    date.toString(),
+                    checkInTime,
+                    timeRecorded,
+                    excuseStatus
+            ));
+        }
+
+        return exportService.export(
+                List.of("Student Name", "Registration Number", "Cohort", "Attendance Status", "Attendance Date", "Check-in Time", "Time Recorded", "Excuse Status"),
+                table, format, "facilitator_report_" + date);
     }
 }
