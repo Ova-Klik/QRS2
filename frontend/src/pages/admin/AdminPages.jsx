@@ -412,10 +412,10 @@ export function AdminStudents() {
             <Table
               columns={[
                 { key: 'name',               label: 'Student Name', strong: true },
-                { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-[11px] text-gray-600">{v || '—'}</span> },
-                { key: 'email',              label: 'Email',  render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
-                { key: 'cohortName',         label: 'Cohort', render: v => v || '—' },
-                { key: 'attendanceRate',     label: 'Rate',   render: v => <span className="font-semibold text-gray-800">{v != null ? `${v}%` : '—'}</span> },
+                { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-[11px] text-gray-600 dark:text-gray-300">{v || '—'}</span> },
+                { key: 'email',              label: 'Email',  render: v => <span className="font-mono text-[11px] text-gray-400 dark:text-gray-300">{v}</span> },
+                { key: 'cohortName',         label: 'Cohort', render: v => <span className="text-gray-800 dark:text-white">{v || '—'}</span> },
+                { key: 'attendanceRate',     label: 'Rate',   render: v => <span className="font-semibold text-gray-900 dark:text-white">{v != null ? `${v}%` : '—'}</span> },
                 { key: 'presentDays',        label: 'Present', render: v => <span className="text-green-600 font-medium">{v || 0}</span> },
                 { key: 'absentDays',         label: 'Absent',  render: v => <span className="text-red-600 font-medium">{v || 0}</span> },
                 { key: 'excusedDays',        label: 'Excused', render: v => <span className="text-blue-600 font-medium">{v || 0}</span> },

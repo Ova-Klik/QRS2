@@ -71,11 +71,32 @@ export function StatCard({ label, value, sub, badge, badgeColor = 'gray', progre
 /* ── Input ──────────────────────────────────────────── */
 const inputClass = (error) => `w-full px-3.5 py-2.5 text-sm text-gray-900 bg-white border-[1.5px] rounded-md transition-colors outline-none focus:border-red placeholder:text-gray-400 ${error ? 'border-red' : 'border-gray-200'}`
 
-export function Input({ label, error, className = '', ...props }) {
+export function Input({ label, error, className = '', type, ...props }) {
+  const [showPassword, setShowPassword] = useState(false)
+  const isPassword = type === 'password'
+  const actualType = isPassword ? (showPassword ? 'text' : 'password') : type
+
   return (
     <div className="mb-3.5">
       {label && <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>}
-      <input className={`${inputClass(error)} ${className}`} {...props} />
+      <div className="relative">
+        <input type={actualType} className={`${inputClass(error)} ${isPassword ? 'pr-10' : ''} ${className}`} {...props} />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(prev => !prev)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 flex items-center justify-center cursor-pointer select-none"
+            tabIndex={-1}
+            title={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {showPassword ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            )}
+          </button>
+        )}
+      </div>
       {error && <p className="text-[11px] text-red mt-0.5">{error}</p>}
     </div>
   )
@@ -177,7 +198,7 @@ export function Table({ columns, rows, emptyMessage = 'No records found' }) {
           ) : rows.map((row, i) => (
             <tr key={i} className={`hover:bg-gray-50 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}>
               {columns.map(col => (
-                <td key={col.key} className={`px-3.5 py-2.5 text-[13px] ${col.strong ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                <td key={col.key} className={`px-3.5 py-2.5 text-[13px] ${col.strong ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-600 dark:text-gray-200'}`}>
                   {col.render ? col.render(row[col.key], row) : row[col.key]}
                 </td>
               ))}
