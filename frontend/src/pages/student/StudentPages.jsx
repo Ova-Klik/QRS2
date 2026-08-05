@@ -69,10 +69,7 @@ export function StudentScan() {
   const [result, setResult]     = useState(null)
   const [token, setToken]       = useState(searchParams.get('token') || '')
   const [dashboard, setDash]    = useState(null)
-  const [biometricRegistered, setBiometricRegistered] = useState(false)
-  const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [networkInfo, setNetworkInfo] = useState({ ssid: null, online: navigator.onLine })
-  const [biometricLoading, setBiometricLoading] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [scannerError, setScannerError] = useState(null)
   const [autoScanning, setAutoScanning] = useState(false)
@@ -85,11 +82,6 @@ export function StudentScan() {
   useEffect(() => {
     studentApi.dashboard().then(r => {
       setDash(r.data)
-      setBiometricRegistered(!!r.data?.biometricRegistered)
-    }).catch(() => {})
-
-    isPlatformAuthenticatorAvailable().then(avail => {
-      setBiometricAvailable(avail)
     }).catch(() => {})
 
     const net = getNetworkInfo()
@@ -173,22 +165,7 @@ export function StudentScan() {
 
   const submitScan = async (scanToken) => {
     const tok = scanToken || token
-    if (!tok.trim()) { toast.error('Enter or scan a QR token'); return }
-
-    let biometricResult = null
-    if (biometricRegistered) {
-      setBiometricLoading(true)
-      try {
-        toast.loading('Verifying fingerprint...', { id: 'bio' })
-        biometricResult = await authenticateBiometric(dashboard?.webAuthnCredentialId)
-        toast.success('Fingerprint verified', { id: 'bio' })
-      } catch (err) {
-        toast.error('Fingerprint verification failed: ' + (err.message || 'Please try again'), { id: 'bio' })
-        setBiometricLoading(false)
-        return
-      }
-      setBiometricLoading(false)
-    }
+    if (!tok.trim()) { toast.error('Enter or scan an attendance code'); return }
 
     setLoading(true)
     try {
@@ -217,18 +194,12 @@ export function StudentScan() {
         clientIP: null,
         latitude: coords.latitude,
         longitude: coords.longitude,
-        biometricVerified: !!biometricResult,
-        biometricCredentialId: biometricResult?.credentialId || null,
-        biometricAuthenticatorData: biometricResult?.authenticatorData || null,
-        biometricClientDataJSON: biometricResult?.clientDataJSON || null,
-        biometricSignature: biometricResult?.signature || null,
       }
       const { data } = await studentApi.scan(payload)
       setResult(data)
       toast.success(`Marked ${data.status?.toLowerCase()}!`)
       studentApi.dashboard().then(r => {
         setDash(r.data)
-        setBiometricRegistered(!!r.data?.biometricRegistered)
       })
     } catch (err) {
       toast.error(err.response?.data?.message || 'Scan failed')
@@ -237,33 +208,10 @@ export function StudentScan() {
     }
   }
 
-  const handleSetupBiometric = async () => {
-    setBiometricLoading(true)
-    try {
-      toast.loading('Starting biometric registration...', { id: 'bio-reg' })
-      const reg = await registerBiometric(dashboard?.userId || 'current-user')
-      await authApi.webauthnRegister({
-        credentialId: reg.credentialId,
-        publicKey: reg.publicKey,
-      })
-      setBiometricRegistered(true)
-      toast.success('Fingerprint registered successfully!', { id: 'bio-reg' })
-      studentApi.dashboard().then(r => {
-        setDash(r.data)
-        setBiometricRegistered(true)
-      })
-    } catch (err) {
-      toast.error('Biometric registration failed: ' + (err.message || 'Try again'), { id: 'bio-reg' })
-    } finally {
-      setBiometricLoading(false)
-    }
-  }
-
   const checks = [
     { label: 'Device registered',          pass: !!dashboard?.deviceStatus?.registered },
     { label: dashboard?.markedToday ? 'Marked for today' : 'Not yet marked today', pass: dashboard?.markedToday || !dashboard?.markedToday, green: !!dashboard?.markedToday },
     { label: 'School network connected',    pass: networkInfo.online },
-    { label: 'Biometric verified',          pass: biometricRegistered ? false : true, optional: !biometricRegistered },
   ]
 
   return (
@@ -278,20 +226,6 @@ export function StudentScan() {
         )}
         {dashboard?.markedToday && !result && (
           <Alert type="success"><strong>Already marked today — {dashboard.todayStatus}</strong></Alert>
-        )}
-
-        {biometricAvailable && !biometricRegistered && !dashboard?.markedToday && !result && (
-          <Alert type="info">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="min-w-0">
-                <strong>Set up fingerprint authentication</strong><br />
-                <span className="text-xs">Secure your attendance with biometric verification</span>
-              </div>
-              <Button size="sm" variant="outline" loading={biometricLoading} onClick={handleSetupBiometric}>
-                Set up fingerprint
-              </Button>
-            </div>
-          </Alert>
         )}
 
         {/* Network Status */}
@@ -356,28 +290,23 @@ export function StudentScan() {
           )}
         </Card>
 
-        {/* Manual Token Entry */}
+        {/* Manual Attendance Code Entry */}
         <Card className="mb-4">
-          <div className="font-semibold mb-3">Manual Entry</div>
+          <div className="font-semibold mb-1">Enter Attendance Code</div>
           <p className="text-xs text-gray-400 mb-3">
-            If camera scanning is unavailable, paste the QR token below.
+            If camera scanning is unavailable, enter or paste the attendance code (QR ID) below.
           </p>
           <div className="flex gap-2">
             <input
               value={token} onChange={e => setToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !loading && submitScan()}
-              placeholder="Paste QR token here..."
-              className="flex-1 min-w-0 px-3.5 py-2.5 border-[1.5px] border-gray-200 rounded text-[13px] font-mono outline-none focus:border-red"
+              placeholder="Enter 8-character Attendance Code"
+              className="flex-1 min-w-0 px-3.5 py-2.5 border-[1.5px] border-gray-200 rounded text-sm font-mono tracking-widest uppercase outline-none focus:border-red"
             />
-            <Button loading={loading || biometricLoading} onClick={() => submitScan()} disabled={dashboard?.markedToday || biometricLoading} className="animate-sign-pulse text-lg font-semibold !px-7 !py-4 !rounded-[12px] hover:scale-105 hover:shadow-[0_10px_24px_rgba(192,57,43,0.28)] active:scale-95">
-              {biometricRegistered ? 'Verify & Sign Attendance' : 'Sign Attendance'}
+            <Button loading={loading} onClick={() => submitScan()} disabled={dashboard?.markedToday} className="animate-sign-pulse font-semibold !px-6 !py-2.5 !rounded-[8px] hover:scale-105 active:scale-95">
+              Submit
             </Button>
           </div>
-          {biometricRegistered && (
-            <p className="text-[11px] text-gray-400 mt-2.5">
-              Fingerprint verification will be required before marking attendance
-            </p>
-          )}
         </Card>
 
         <Card>
@@ -389,7 +318,6 @@ export function StudentScan() {
               </div>
               <span className={`text-[13px] min-w-0 ${c.green ? 'font-semibold text-green-dark' : c.pass ? 'text-gray-900' : 'text-gray-400'}`}>
                 {c.label}
-                {c.optional && <span className="text-[10px] text-gray-300 ml-1.5">(recommended)</span>}
               </span>
             </div>
           ))}

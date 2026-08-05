@@ -31,7 +31,6 @@ public class CohortService {
     private final QrSessionRepository qrSessionRepository;
     private final AuditService auditService;
     private final MongoTemplate mongoTemplate;
-    private final AttendanceService attendanceService;
     private final ExcuseRequestRepository excuseRepository;
 
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone}")
@@ -80,7 +79,13 @@ public class CohortService {
 
     /** Batched cohort mapping — zero per-cohort queries. */
     private List<CohortDto.CohortResponse> toResponses(List<Cohort> cohorts) {
+        return toResponses(cohorts, null);
+    }
+
+    private List<CohortDto.CohortResponse> toResponses(List<Cohort> cohorts, LocalDate targetDate) {
         if (cohorts.isEmpty()) return List.of();
+
+        LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
 
         Set<String> facilitatorIds = cohorts.stream()
                 .map(Cohort::getFacilitatorId)
@@ -90,72 +95,87 @@ public class CohortService {
                 : userRepository.findAllById(facilitatorIds).stream()
                         .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
 
-        Map<String, Long> studentCountByCohort = userRepository.findByRole(User.Role.STUDENT).stream()
+        Map<String, List<User>> studentsByCohort = userRepository.findByRole(User.Role.STUDENT).stream()
                 .filter(u -> u.getCohortId() != null)
-                .collect(Collectors.groupingBy(User::getCohortId, Collectors.counting()));
+                .collect(Collectors.groupingBy(User::getCohortId));
 
-        Map<String, List<Attendance>> attendanceByCohort = attendanceRepository
-                .findByCohortIdIn(cohorts.stream().map(Cohort::getId).collect(Collectors.toList()))
-                .stream().collect(Collectors.groupingBy(Attendance::getCohortId));
+        List<String> cohortIds = cohorts.stream().map(Cohort::getId).collect(Collectors.toList());
 
-        return cohorts.stream().map(c -> toResponse(c, facById, studentCountByCohort, attendanceByCohort))
+        List<Attendance> dateAtt = attendanceRepository.findByCohortIdIn(cohortIds).stream()
+                .filter(a -> date.equals(a.getDate()))
                 .collect(Collectors.toList());
-    }
+        Map<String, List<Attendance>> attByCohort = dateAtt.stream()
+                .collect(Collectors.groupingBy(Attendance::getCohortId));
 
-    private CohortDto.CohortResponse toResponse(Cohort c,
-                                                Map<String, User> facById,
-                                                Map<String, Long> studentCountByCohort,
-                                                Map<String, List<Attendance>> attendanceByCohort) {
-        User fac = c.getFacilitatorId() != null ? facById.get(c.getFacilitatorId()) : null;
-        long count = studentCountByCohort.getOrDefault(c.getId(), 0L);
-        List<Attendance> att = attendanceByCohort.getOrDefault(c.getId(), List.of());
+        List<ExcuseRequest> excuses = excuseRepository.findAll().stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .filter(e -> e.getStartDate() != null && !date.isBefore(e.getStartDate()) && !date.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                .collect(Collectors.toList());
+        Map<String, List<ExcuseRequest>> excuseByStudent = excuses.stream()
+                .collect(Collectors.groupingBy(ExcuseRequest::getStudentId));
 
-        int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-        int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-        int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-        int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-        int totalRecs = att.size();
+        return cohorts.stream().map(c -> {
+            User fac = c.getFacilitatorId() != null ? facById.get(c.getFacilitatorId()) : null;
+            List<User> cohortStudents = studentsByCohort.getOrDefault(c.getId(), List.of());
+            int studentCount = cohortStudents.size();
+            List<Attendance> att = attByCohort.getOrDefault(c.getId(), List.of());
 
-        double attendanceRate = totalRecs > 0 ? (double) (present + late) / totalRecs * 100.0 : 0.0;
-        double presentRate = totalRecs > 0 ? (double) present / totalRecs * 100.0 : 0.0;
-        double absentRate = totalRecs > 0 ? (double) absent / totalRecs * 100.0 : 0.0;
-        double excusedRate = totalRecs > 0 ? (double) excused / totalRecs * 100.0 : 0.0;
-        double lateRate = totalRecs > 0 ? (double) late / totalRecs * 100.0 : 0.0;
+            int earlyCount = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+            int lateCount = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+            int presentCount = earlyCount + lateCount;
 
-        long uniqueDays = att.stream().map(Attendance::getDate).filter(java.util.Objects::nonNull).distinct().count();
-        double avgDaily = uniqueDays > 0 ? (double) (present + late + excused) / uniqueDays : 0.0;
+            int excusedCount = 0;
+            for (User s : cohortStudents) {
+                if (excuseByStudent.containsKey(s.getId())) {
+                    excusedCount++;
+                } else {
+                    boolean isExcusedAtt = att.stream().anyMatch(a -> a.getStudentId().equals(s.getId()) && a.getStatus() == Attendance.AttendanceStatus.EXCUSED);
+                    if (isExcusedAtt) excusedCount++;
+                }
+            }
 
-        CohortDto.CohortResponse resp = new CohortDto.CohortResponse();
-        resp.setId(c.getId());
-        resp.setName(c.getName());
-        resp.setFacilitatorId(c.getFacilitatorId());
-        resp.setFacilitatorName(fac != null ? fac.getName() : null);
-        resp.setFacilitatorEmail(fac != null ? fac.getEmail() : null);
-        resp.setFacilitatorPhone(fac != null ? fac.getPhone() : null);
-        resp.setSchedule(c.getSchedule());
-        resp.setActive(c.isActive());
-        resp.setStudentCount((int) count);
-        resp.setAttendanceRate(Math.round(attendanceRate * 10.0) / 10.0);
-        resp.setPresentCount(present);
-        resp.setAbsentCount(absent);
-        resp.setExcusedCount(excused);
-        resp.setLateCount(late);
-        resp.setTotalRecords(totalRecs);
-        resp.setPresentRate(Math.round(presentRate * 10.0) / 10.0);
-        resp.setAbsentRate(Math.round(absentRate * 10.0) / 10.0);
-        resp.setExcusedRate(Math.round(excusedRate * 10.0) / 10.0);
-        resp.setLateRate(Math.round(lateRate * 10.0) / 10.0);
-        resp.setAverageDailyAttendance(Math.round(avgDaily * 10.0) / 10.0);
-        resp.setCreatedAt(c.getCreatedAt());
-        return resp;
+            int absentCount = Math.max(0, studentCount - (presentCount + excusedCount));
+            double attendanceRate = (studentCount - excusedCount) > 0
+                    ? (double) presentCount / (studentCount - excusedCount) * 100.0
+                    : 0.0;
+
+            CohortDto.CohortResponse resp = new CohortDto.CohortResponse();
+            resp.setId(c.getId());
+            resp.setName(c.getName());
+            resp.setFacilitatorId(c.getFacilitatorId());
+            resp.setFacilitatorName(fac != null ? fac.getName() : null);
+            resp.setFacilitatorEmail(fac != null ? fac.getEmail() : null);
+            resp.setFacilitatorPhone(fac != null ? fac.getPhone() : null);
+            resp.setSchedule(c.getSchedule());
+            resp.setActive(c.isActive());
+            resp.setStudentCount(studentCount);
+            resp.setAttendanceRate(Math.round(attendanceRate * 10.0) / 10.0);
+            resp.setPresentCount(presentCount);
+            resp.setEarlyCount(earlyCount);
+            resp.setLateCount(lateCount);
+            resp.setAbsentCount(absentCount);
+            resp.setExcusedCount(excusedCount);
+            resp.setTotalRecords(att.size());
+            resp.setCreatedAt(c.getCreatedAt());
+            return resp;
+        }).collect(Collectors.toList());
     }
 
     public AnalyticsDto.PageResponse<CohortDto.CohortResponse> searchCohorts(
             String query, String statusStr, int page, int size, String sort, String order) {
+        return searchCohorts(query, statusStr, null, null, page, size, sort, order);
+    }
+
+    public AnalyticsDto.PageResponse<CohortDto.CohortResponse> searchCohorts(
+            String query, String statusStr, LocalDate targetDate, String cohortIdFilter,
+            int page, int size, String sort, String order) {
 
         List<Cohort> allCohorts = cohortRepository.findAll();
 
         List<Cohort> filtered = allCohorts.stream().filter(c -> {
+            if (cohortIdFilter != null && !cohortIdFilter.isBlank()) {
+                if (!c.getId().equals(cohortIdFilter.trim())) return false;
+            }
             if ("ACTIVE".equalsIgnoreCase(statusStr)) return c.isActive();
             if ("ARCHIVED".equalsIgnoreCase(statusStr)) return !c.isActive();
             return true;
@@ -179,7 +199,7 @@ public class CohortService {
             }).collect(Collectors.toList());
         }
 
-        List<CohortDto.CohortResponse> responses = toResponses(filtered);
+        List<CohortDto.CohortResponse> responses = toResponses(filtered, targetDate);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
         String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
@@ -553,17 +573,10 @@ public class CohortService {
             }
         }
 
-        // Pagination for student records list
-        int safeSize = Math.min(200, Math.max(1, size));
-        int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, totalStudents);
-        int to = Math.min(from + safeSize, totalStudents);
-
-        List<User> pagedStudents = myStudents.subList(from, to);
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(activeCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.AttendanceRecord> pagedRecords = pagedStudents.stream().map(s -> {
+        List<AttendanceDto.AttendanceRecord> allRecords = myStudents.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -587,11 +600,57 @@ public class CohortService {
             );
         }).collect(Collectors.toList());
 
+        // Sort all records across cohort by Status Priority (PRESENT -> LATE -> ABSENT -> EXCUSED)
+        // and by markedAt DESCENDING for attended students before pagination
+        allRecords.sort((r1, r2) -> {
+            int rank1 = getStatusPriorityRank(r1.getStatus());
+            int rank2 = getStatusPriorityRank(r2.getStatus());
+            if (rank1 != rank2) {
+                return Integer.compare(rank1, rank2);
+            }
+
+            if (rank1 == 1 || rank1 == 2) {
+                Instant t1 = r1.getMarkedAt();
+                Instant t2 = r2.getMarkedAt();
+                if (t1 != null && t2 != null) {
+                    int cmp = t2.compareTo(t1);
+                    if (cmp != 0) return cmp;
+                } else if (t1 != null) {
+                    return -1;
+                } else if (t2 != null) {
+                    return 1;
+                }
+            }
+
+            String n1 = r1.getStudentName() != null ? r1.getStudentName() : "";
+            String n2 = r2.getStudentName() != null ? r2.getStudentName() : "";
+            return n1.compareToIgnoreCase(n2);
+        });
+
+        // Pagination for sorted student records
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, totalStudents);
+        int to = Math.min(from + safeSize, totalStudents);
+
+        List<AttendanceDto.AttendanceRecord> pagedRecords = allRecords.subList(from, to);
+
         AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> pageResponse =
                 new AnalyticsDto.PageResponse<>(pagedRecords, safePage, safeSize, totalStudents, (int) Math.ceil((double) totalStudents / safeSize));
 
         return new DashboardDto.FacilitatorStats(totalStudents, present, late, absent, excused, Math.round(rate * 10.0) / 10.0,
                 hasActiveQr, isWeekend, activeSession, pagedRecords, pageResponse);
+    }
+
+    private static int getStatusPriorityRank(String status) {
+        if (status == null) return 5;
+        switch (status.toUpperCase()) {
+            case "PRESENT": return 1;
+            case "LATE":    return 2;
+            case "ABSENT":  return 3;
+            case "EXCUSED": return 4;
+            default:        return 5;
+        }
     }
 
     public DashboardDto.StudentStats buildStudentStats(String studentId) {

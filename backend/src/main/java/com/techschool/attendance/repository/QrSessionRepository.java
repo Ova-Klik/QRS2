@@ -16,6 +16,7 @@ public interface QrSessionRepository extends MongoRepository<QrSession, String> 
     Optional<QrSession> findByCohortIdAndDate(String cohortId, LocalDate date);
     List<QrSession> findByCohortIdOrderByCreatedAtDesc(String cohortId);
     List<QrSession> findByStateAndExpiresAtBefore(QrSession.SessionState state, Instant now);
+    List<QrSession> findByStateAndExpiresAtAfter(QrSession.SessionState state, Instant now);
 
     @Query("{ 'cohortId': ?0, 'state': 'ACTIVE' }")
     Optional<QrSession> findActiveSessionByCohortId(String cohortId);

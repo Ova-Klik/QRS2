@@ -41,6 +41,7 @@ public class CohortDto {
         private int studentCount;
         private double attendanceRate;
         private int presentCount;
+        private int earlyCount;
         private int absentCount;
         private int excusedCount;
         private int lateCount;

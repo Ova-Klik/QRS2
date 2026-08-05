@@ -180,22 +180,25 @@ public class FacilitatorController {
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
         var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
-        return ResponseEntity.ok(attendanceService.getFacilitatorReportPage(assignedCohortIds, cohortId, q, date, page, size));
+        return ResponseEntity.ok(attendanceService.getFacilitatorReportPage(assignedCohortIds, cohortId, q, date, status, page, size));
     }
 
     @GetMapping("/attendance/reports/export")
     public ResponseEntity<byte[]> exportFacilitatorReport(
             @AuthenticationPrincipal String facId,
             @RequestParam(required = false) String cohortId,
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "csv") String format) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
         var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
-        return attendanceService.exportFacilitatorReport(assignedCohortIds, cohortId, date, format, exportService);
+        return attendanceService.exportFacilitatorReport(assignedCohortIds, cohortId, q, date, status, format, exportService);
     }
 
     // ── Dashboard ─────────────────────────────────────────

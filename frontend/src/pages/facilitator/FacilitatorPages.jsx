@@ -26,15 +26,23 @@ export function FacilitatorDashboard() {
     return () => clearTimeout(timer)
   }, [query])
 
-  const reload = useCallback(() => {
-    setLoading(true)
+  const reload = useCallback((showLoading = true) => {
+    if (showLoading) setLoading(true)
     facilitatorApi.dashboard({ cohortId: cohortId || undefined, q: debouncedQ || undefined, date, page, size })
       .then(r => setData(r.data))
-      .catch(() => toast.error('Failed to load dashboard'))
-      .finally(() => setLoading(false))
+      .catch(() => { if (showLoading) toast.error('Failed to load dashboard') })
+      .finally(() => { if (showLoading) setLoading(false) })
   }, [cohortId, debouncedQ, date, page, size])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => { reload(true) }, [reload])
+
+  // Real-time live attendance polling (5-second interval)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      reload(false)
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [reload])
 
   const isWeekendSelected = () => {
     if (!date) return false
@@ -135,9 +143,9 @@ export function FacilitatorQR() {
 
   const qrWindowEnd = settings?.qr_window_end || '12:00'
 
-  useEffect(() => {
-    if (!selectedCohort) return
-    facilitatorApi.getActiveQr(selectedCohort, window.location.origin)
+  const fetchActiveQr = useCallback((cohortId) => {
+    if (!cohortId) return
+    facilitatorApi.getActiveQr(cohortId, window.location.origin)
       .then(r => {
         setSession(r.data)
         if (r.data?.remainingSeconds !== undefined) {
@@ -145,7 +153,25 @@ export function FacilitatorQR() {
         }
       })
       .catch(() => setSession(null))
-  }, [selectedCohort])
+  }, [])
+
+  useEffect(() => {
+    fetchActiveQr(selectedCohort)
+  }, [selectedCohort, fetchActiveQr])
+
+  // Refresh interval sync
+  const refreshIntervalSec = session?.refreshInterval || 15
+  const isRefreshEnabled = session?.refreshEnabled !== false
+  const isActive = session?.state === 'ACTIVE' && remaining > 0
+
+  useEffect(() => {
+    if (!selectedCohort || !isActive || !isRefreshEnabled) return
+    const interval = setInterval(() => {
+      fetchActiveQr(selectedCohort)
+    }, refreshIntervalSec * 1000)
+
+    return () => clearInterval(interval)
+  }, [selectedCohort, isActive, isRefreshEnabled, refreshIntervalSec, fetchActiveQr])
 
   useEffect(() => {
     if (!session || session.state !== 'ACTIVE') return
@@ -176,7 +202,6 @@ export function FacilitatorQR() {
 
   const generate = async () => {
     if (!selectedCohort) { toast.error('Select a cohort'); return }
-    if (isWeekend()) { toast.error('Attendance QR codes cannot be generated on weekends'); return }
     setGenerating(true)
     try {
       const parsedDuration = durationMinutes ? parseInt(durationMinutes) : null
@@ -201,20 +226,14 @@ export function FacilitatorQR() {
     } catch { toast.error('Failed to stop QR session') }
   }
 
-  const isActive = session?.state === 'ACTIVE' && remaining > 0
   const displayRemaining = isActive ? remaining : windowRemaining
   const mins = Math.floor(displayRemaining / 60), secs = displayRemaining % 60
   const timerLabel = isActive ? 'Session Remaining' : 'Window Closes In'
 
   return (
     <>
-      <PageHeader title="QR Generator" subtitle="Generate or stop daily attendance QR codes (07:00 AM – 12:00 PM Mon-Fri)" />
+      <PageHeader title="QR Generator" subtitle="Generate or stop attendance QR codes for active cohorts" />
       <div className="p-4 sm:p-6 animate-fade-in">
-        {isWeekend() && (
-          <Alert type="warning" className="mb-4">
-            <strong>Attendance Disabled on Weekends:</strong> QR code generation is unavailable on Saturdays and Sundays.
-          </Alert>
-        )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-[800px]">
           <Card>
             <div className="font-semibold mb-4">Manage QR Session</div>
@@ -236,10 +255,10 @@ export function FacilitatorQR() {
                 {isActive ? 'Active Session Available' : 'No Active Session'}
               </div>
               <div className="text-xs text-gray-600 mt-0.5">
-                {isActive ? '10-second dynamic TOTP rolling rotation enabled' : 'Select cohort & duration to generate session'}
+                {isActive ? (isRefreshEnabled ? `${refreshIntervalSec}s dynamic refresh enabled` : 'Static QR code active') : 'Select cohort & duration to generate session'}
               </div>
             </div>
-            <Button onClick={generate} loading={generating} disabled={isWeekend()} className="w-full justify-center">
+            <Button onClick={generate} loading={generating} className="w-full justify-center">
               {isActive ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               ) : (
@@ -268,6 +287,19 @@ export function FacilitatorQR() {
                     </div>
                   )}
                 </div>
+
+                {/* Attendance Code (QR ID) */}
+                <div className="mb-3 flex flex-col items-center gap-1.5 w-full">
+                  <div className="text-[11px] font-bold tracking-wider uppercase text-gray-400">
+                    Attendance Code (QR ID)
+                  </div>
+                  <div className="flex items-center justify-center gap-2 w-full max-w-[280px] px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 dark:bg-slate-800 dark:border-slate-700 select-none">
+                    <span className="font-mono text-base font-extrabold text-gray-800 dark:text-gray-100 truncate text-center tracking-widest uppercase select-none">
+                      {session.token ? session.token.substring(0, 8).toUpperCase() : ''}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="text-[11px] text-gray-400 mb-0.5">{timerLabel}</div>
                 <div className={`font-mono text-[28px] font-medium mb-1 ${displayRemaining < 300 ? 'text-red' : 'text-gray-900'}`}>
                   {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
@@ -275,11 +307,10 @@ export function FacilitatorQR() {
                 <div className="mb-2 flex flex-col items-center gap-1.5">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${isActive ? 'bg-green-light text-green-dark border-[#a8dbb8]' : 'bg-yellow-light text-yellow-dark border-[#f3dfa8]'}`}>
                     {isActive && <span className="inline-block h-[7px] w-[7px] rounded-full bg-green animate-pulse" />}
-                    {isActive ? 'Active (10s TOTP)' : `Window ends at ${qrWindowEnd}`}
+                    {isActive ? (isRefreshEnabled ? `Active (${refreshIntervalSec}s Refresh)` : 'Active (Static)') : `Window ends at ${qrWindowEnd}`}
                   </span>
                 </div>
                 <div className="text-[11px] text-gray-400">Cohort: {session.cohortName}</div>
-                <div className="text-[10px] font-mono text-gray-200 mt-1.5 break-all">{session.token?.substring(0, 20)}...</div>
               </>
             ) : (
               <div className="py-10 text-gray-400">
@@ -446,6 +477,7 @@ export function FacilitatorReports() {
   const [query, setQuery]       = useState('')
   const [debouncedQ, setDebQ]   = useState('')
   const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [statusFilter, setStatusFilter] = useState('ALL')
   const [pageResponse, setPageResponse] = useState(null)
   const [loading, setLoading]   = useState(true)
   const [page, setPage]         = useState(0)
@@ -465,17 +497,30 @@ export function FacilitatorReports() {
 
   const load = useCallback(() => {
     setLoading(true)
-    facilitatorApi.reports({ cohortId: selected || undefined, q: debouncedQ || undefined, date, page, size })
+    facilitatorApi.reports({
+      cohortId: selected || undefined,
+      q: debouncedQ || undefined,
+      date,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      page,
+      size
+    })
       .then(r => setPageResponse(r.data))
       .catch(() => toast.error('Failed to load reports'))
       .finally(() => setLoading(false))
-  }, [selected, debouncedQ, date, page, size])
+  }, [selected, debouncedQ, date, statusFilter, page, size])
 
   useEffect(() => { load() }, [load])
 
   const exportCSV = async () => {
     try {
-      const res = await facilitatorApi.exportReports({ cohortId: selected || undefined, date, format: 'csv' })
+      const res = await facilitatorApi.exportReports({
+        cohortId: selected || undefined,
+        q: debouncedQ || undefined,
+        date,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        format: 'csv'
+      })
       const blob = new Blob([res.data], { type: 'text/csv' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -507,12 +552,19 @@ export function FacilitatorReports() {
         )}
         <Card className="mb-4">
           <div className="flex gap-3 items-center flex-wrap">
-            <Select label="Cohort" value={selected} onChange={e => { setSelected(e.target.value); setPage(0) }} className="mb-0 min-w-[180px] flex-1 max-w-[280px]">
+            <Select label="Cohort" value={selected} onChange={e => { setSelected(e.target.value); setPage(0) }} className="mb-0 min-w-[180px] flex-1 max-w-[240px]">
               <option value="">All Assigned Cohorts</option>
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>)}
             </Select>
-            <Input label="Search Student" placeholder="Search name or reg no..." value={query} onChange={e => { setQuery(e.target.value); setPage(0) }} className="mb-0 min-w-[200px] flex-1 max-w-[280px]" />
-            <Input label="Attendance Date" type="date" value={date} onChange={e => { setDate(e.target.value); setPage(0) }} className="mb-0 min-w-[160px]" />
+            <Select label="Status Filter" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0) }} className="mb-0 min-w-[150px] max-w-[200px]">
+              <option value="ALL">All Statuses</option>
+              <option value="PRESENT">Present</option>
+              <option value="LATE">Late</option>
+              <option value="ABSENT">Absent</option>
+              <option value="EXCUSED">Excused</option>
+            </Select>
+            <Input label="Search Student" placeholder="Search name or reg no..." value={query} onChange={e => { setQuery(e.target.value); setPage(0) }} className="mb-0 min-w-[200px] flex-1 max-w-[240px]" />
+            <Input label="Attendance Date" type="date" value={date} onChange={e => { setDate(e.target.value); setPage(0) }} className="mb-0 min-w-[150px]" />
             <Button variant="outline" size="sm" onClick={load} className="mt-5"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</Button>
           </div>
         </Card>

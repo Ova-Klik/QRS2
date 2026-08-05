@@ -178,11 +178,13 @@ public class AdminController {
     public ResponseEntity<AnalyticsDto.PageResponse<CohortDto.CohortResponse>> searchCohorts(
             @RequestParam(required = false, defaultValue = "") String q,
             @RequestParam(required = false, defaultValue = "ALL") String status,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String cohortId,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false, defaultValue = "name") String sort,
             @RequestParam(required = false, defaultValue = "asc") String order) {
-        return ResponseEntity.ok(cohortService.searchCohorts(q, status, page, size, sort, order));
+        return ResponseEntity.ok(cohortService.searchCohorts(q, status, date, cohortId, page, size, sort, order));
     }
 
     @GetMapping("/cohorts/{id}")

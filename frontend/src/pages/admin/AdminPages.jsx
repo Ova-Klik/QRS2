@@ -387,11 +387,11 @@ export function AdminStudents() {
             </Select>
             <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="!mb-0">
               <option value="ALL">All Attendance Statuses</option>
-              <option value="PRESENT">Present</option>
-              <option value="ABSENT">Absent</option>
+              <option value="PRESENT">Present (Early & Late)</option>
+              <option value="EARLY">Early</option>
               <option value="LATE">Late</option>
+              <option value="ABSENT">Absent</option>
               <option value="EXCUSED">Excused</option>
-              <option value="HOLIDAY">Holiday</option>
             </Select>
             <div className="flex items-center text-xs text-gray-500 font-medium px-2">
               Showing {students.length} of {total} students
@@ -473,8 +473,9 @@ export function AdminFacilitators() {
   const [facilitators, setFacilitators] = useState([])
   const [cohorts, setCohorts]           = useState([])
   const [loading, setLoading]           = useState(true)
-  const [modal, setModal]               = useState(false)
-  const [form, setForm]                 = useState({ name: '', email: '', password: 'Fac@1234', assignedCohortIds: [] })
+  const [modal, setModal]               = useState(null) // 'add' | 'edit'
+  const [editTarget, setEditTarget]     = useState(null)
+  const [form, setForm]                 = useState({ name: '', email: '', phone: '', password: 'Fac@1234', assignedCohortIds: [] })
   const [saving, setSaving]             = useState(false)
 
   const load = useCallback(() => {
@@ -482,14 +483,46 @@ export function AdminFacilitators() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const addFac = async () => {
+  const handleCreate = async () => {
     if (!form.name || !form.email) { toast.error('Fill all required fields'); return }
     setSaving(true)
     try {
       await adminApi.createUser({ ...form, role: 'FACILITATOR' })
-      toast.success('Facilitator added'); setModal(false); load()
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed') }
+      toast.success('Facilitator added successfully')
+      setModal(null)
+      load()
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to add facilitator') }
     finally { setSaving(false) }
+  }
+
+  const handleUpdate = async () => {
+    if (!form.name || !form.email) { toast.error('Fill all required fields'); return }
+    setSaving(true)
+    try {
+      await adminApi.updateUser(editTarget.id, {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        assignedCohortIds: form.assignedCohortIds
+      })
+      toast.success('Facilitator updated successfully')
+      setModal(null)
+      setEditTarget(null)
+      load()
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to update facilitator') }
+    finally { setSaving(false) }
+  }
+
+  const openEditModal = (fac) => {
+    setEditTarget(fac)
+    setForm({
+      name: fac.name || '',
+      email: fac.email || '',
+      phone: fac.phone || '',
+      password: '',
+      assignedCohortIds: fac.assignedCohortIds || []
+    })
+    setModal('edit')
   }
 
   if (loading) return <LoadingPage />
@@ -497,24 +530,32 @@ export function AdminFacilitators() {
   return (
     <>
       <PageHeader title="Facilitators" subtitle={`${facilitators.length} facilitators`}
-        actions={<Button size="sm" onClick={() => { setModal(true); setForm({ name: '', email: '', password: 'Fac@1234', assignedCohortIds: [] }) }}>+ Add Facilitator</Button>} />
+        actions={<Button size="sm" onClick={() => { setEditTarget(null); setForm({ name: '', email: '', phone: '', password: 'Fac@1234', assignedCohortIds: [] }); setModal('add'); }}>+ Add Facilitator</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card>
           <Table
             columns={[
               { key: 'name',              label: 'Name',    strong: true },
               { key: 'email',             label: 'Email',   render: v => <span className="font-mono text-[11px] text-gray-400">{v}</span> },
+              { key: 'phone',             label: 'Phone',   render: v => <span className="text-xs text-gray-500">{v || '—'}</span> },
               { key: 'assignedCohortIds', label: 'Cohorts', render: v => (v || []).map(id => cohorts.find(c => c.id === id)?.name).filter(Boolean).join(', ') || '—' },
               { key: 'active',            label: 'Status',  render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} /> },
+              { key: 'actions',           label: 'Actions', render: (_, row) => (
+                <Button size="sm" variant="outline" onClick={() => openEditModal(row)}>Edit</Button>
+              )},
             ]}
             rows={facilitators}
           />
         </Card>
       </div>
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Facilitator">
+
+      <Modal open={modal === 'add' || modal === 'edit'} onClose={() => { setModal(null); setEditTarget(null); }} title={modal === 'edit' ? `Edit Facilitator — ${editTarget?.name}` : 'Add Facilitator'}>
         <Input label="Full Name *"  value={form.name}     onChange={e => setForm(p => ({...p, name: e.target.value}))} />
         <Input label="Email *"      value={form.email}    onChange={e => setForm(p => ({...p, email: e.target.value}))} type="email" />
-        <Input label="Password *"   value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} type="password" />
+        <Input label="Phone Number" value={form.phone}    onChange={e => setForm(p => ({...p, phone: e.target.value}))} placeholder="+234..." />
+        {modal === 'add' && (
+          <Input label="Password *" value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} type="password" />
+        )}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-500 mb-2">Assigned Cohorts</label>
           {cohorts.length === 0 ? (
@@ -542,8 +583,10 @@ export function AdminFacilitators() {
           )}
         </div>
         <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={() => setModal(false)}>Cancel</Button>
-          <Button loading={saving} onClick={addFac}>Add Facilitator</Button>
+          <Button variant="outline" onClick={() => { setModal(null); setEditTarget(null); }}>Cancel</Button>
+          <Button loading={saving} onClick={modal === 'edit' ? handleUpdate : handleCreate}>
+            {modal === 'edit' ? 'Save Changes' : 'Add Facilitator'}
+          </Button>
         </div>
       </Modal>
     </>
@@ -565,6 +608,8 @@ export function AdminCohorts() {
   // Filters & Pagination for Cohorts
   const [q, setQ]                     = useState('')
   const [statusFilter, setStatusFilter] = useState('ACTIVE') // ACTIVE | ARCHIVED | ALL
+  const [date, setDate]               = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [selectedCohort, setSelectedCohort] = useState('')
   const [page, setPage]               = useState(0)
   const [size, setSize]               = useState(10)
   const [total, setTotal]             = useState(0)
@@ -586,6 +631,8 @@ export function AdminCohorts() {
       adminApi.searchCohorts({
         q: debouncedQ || undefined,
         status: statusFilter,
+        date: date || undefined,
+        cohortId: selectedCohort || undefined,
         page,
         size,
         sort: 'name',
@@ -611,9 +658,9 @@ export function AdminCohorts() {
         setTotalPages(1)
       }).catch(() => toast.error('Failed to load cohorts'))
     }).finally(() => setLoading(false))
-  }, [debouncedQ, statusFilter, page, size])
+  }, [debouncedQ, statusFilter, date, selectedCohort, page, size])
 
-  useEffect(() => { setPage(0) }, [debouncedQ, statusFilter])
+  useEffect(() => { setPage(0) }, [debouncedQ, statusFilter, date, selectedCohort])
   useEffect(() => { load() }, [load])
 
   const loadMembers = useCallback(() => {
@@ -714,20 +761,29 @@ export function AdminCohorts() {
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card className="mb-4">
           <div className="flex gap-3 mb-4 flex-wrap items-center">
+            <Select label="Cohort" value={selectedCohort} onChange={e => setSelectedCohort(e.target.value)} className="!mb-0 min-w-[180px]">
+              <option value="">All Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
             <Input
-              placeholder="Search by cohort name or facilitator..."
+              label="Date Filter"
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="!mb-0 min-w-[160px]"
+            />
+            <Input
+              label="Search"
+              placeholder="Search cohort or facilitator..."
               value={q}
               onChange={e => setQ(e.target.value)}
-              className="!mb-0 flex-1 min-w-[240px]"
+              className="!mb-0 flex-1 min-w-[200px]"
             />
-            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="!mb-0 min-w-[180px]">
+            <Select label="Status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="!mb-0 min-w-[150px]">
               <option value="ACTIVE">Active Cohorts</option>
               <option value="ARCHIVED">Archived Cohorts</option>
               <option value="ALL">All Cohorts</option>
             </Select>
-            <div className="text-xs text-gray-500 font-medium px-2">
-              Showing {cohorts.length} of {total} cohorts
-            </div>
           </div>
 
           {loading ? (
@@ -744,10 +800,16 @@ export function AdminCohorts() {
                 )},
                 { key: 'studentCount',    label: 'Students', render: v => <span className="font-medium">{v || 0}</span> },
                 { key: 'attendanceRate',  label: 'Att. Rate', render: v => <span className="font-semibold text-gray-800 dark:text-gray-100">{v != null ? `${v}%` : '0%'}</span> },
-                { key: 'presentCount',    label: 'Present',  render: v => <span className="text-green-600 font-medium">{v || 0}</span> },
+                { key: 'presentCount',    label: 'Present',  render: (_, row) => (
+                  <div>
+                    <span className="text-green-600 font-medium">{row.presentCount || 0}</span>
+                    <div className="text-[10px] text-gray-400">Early: {row.earlyCount || 0} · Late: {row.lateCount || 0}</div>
+                  </div>
+                )},
+                { key: 'earlyCount',      label: 'Early',    render: v => <span className="text-emerald-600 font-medium">{v || 0}</span> },
+                { key: 'lateCount',       label: 'Late',     render: v => <span className="text-yellow-600 font-medium">{v || 0}</span> },
                 { key: 'absentCount',     label: 'Absent',   render: v => <span className="text-red-600 font-medium">{v || 0}</span> },
                 { key: 'excusedCount',    label: 'Excused',  render: v => <span className="text-blue-600 font-medium">{v || 0}</span> },
-                { key: 'lateCount',       label: 'Late',     render: v => <span className="text-yellow-600 font-medium">{v || 0}</span> },
                 { key: 'active',          label: 'Status',   render: v => <Badge status={v ? 'ACTIVE' : 'INACTIVE'} label={v ? 'Active' : 'Archived'} /> },
                 { key: 'actions',         label: 'Actions',   render: (_, row) => (
                   <div className="flex gap-1.5 flex-wrap">

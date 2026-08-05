@@ -10,8 +10,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +31,14 @@ public class UserService {
     private final DeviceRepository deviceRepository;
     private final AttendanceRepository attendanceRepository;
     private final CohortRepository cohortRepository;
+    private final ExcuseRequestRepository excuseRepository;
     private final SystemSettingRepository systemSettingRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final AttendanceService attendanceService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone:Africa/Lagos}")
+    private String timezone;
 
     public UserDto.UserResponse createUser(String actorId, String actorName, String actorRole,
                                             UserDto.CreateUserRequest request) {
@@ -156,40 +162,54 @@ public class UserService {
                         || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
                 .collect(Collectors.toList());
 
-        Attendance.AttendanceStatus statusFilter = null;
-        if (statusStr != null && !statusStr.isBlank() && !"ALL".equalsIgnoreCase(statusStr)) {
-            try {
-                statusFilter = Attendance.AttendanceStatus.valueOf(statusStr.trim().toUpperCase());
-            } catch (Exception ignored) {}
-        }
-
-        final Attendance.AttendanceStatus targetStatus = statusFilter;
         final LocalDate effStart = startDate;
         final LocalDate effEnd = endDate;
+        final LocalDate targetDate = effStart != null ? effStart : LocalDate.now(ZoneId.of(timezone));
 
-        if (targetStatus != null || effStart != null || effEnd != null) {
-            Set<String> matchingStudentIds;
-            if (effStart != null && effEnd != null) {
-                List<Attendance> inRange = attendanceRepository.findByDateBetween(effStart, effEnd);
-                matchingStudentIds = inRange.stream()
-                        .filter(a -> targetStatus == null || a.getStatus() == targetStatus)
-                        .map(Attendance::getStudentId)
-                        .collect(Collectors.toSet());
-            } else if (targetStatus != null) {
-                List<Attendance> allRecs = attendanceRepository.findAll();
-                matchingStudentIds = allRecs.stream()
-                        .filter(a -> a.getStatus() == targetStatus)
-                        .map(Attendance::getStudentId)
-                        .collect(Collectors.toSet());
-            } else {
-                matchingStudentIds = Set.of();
+        if (statusStr != null && !statusStr.isBlank() && !"ALL".equalsIgnoreCase(statusStr.trim())) {
+            String s = statusStr.trim().toUpperCase();
+            Set<String> matchingIds = new HashSet<>();
+
+            List<Attendance> dateAtt = attendanceRepository.findByDate(targetDate);
+            Map<String, Attendance> attByStudent = dateAtt.stream()
+                    .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
+
+            List<ExcuseRequest> excuses = excuseRepository.findAll().stream()
+                    .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                    .filter(e -> e.getStartDate() != null && !targetDate.isBefore(e.getStartDate()) && !targetDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                    .collect(Collectors.toList());
+            Set<String> excusedStudentIds = excuses.stream().map(ExcuseRequest::getStudentId).collect(Collectors.toSet());
+
+            for (User u : candidates) {
+                Attendance a = attByStudent.get(u.getId());
+                boolean hasExcuse = excusedStudentIds.contains(u.getId()) || (a != null && a.getStatus() == Attendance.AttendanceStatus.EXCUSED);
+
+                if ("PRESENT".equals(s)) {
+                    if (a != null && (a.getStatus() == Attendance.AttendanceStatus.PRESENT || a.getStatus() == Attendance.AttendanceStatus.LATE)) {
+                        matchingIds.add(u.getId());
+                    }
+                } else if ("EARLY".equals(s)) {
+                    if (a != null && a.getStatus() == Attendance.AttendanceStatus.PRESENT) {
+                        matchingIds.add(u.getId());
+                    }
+                } else if ("LATE".equals(s)) {
+                    if (a != null && a.getStatus() == Attendance.AttendanceStatus.LATE) {
+                        matchingIds.add(u.getId());
+                    }
+                } else if ("EXCUSED".equals(s)) {
+                    if (hasExcuse) {
+                        matchingIds.add(u.getId());
+                    }
+                } else if ("ABSENT".equals(s)) {
+                    if (a == null && !hasExcuse) {
+                        matchingIds.add(u.getId());
+                    }
+                }
             }
 
-            if (targetStatus != null) {
-                filtered = filtered.stream()
-                        .filter(u -> matchingStudentIds.contains(u.getId()))
-                        .collect(Collectors.toList());
-            }
+            filtered = filtered.stream()
+                    .filter(u -> matchingIds.contains(u.getId()))
+                    .collect(Collectors.toList());
         }
 
         Map<String, Cohort> cohortsById = loadCohortsById(filtered);
@@ -482,15 +502,55 @@ public class UserService {
                                             String userId, UserDto.UpdateUserRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
-        if (request.getName() != null) user.setName(request.getName());
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            user.setName(request.getName().trim());
+        }
+
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            String newEmail = request.getEmail().trim().toLowerCase();
+            if (!newEmail.equalsIgnoreCase(user.getEmail())) {
+                userRepository.findByEmail(newEmail).ifPresent(existing -> {
+                    if (!existing.getId().equals(userId)) {
+                        throw AppException.badRequest("Email address is already in use");
+                    }
+                });
+                user.setEmail(newEmail);
+            }
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone().trim());
+        }
+
         if (request.getCohortId() != null) user.setCohortId(request.getCohortId());
         if (request.getRegistrationNumber() != null) user.setRegistrationNumber(request.getRegistrationNumber());
-        if (request.getAssignedCohortIds() != null) user.setAssignedCohortIds(request.getAssignedCohortIds());
+
+        if (request.getAssignedCohortIds() != null) {
+            user.setAssignedCohortIds(request.getAssignedCohortIds());
+            if (user.getRole() == User.Role.FACILITATOR) {
+                // Sync cohort facilitator assignment
+                List<Cohort> cohorts = cohortRepository.findAll();
+                for (Cohort c : cohorts) {
+                    if (request.getAssignedCohortIds().contains(c.getId())) {
+                        if (!userId.equals(c.getFacilitatorId())) {
+                            c.setFacilitatorId(userId);
+                            cohortRepository.save(c);
+                        }
+                    } else if (userId.equals(c.getFacilitatorId())) {
+                        c.setFacilitatorId(null);
+                        cohortRepository.save(c);
+                    }
+                }
+            }
+        }
+
         if (request.getActive() != null) user.setActive(request.getActive());
         User saved = userRepository.save(user);
 
         auditService.log(actorId, actorName, actorRole,
-                AuditLog.ActionType.USER_UPDATED, userId, user.getName(), "User profile updated", null);
+                AuditLog.ActionType.USER_UPDATED, userId, user.getName(),
+                (user.getRole() == User.Role.FACILITATOR ? "Facilitator" : "User") + " profile updated: " + user.getName(), null);
         return toResponse(saved);
     }
 
@@ -587,13 +647,15 @@ public class UserService {
         "school_name", "school_address", "school_email", "school_website",
         "school_wifi_ssid", "school_ip_range", "network_enforce",
         "qr_window_start", "qr_window_end", "late_threshold",
-        "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_fallback_enabled"
+        "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_fallback_enabled",
+        "qr_refresh_interval", "qr_refresh_enabled"
     };
     private static final String[] NETWORK_DEFAULTS = {
         "Tech School", "Lagos, Nigeria", "admin@techschool.edu.ng", "https://techschool.edu.ng",
         "TechSchool-WiFi", "192.168.1.0/24", "false",
         "07:00", "12:00", "08:31",
-        "6.5244", "3.3792", "150", "true"
+        "6.5244", "3.3792", "150", "true",
+        "15", "true"
     };
 
     public Map<String, String> getNetworkSettings() {
@@ -606,6 +668,18 @@ public class UserService {
     }
 
     public Map<String, String> updateNetworkSettings(String actorId, String actorName, Map<String, String> updates) {
+        if (updates.containsKey("qr_refresh_interval")) {
+            String val = updates.get("qr_refresh_interval");
+            try {
+                int interval = Integer.parseInt(val != null ? val.trim() : "");
+                if (interval < 5 || interval > 600) {
+                    throw AppException.badRequest("QR Refresh Interval must be between 5 and 600 seconds.");
+                }
+            } catch (NumberFormatException e) {
+                throw AppException.badRequest("QR Refresh Interval must be a valid integer between 5 and 600 seconds.");
+            }
+        }
+
         Map<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : updates.entrySet()) {
             String key = entry.getKey();

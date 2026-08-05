@@ -126,23 +126,28 @@ export function ProjectionPage() {
     }
   }, [selectedCohort, fetchSession])
 
-  // 10-second rolling TOTP refresher interval
+  // Dynamic TOTP refresher interval (syncs with session refreshInterval & refreshEnabled)
+  const refreshIntervalSec = session?.refreshInterval || 15
+  const isRefreshEnabled = session?.refreshEnabled !== false
+
   useEffect(() => {
-    if (!selectedCohort) return
+    if (!selectedCohort || !isRefreshEnabled) return
+    setTotpCountdown(refreshIntervalSec)
+
     const interval = setInterval(() => {
       fetchSession(selectedCohort)
-      setTotpCountdown(10)
-    }, 10000)
+      setTotpCountdown(refreshIntervalSec)
+    }, refreshIntervalSec * 1000)
 
     const timer = setInterval(() => {
-      setTotpCountdown(prev => (prev > 1 ? prev - 1 : 10))
+      setTotpCountdown(prev => (prev > 1 ? prev - 1 : refreshIntervalSec))
     }, 1000)
 
     return () => {
       clearInterval(interval)
       clearInterval(timer)
     }
-  }, [selectedCohort, fetchSession])
+  }, [selectedCohort, fetchSession, refreshIntervalSec, isRefreshEnabled])
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -231,11 +236,11 @@ export function ProjectionPage() {
             <>
               <div className="mb-3 inline-flex items-center gap-2 bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.4)] text-[#4ade80] px-4 py-1.5 rounded-full text-[13px] font-semibold">
                 <span className="w-2 h-2 rounded-full bg-[#22c55e] inline-block shadow-[0_0_10px_#22c55e]" />
-                Active Session — 10s TOTP Rotation Live
+                {isRefreshEnabled ? `Active Session — ${refreshIntervalSec}s Refresh Live` : 'Active Session — Static QR'}
               </div>
 
               {/* QR Image Frame */}
-              <div className="relative bg-white p-4 rounded-[20px] shadow-[0_0_40px_rgba(239,68,68,0.25)] mb-5 mt-2">
+              <div className="relative bg-white p-4 rounded-[20px] shadow-[0_0_40px_rgba(239,68,68,0.25)] mb-4 mt-2">
                 <img
                   src={`data:image/png;base64,${session.qrImageBase64}`}
                   alt="Live Session QR"
@@ -244,16 +249,28 @@ export function ProjectionPage() {
                 />
               </div>
 
-              {/* TOTP Progress Bar */}
-              <div className="w-[280px] max-w-full mb-4">
-                <div className="flex justify-between text-[11px] mb-1" style={{ color: C.muted }}>
-                  <span>Dynamic Code Security Refresh</span>
-                  <span className="font-mono">{totpCountdown}s</span>
-                </div>
-                <div className="h-1 rounded-[2px] overflow-hidden" style={{ background: C.progressBg }}>
-                  <div className="h-full bg-[#3b82f6] transition-[width] duration-1000 ease-linear" style={{ width: `${(totpCountdown / 10) * 100}%` }} />
+              {/* Attendance Code (QR ID) */}
+              <div className="mb-4 flex flex-col items-center gap-1 w-full max-w-[320px]">
+                <span className="text-[11px] font-bold tracking-wider uppercase" style={{ color: C.muted }}>
+                  Attendance Code (QR ID)
+                </span>
+                <div className="flex items-center justify-center gap-2 w-full px-3.5 py-2 rounded-xl border font-mono text-lg sm:text-xl font-extrabold shadow-sm select-none" style={{ background: C.cardBgDeep, borderColor: C.borderStrong, color: C.fg }}>
+                  <span className="truncate text-center tracking-widest uppercase select-none">{session.token ? session.token.substring(0, 8).toUpperCase() : ''}</span>
                 </div>
               </div>
+
+              {/* TOTP Progress Bar */}
+              {isRefreshEnabled && (
+                <div className="w-[280px] max-w-full mb-4">
+                  <div className="flex justify-between text-[11px] mb-1" style={{ color: C.muted }}>
+                    <span>Dynamic Code Security Refresh</span>
+                    <span className="font-mono">{totpCountdown}s</span>
+                  </div>
+                  <div className="h-1 rounded-[2px] overflow-hidden" style={{ background: C.progressBg }}>
+                    <div className="h-full bg-[#3b82f6] transition-[width] duration-1000 ease-linear" style={{ width: `${(totpCountdown / refreshIntervalSec) * 100}%` }} />
+                  </div>
+                </div>
+              )}
 
               <div className="text-sm" style={{ color: C.soft }}>
                 Cohort: <strong style={{ color: C.fg }}>{(session.cohortName || '').match(/\d+/)?.[0] || session.cohortName}</strong>

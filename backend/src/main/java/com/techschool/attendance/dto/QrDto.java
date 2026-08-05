@@ -30,6 +30,25 @@ public class QrDto {
         private Instant expiresAt;
         private QrSession.SessionState state;
         private long remainingSeconds;
+        private Integer refreshInterval;
+        private Boolean refreshEnabled;
+
+        public QrResponse(String sessionId, String cohortId, String cohortName,
+                          String qrImageBase64, String token,
+                          Instant activeFrom, Instant expiresAt,
+                          QrSession.SessionState state, long remainingSeconds) {
+            this.sessionId = sessionId;
+            this.cohortId = cohortId;
+            this.cohortName = cohortName;
+            this.qrImageBase64 = qrImageBase64;
+            this.token = token;
+            this.activeFrom = activeFrom;
+            this.expiresAt = expiresAt;
+            this.state = state;
+            this.remainingSeconds = remainingSeconds;
+            this.refreshInterval = 15;
+            this.refreshEnabled = true;
+        }
     }
 
     @Data

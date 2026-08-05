@@ -90,6 +90,8 @@ public class UserDto {
     @Data
     public static class UpdateUserRequest {
         private String name;
+        private String email;
+        private String phone;
         private String cohortId;
         private String registrationNumber;
         private List<String> assignedCohortIds;

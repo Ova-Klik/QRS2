@@ -69,13 +69,18 @@ public class AttendanceService {
         }
 
         java.time.LocalTime currentTime = nowZone.toLocalTime();
-        String windowStartStr = getSetting("qr_window_start", windowStartDefault);
-        String windowEndStr = getSetting("qr_window_end", windowEndDefault);
-        java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
-        java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
+        java.time.LocalTime autoStartTime = java.time.LocalTime.of(7, 0);
 
-        if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
-            throw AppException.badRequest("Attendance is unavailable outside the permitted time window (" + windowStartStr + " – " + windowEndStr + " Mon-Fri).");
+        // Enforce standard time window settings starting at 7:00 AM
+        if (!currentTime.isBefore(autoStartTime)) {
+            String windowStartStr = getSetting("qr_window_start", windowStartDefault);
+            String windowEndStr = getSetting("qr_window_end", windowEndDefault);
+            java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
+            java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
+
+            if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
+                throw AppException.badRequest("Attendance is unavailable outside the permitted time window (" + windowStartStr + " – " + windowEndStr + " Mon-Fri).");
+            }
         }
 
         LocalDate today = nowZone.toLocalDate();
@@ -125,10 +130,7 @@ public class AttendanceService {
             }
         }
 
-        // 6. Biometric verification (required if student has registered biometric)
-        validateBiometric(student, request);
-
-        // 7. Determine status (holidays are automatically recorded as HOLIDAY, never ABSENT)
+        // Determine status (holidays are automatically recorded as HOLIDAY, never ABSENT)
         Attendance.AttendanceStatus status = determineStatus(student.getCohortId());
 
         // 8. Save attendance
@@ -253,30 +255,6 @@ public class AttendanceService {
         return systemSettingRepository.findByKey(key)
                 .map(SystemSetting::getValue)
                 .orElse(defaultVal);
-    }
-
-    // ── Biometric Validation ─────────────────────────────
-    private void validateBiometric(User student, QrDto.ScanRequest request) {
-        // If student has a registered biometric credential, they MUST verify it
-        if (student.getWebAuthnCredentialId() != null && !student.getWebAuthnCredentialId().isEmpty()) {
-            if (!request.isBiometricVerified()) {
-                throw AppException.forbidden(
-                        "Biometric verification required. Please verify your fingerprint to mark attendance.");
-            }
-
-            if (request.getBiometricCredentialId() == null ||
-                    !request.getBiometricCredentialId().equals(student.getWebAuthnCredentialId())) {
-                throw AppException.forbidden("Biometric credential mismatch. Use the same device you registered.");
-            }
-
-            // Verify the biometric assertion server-side
-            AuthDto.WebAuthnVerifyRequest verifyReq = new AuthDto.WebAuthnVerifyRequest();
-            verifyReq.setCredentialId(request.getBiometricCredentialId());
-            verifyReq.setAuthenticatorData(request.getBiometricAuthenticatorData());
-            verifyReq.setClientDataJSON(request.getBiometricClientDataJSON());
-            verifyReq.setSignature(request.getBiometricSignature());
-            authService.verifyBiometric(student.getId(), verifyReq);
-        }
     }
 
     // ── Manual Attendance ────────────────────────────────
@@ -792,6 +770,11 @@ public class AttendanceService {
 
     public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getFacilitatorReportPage(
             List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, int page, int size) {
+        return getFacilitatorReportPage(assignedCohortIds, cohortId, queryStr, targetDate, null, page, size);
+    }
+
+    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getFacilitatorReportPage(
+            List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, String statusFilter, int page, int size) {
         
         LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
         List<String> targetCohortIds = (cohortId != null && !cohortId.isBlank())
@@ -811,24 +794,17 @@ public class AttendanceService {
             ).collect(Collectors.toList());
         }
 
-        int total = students.size();
-        int safeSize = Math.min(200, Math.max(1, size));
-        int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, total);
-        int to = Math.min(from + safeSize, total);
+        Set<String> studentIds = students.stream().map(User::getId).collect(Collectors.toSet());
 
-        List<User> pagedStudents = students.subList(from, to);
-        Set<String> pagedStudentIds = pagedStudents.stream().map(User::getId).collect(Collectors.toSet());
-
-        List<Attendance> existingAtt = pagedStudentIds.isEmpty() ? List.of()
-                : attendanceRepository.findByStudentIdIn(pagedStudentIds).stream()
+        List<Attendance> existingAtt = studentIds.isEmpty() ? List.of()
+                : attendanceRepository.findByStudentIdIn(studentIds).stream()
                 .filter(a -> date.equals(a.getDate()))
                 .collect(Collectors.toList());
         Map<String, Attendance> attByStudent = existingAtt.stream()
                 .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
 
-        List<ExcuseRequest> excuses = pagedStudentIds.isEmpty() ? List.of()
-                : excuseRepository.findByStudentIdIn(pagedStudentIds).stream()
+        List<ExcuseRequest> excuses = studentIds.isEmpty() ? List.of()
+                : excuseRepository.findByStudentIdIn(studentIds).stream()
                 .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
                 .filter(e -> e.getStartDate() != null && !date.isBefore(e.getStartDate()) && !date.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
                 .collect(Collectors.toList());
@@ -838,7 +814,7 @@ public class AttendanceService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.AttendanceRecord> content = pagedStudents.stream().map(s -> {
+        List<AttendanceDto.AttendanceRecord> allRecords = students.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -863,19 +839,77 @@ public class AttendanceService {
             );
         }).collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        // Status Filtering
+        if (statusFilter != null && !statusFilter.isBlank() && !"ALL".equalsIgnoreCase(statusFilter.trim())) {
+            String sf = statusFilter.trim().toUpperCase();
+            allRecords = allRecords.stream()
+                    .filter(r -> r.getStatus() != null && r.getStatus().equalsIgnoreCase(sf))
+                    .collect(Collectors.toList());
+        }
+
+        // Status Priority Sorting (PRESENT -> LATE -> ABSENT -> EXCUSED) & markedAt DESCENDING for attended
+        allRecords.sort((r1, r2) -> {
+            int rank1 = getStatusPriorityRank(r1.getStatus());
+            int rank2 = getStatusPriorityRank(r2.getStatus());
+            if (rank1 != rank2) {
+                return Integer.compare(rank1, rank2);
+            }
+
+            if (rank1 == 1 || rank1 == 2) {
+                Instant t1 = r1.getMarkedAt();
+                Instant t2 = r2.getMarkedAt();
+                if (t1 != null && t2 != null) {
+                    int cmp = t2.compareTo(t1);
+                    if (cmp != 0) return cmp;
+                } else if (t1 != null) {
+                    return -1;
+                } else if (t2 != null) {
+                    return 1;
+                }
+            }
+
+            String n1 = r1.getStudentName() != null ? r1.getStudentName() : "";
+            String n2 = r2.getStudentName() != null ? r2.getStudentName() : "";
+            return n1.compareToIgnoreCase(n2);
+        });
+
+        int total = allRecords.size();
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+
+        List<AttendanceDto.AttendanceRecord> pagedContent = allRecords.subList(from, to);
+
+        return new AnalyticsDto.PageResponse<>(pagedContent, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
     public org.springframework.http.ResponseEntity<byte[]> exportFacilitatorReport(
             List<String> assignedCohortIds, String cohortId, LocalDate targetDate, String format, ExportService exportService) {
+        return exportFacilitatorReport(assignedCohortIds, cohortId, null, targetDate, null, format, exportService);
+    }
+
+    public org.springframework.http.ResponseEntity<byte[]> exportFacilitatorReport(
+            List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, String statusFilter, String format, ExportService exportService) {
         
         LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
         List<String> targetCohortIds = (cohortId != null && !cohortId.isBlank())
                 ? List.of(cohortId) : assignedCohortIds;
 
         List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
+        String q = queryStr == null ? "" : queryStr.trim().toLowerCase();
+        if (!q.isEmpty()) {
+            students = students.stream().filter(s ->
+                (s.getName() != null && s.getName().toLowerCase().contains(q)) ||
+                (s.getEmail() != null && s.getEmail().toLowerCase().contains(q)) ||
+                (s.getRegistrationNumber() != null && s.getRegistrationNumber().toLowerCase().contains(q))
+            ).collect(Collectors.toList());
+        }
+
         Set<String> studentIds = students.stream().map(User::getId).collect(Collectors.toSet());
+        Map<String, User> studentMap = students.stream()
+                .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
 
         List<Attendance> existingAtt = studentIds.isEmpty() ? List.of()
                 : attendanceRepository.findByStudentIdIn(studentIds).stream()
@@ -895,35 +929,101 @@ public class AttendanceService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<List<Object>> table = new ArrayList<>();
-        java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of(timezone));
-        java.time.format.DateTimeFormatter dateTimeFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of(timezone));
-
-        for (User s : students) {
+        List<AttendanceDto.AttendanceRecord> allRecords = students.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
 
-            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
-                          : (exc != null ? "EXCUSED" : "ABSENT");
-            String checkInTime = (a != null && a.getMarkedAt() != null) ? timeFmt.format(a.getMarkedAt()) : "—";
-            String timeRecorded = (a != null && a.getMarkedAt() != null) ? dateTimeFmt.format(a.getMarkedAt()) : "—";
-            String excuseStatus = exc != null ? "Approved Excuse (" + exc.getReason() + ")" : "N/A";
+            boolean isWeekend = date.getDayOfWeek().getValue() >= 6;
+            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : (isWeekend ? "WEEKEND" : "ABSENT"))
+                          : (exc != null ? "EXCUSED" : (isWeekend ? "WEEKEND" : "ABSENT"));
+
+            return new AttendanceDto.AttendanceRecord(
+                    a != null ? a.getId() : null,
+                    s.getId(),
+                    s.getName(),
+                    s.getRegistrationNumber(),
+                    s.getCohortId(),
+                    c != null ? c.getName() : s.getCohortId(),
+                    date,
+                    a != null ? a.getMarkedAt() : null,
+                    status,
+                    a != null && a.isManual(),
+                    a != null ? a.getManualReason() : null,
+                    null
+            );
+        }).collect(Collectors.toList());
+
+        // Status Filtering
+        if (statusFilter != null && !statusFilter.isBlank() && !"ALL".equalsIgnoreCase(statusFilter.trim())) {
+            String sf = statusFilter.trim().toUpperCase();
+            allRecords = allRecords.stream()
+                    .filter(r -> r.getStatus() != null && r.getStatus().equalsIgnoreCase(sf))
+                    .collect(Collectors.toList());
+        }
+
+        // Status Priority Sorting (PRESENT -> LATE -> ABSENT -> EXCUSED) & markedAt DESCENDING for attended
+        allRecords.sort((r1, r2) -> {
+            int rank1 = getStatusPriorityRank(r1.getStatus());
+            int rank2 = getStatusPriorityRank(r2.getStatus());
+            if (rank1 != rank2) {
+                return Integer.compare(rank1, rank2);
+            }
+
+            if (rank1 == 1 || rank1 == 2) {
+                Instant t1 = r1.getMarkedAt();
+                Instant t2 = r2.getMarkedAt();
+                if (t1 != null && t2 != null) {
+                    int cmp = t2.compareTo(t1);
+                    if (cmp != 0) return cmp;
+                } else if (t1 != null) {
+                    return -1;
+                } else if (t2 != null) {
+                    return 1;
+                }
+            }
+
+            String n1 = r1.getStudentName() != null ? r1.getStudentName() : "";
+            String n2 = r2.getStudentName() != null ? r2.getStudentName() : "";
+            return n1.compareToIgnoreCase(n2);
+        });
+
+        List<List<Object>> table = new ArrayList<>();
+        java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of(timezone));
+
+        for (AttendanceDto.AttendanceRecord r : allRecords) {
+            User s = studentMap.get(r.getStudentId());
+            String email = s != null && s.getEmail() != null ? s.getEmail() : "";
+            String checkInTime = (r.getMarkedAt() != null) ? timeFmt.format(r.getMarkedAt()) : "—";
+            String attendanceType = (r.getStatus() != null && (r.getStatus().equals("PRESENT") || r.getStatus().equals("LATE")))
+                    ? (r.isManual() ? "Manual Override" : "QR Scan") : r.getStatus();
 
             table.add(List.of(
-                    s.getName() != null ? s.getName() : "",
-                    s.getRegistrationNumber() != null ? s.getRegistrationNumber() : "",
-                    c != null ? c.getName() : "",
-                    status,
+                    r.getStudentName() != null ? r.getStudentName() : "",
+                    email,
+                    r.getCohortName() != null ? r.getCohortName() : "",
+                    r.getStatus() != null ? r.getStatus() : "",
                     date.toString(),
                     checkInTime,
-                    timeRecorded,
-                    excuseStatus
+                    attendanceType,
+                    r.getRegistrationNumber() != null ? r.getRegistrationNumber() : "",
+                    r.getManualReason() != null ? r.getManualReason() : "N/A"
             ));
         }
 
         return exportService.export(
-                List.of("Student Name", "Registration Number", "Cohort", "Attendance Status", "Attendance Date", "Check-in Time", "Time Recorded", "Excuse Status"),
+                List.of("Student Name", "Email", "Cohort", "Attendance Status", "Attendance Date", "Attendance Time", "Attendance Type", "Registration Number", "Excuse Status"),
                 table, format, "facilitator_report_" + date);
+    }
+
+    private static int getStatusPriorityRank(String status) {
+        if (status == null) return 5;
+        switch (status.toUpperCase()) {
+            case "PRESENT": return 1;
+            case "LATE":    return 2;
+            case "ABSENT":  return 3;
+            case "EXCUSED": return 4;
+            default:        return 5;
+        }
     }
 }

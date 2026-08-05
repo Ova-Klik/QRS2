@@ -46,12 +46,12 @@ public class QrService {
     private String timezone;
 
     public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
-                                             String cohortId, Integer durationMinutes) throws WriterException, IOException {
+            String cohortId, Integer durationMinutes) throws WriterException, IOException {
         return generateSession(facilitatorId, facilitatorName, cohortId, durationMinutes, null);
     }
 
     public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
-                                             String cohortId, Integer durationMinutes, String origin) throws WriterException, IOException {
+            String cohortId, Integer durationMinutes, String origin) throws WriterException, IOException {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
 
@@ -61,24 +61,10 @@ public class QrService {
 
         ZoneId zone = ZoneId.of(timezone);
         ZonedDateTime nowZone = ZonedDateTime.now(zone);
-        java.time.DayOfWeek dayOfWeek = nowZone.getDayOfWeek();
-        if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
-            throw AppException.badRequest("Attendance QR codes cannot be generated on weekends (Saturday/Sunday).");
-        }
-
-        java.time.LocalTime currentTime = nowZone.toLocalTime();
-        String windowStartStr = getSetting("qr_window_start", windowStartDefault);
-        String windowEndStr = getSetting("qr_window_end", windowEndDefault);
-        java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
-        java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
-
-        if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
-            throw AppException.badRequest("Attendance QR generation is only permitted between " + windowStartStr + " and " + windowEndStr + " (Mon-Fri).");
-        }
-
         LocalDate today = nowZone.toLocalDate();
 
-        // Check for existing active session & expire it to allow generating a new session
+        // Check for existing active session & expire it to allow generating a new
+        // session
         Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
         if (existing.isPresent()) {
             QrSession oldSession = existing.get();
@@ -126,16 +112,20 @@ public class QrService {
         auditService.log(facilitatorId, facilitatorName, "FACILITATOR",
                 AuditLog.ActionType.QR_GENERATED, saved.getId(), cohort.getName(),
                 "QR session opened for " + cohort.getName() + " on " + today +
-                        (durationMinutes != null ? " (" + durationMinutes + " mins duration)" : ""), null);
+                        (durationMinutes != null ? " (" + durationMinutes + " mins duration)" : ""),
+                null);
 
         long remainingSeconds = Duration.between(Instant.now(), expiresAt.toInstant()).getSeconds();
+
+        int refreshInterval = getRefreshIntervalSetting();
+        boolean refreshEnabled = getRefreshEnabledSetting();
 
         return new QrDto.QrResponse(
                 saved.getId(), cohortId, cohort.getName(),
                 qrBase64, rollingPayload,
                 activeFrom.toInstant(), expiresAt.toInstant(),
-                QrSession.SessionState.ACTIVE, Math.max(0, remainingSeconds)
-        );
+                QrSession.SessionState.ACTIVE, Math.max(0, remainingSeconds),
+                refreshInterval, refreshEnabled);
     }
 
     public QrDto.QrResponse getActiveSession(String cohortId) throws WriterException, IOException {
@@ -156,23 +146,36 @@ public class QrService {
         String qrBase64 = generateQrImage(qrContent, 300);
         long remaining = Duration.between(Instant.now(), session.getExpiresAt()).getSeconds();
 
+        int refreshInterval = getRefreshIntervalSetting();
+        boolean refreshEnabled = getRefreshEnabledSetting();
+
         return new QrDto.QrResponse(
                 session.getId(), cohortId, cohort.getName(),
                 qrBase64, rollingPayload,
                 session.getActiveFrom(), session.getExpiresAt(),
-                session.getState(), Math.max(0, remaining)
-        );
+                session.getState(), Math.max(0, remaining),
+                refreshInterval, refreshEnabled);
     }
 
     public QrDto.QrResponse getOrGeneratePublicSession(String cohortId) throws WriterException, IOException {
         return getOrGeneratePublicSession(cohortId, null);
     }
 
-    public QrDto.QrResponse getOrGeneratePublicSession(String cohortId, String origin) throws WriterException, IOException {
+    public QrDto.QrResponse getOrGeneratePublicSession(String cohortId, String origin)
+            throws WriterException, IOException {
         Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
         if (existing.isPresent()) {
             return getActiveSession(cohortId, origin);
         }
+
+        ZonedDateTime nowZone = ZonedDateTime.now(ZoneId.of(timezone));
+        java.time.LocalTime currentTime = nowZone.toLocalTime();
+        java.time.LocalTime autoStartTime = java.time.LocalTime.of(7, 0);
+
+        if (currentTime.isBefore(autoStartTime)) {
+            throw AppException.notFound("No active QR session. Session will automatically start at 7:00 AM or when generated by a facilitator.");
+        }
+
         return generateSession("SYSTEM", "Automated Projection System", cohortId, null, origin);
     }
 
@@ -200,43 +203,102 @@ public class QrService {
             cleanedToken = cleanedToken.substring(4);
         }
 
-        String masterToken = cleanedToken;
+        boolean enabled = getRefreshEnabledSetting();
+        int interval = getRefreshIntervalSetting();
+
+        // 1. Parsed dynamic QR token format (hash8:masterToken:step)
         if (cleanedToken.contains(":")) {
             String[] parts = cleanedToken.split(":");
             if (parts.length >= 3) {
-                masterToken = parts[0];
+                String hash8 = parts[0];
+                String masterToken = parts[1];
                 long timeStep;
                 try {
-                    timeStep = Long.parseLong(parts[1]);
+                    timeStep = Long.parseLong(parts[2]);
                 } catch (NumberFormatException e) {
                     throw AppException.badRequest("Malformed dynamic QR token");
                 }
 
-                long currentStep = System.currentTimeMillis() / 10000; // 10-second window
-                if (Math.abs(currentStep - timeStep) > 1) { // Expired 10s window
-                    throw AppException.badRequest("QR code has expired. Please scan the live code on screen.");
+                if (enabled) {
+                    long currentStep = System.currentTimeMillis() / (interval * 1000L);
+                    if (Math.abs(currentStep - timeStep) > 1) {
+                        throw AppException.badRequest("QR code has expired. Please scan the live code on screen.");
+                    }
+
+                    String expectedHash8 = computeHash(masterToken + ":" + timeStep).substring(0, 8);
+                    if (!expectedHash8.equalsIgnoreCase(hash8)) {
+                        throw AppException.badRequest("Invalid dynamic QR code signature");
+                    }
                 }
 
-                String expectedHash = computeHash(masterToken + ":" + timeStep);
-                if (!expectedHash.equals(parts[2])) {
-                    throw AppException.badRequest("Invalid dynamic QR code signature");
+                QrSession session = qrSessionRepository.findByToken(masterToken)
+                        .orElseThrow(() -> AppException.badRequest("Invalid or expired QR code"));
+                if (!session.isCurrentlyActive()) {
+                    throw AppException.badRequest("QR session has expired or is not active");
+                }
+                return session;
+            }
+        }
+
+        // 2. Direct masterToken lookup
+        Optional<QrSession> directSession = qrSessionRepository.findByToken(cleanedToken);
+        if (directSession.isPresent()) {
+            QrSession session = directSession.get();
+            if (!session.isCurrentlyActive()) {
+                throw AppException.badRequest("QR session has expired or is not active");
+            }
+            return session;
+        }
+
+        // 3. 8-character Attendance Code (QR ID) lookup across active sessions
+        List<QrSession> activeSessions = qrSessionRepository.findByStateAndExpiresAtAfter(
+                QrSession.SessionState.ACTIVE, Instant.now());
+        long currentStep = System.currentTimeMillis() / (interval * 1000L);
+
+        for (QrSession session : activeSessions) {
+            String masterToken = session.getToken();
+            if (!enabled) {
+                if (cleanedToken.equalsIgnoreCase(masterToken) ||
+                    (masterToken.length() >= 8 && cleanedToken.equalsIgnoreCase(masterToken.substring(0, 8)))) {
+                    return session;
+                }
+            } else {
+                for (long stepOffset = -1; stepOffset <= 1; stepOffset++) {
+                    long targetStep = currentStep + stepOffset;
+                    String expectedHash8 = computeHash(masterToken + ":" + targetStep).substring(0, 8);
+                    if (cleanedToken.equalsIgnoreCase(expectedHash8)) {
+                        return session;
+                    }
                 }
             }
         }
 
-        QrSession session = qrSessionRepository.findByToken(masterToken)
-                .orElseThrow(() -> AppException.badRequest("Invalid or expired QR code"));
-
-        if (!session.isCurrentlyActive()) {
-            throw AppException.badRequest("QR session has expired or is not active");
-        }
-        return session;
+        throw AppException.badRequest("Invalid or expired Attendance Code (QR ID)");
     }
 
     public String generateRollingTokenPayload(String masterToken) {
-        long step = System.currentTimeMillis() / 10000; // 10-second window
-        String hash = computeHash(masterToken + ":" + step);
-        return masterToken + ":" + step + ":" + hash;
+        if (!getRefreshEnabledSetting()) {
+            return masterToken;
+        }
+        int interval = getRefreshIntervalSetting();
+        long step = System.currentTimeMillis() / (interval * 1000L);
+        String hash8 = computeHash(masterToken + ":" + step).substring(0, 8);
+        return hash8 + ":" + masterToken + ":" + step;
+    }
+
+    private int getRefreshIntervalSetting() {
+        try {
+            String val = getSetting("qr_refresh_interval", "15");
+            int interval = Integer.parseInt(val.trim());
+            return Math.min(600, Math.max(5, interval));
+        } catch (Exception e) {
+            return 15;
+        }
+    }
+
+    private boolean getRefreshEnabledSetting() {
+        String val = getSetting("qr_refresh_enabled", "true");
+        return Boolean.parseBoolean(val);
     }
 
     private String computeHash(String input) {

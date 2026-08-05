@@ -904,6 +904,28 @@ export function AdminSettings() {
                   />
                 </div>
               </Section>
+              <Section title="QR Refresh Configuration">
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                  Configure dynamic QR code regeneration behaviour for attendance sessions (5 to 600 seconds).
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <Input
+                    label="QR Refresh Interval (seconds)"
+                    type="number"
+                    min="5"
+                    max="600"
+                    value={netSettings.qr_refresh_interval || '15'}
+                    onChange={e => updateNet('qr_refresh_interval', e.target.value)}
+                    placeholder="15"
+                  />
+                </div>
+                <Toggle
+                  checked={netSettings.qr_refresh_enabled !== 'false'}
+                  onChange={v => updateNet('qr_refresh_enabled', v ? 'true' : 'false')}
+                  label="Enable Automatic QR Refresh"
+                  sublabel="ON (default) regenerates QR codes every specified interval. OFF keeps QR code static until session ends."
+                />
+              </Section>
               <Section title="Attendance Rules" last>
                 <Toggle
                   checked={netSettings.network_enforce === 'true'}
