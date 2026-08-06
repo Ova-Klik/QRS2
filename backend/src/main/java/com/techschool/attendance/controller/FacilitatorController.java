@@ -1,6 +1,7 @@
 package com.techschool.attendance.controller;
 
 import com.techschool.attendance.dto.*;
+import com.techschool.attendance.exception.AppException;
 import com.techschool.attendance.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -195,10 +196,14 @@ public class FacilitatorController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "csv") String format) {
+            @RequestParam(defaultValue = "xlsx") String format,
+            @RequestParam(required = false) String source) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
         var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
-        return attendanceService.exportFacilitatorReport(assignedCohortIds, cohortId, q, date, status, format, exportService);
+        if (cohortId != null && !cohortId.isBlank() && !assignedCohortIds.contains(cohortId)) {
+            throw AppException.forbidden("You are not authorized to download reports for cohort: " + cohortId);
+        }
+        return attendanceService.exportFacilitatorReport(facId, assignedCohortIds, cohortId, q, date, status, format, source, exportService);
     }
 
     // ── Dashboard ─────────────────────────────────────────

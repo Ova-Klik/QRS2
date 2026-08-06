@@ -60,17 +60,20 @@ public class ExportService {
         if (rows.isEmpty()) return null;
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("Attendance");
+            sheet.createFreezePane(0, 1);
 
             CellStyle headerStyle = wb.createCellStyle();
             Font headerFont = wb.createFont();
             headerFont.setBold(true);
             headerFont.setColor(IndexedColors.WHITE.getIndex());
             headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(IndexedColors.DARK_RED.getIndex());
+            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            headerStyle.setAlignment(HorizontalAlignment.LEFT);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
             Row header = sheet.createRow(0);
+            header.setHeightInPoints(24);
             for (int c = 0; c < headers.size(); c++) {
                 Cell cell = header.createCell(c);
                 cell.setCellValue(headers.get(c));
@@ -79,12 +82,18 @@ public class ExportService {
 
             CellStyle dateStyle = wb.createCellStyle();
             dateStyle.setDataFormat(wb.createDataFormat().getFormat("yyyy-mm-dd"));
+            dateStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+            CellStyle dataStyle = wb.createCellStyle();
+            dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
             for (int r = 0; r < rows.size(); r++) {
                 Row row = sheet.createRow(r + 1);
+                row.setHeightInPoints(20);
                 List<Object> data = rows.get(r);
                 for (int c = 0; c < data.size() && c < headers.size(); c++) {
                     Cell cell = row.createCell(c);
+                    cell.setCellStyle(dataStyle);
                     Object v = data.get(c);
                     if (v == null) {
                         cell.setCellValue("");
@@ -101,6 +110,8 @@ public class ExportService {
 
             for (int c = 0; c < headers.size(); c++) {
                 sheet.autoSizeColumn(c);
+                int w = sheet.getColumnWidth(c);
+                sheet.setColumnWidth(c, Math.max(w + 1200, 3800));
             }
             wb.write(baos);
             return baos.toByteArray();

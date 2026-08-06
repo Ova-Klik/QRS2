@@ -23,6 +23,7 @@ public class PublicController {
     private final QrService qrService;
     private final AttendanceService attendanceService;
     private final com.techschool.attendance.service.UserService userService;
+    private final com.techschool.attendance.service.ExportService exportService;
 
     @GetMapping("/cohorts")
     public ResponseEntity<List<CohortDto.CohortResponse>> getActiveCohorts() {
@@ -44,5 +45,14 @@ public class PublicController {
     @GetMapping("/today-summary/{cohortId}")
     public ResponseEntity<AttendanceDto.DailySummary> getTodaySummary(@PathVariable String cohortId) {
         return ResponseEntity.ok(attendanceService.getCohortSummaryToday(cohortId));
+    }
+
+    @GetMapping("/projection/export/{cohortId}")
+    public ResponseEntity<byte[]> exportPublicProjectionReport(
+            @PathVariable String cohortId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+            @RequestParam(defaultValue = "xlsx") String format,
+            jakarta.servlet.http.HttpServletRequest request) {
+        return attendanceService.exportPublicProjectionReport(cohortId, date, format, request.getRemoteAddr(), exportService);
     }
 }

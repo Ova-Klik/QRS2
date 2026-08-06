@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,6 +37,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final AttendanceService attendanceService;
+    private final HolidayService holidayService;
 
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone:Africa/Lagos}")
     private String timezone;
@@ -271,17 +273,59 @@ public class UserService {
         Map<String, List<Attendance>> byStudent = all.stream()
                 .collect(Collectors.groupingBy(Attendance::getStudentId));
 
+        List<ExcuseRequest> excuses = excuseRepository.findByStudentIdIn(ids).stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .collect(Collectors.toList());
+        Map<String, List<ExcuseRequest>> excusesByStudent = excuses.stream()
+                .collect(Collectors.groupingBy(ExcuseRequest::getStudentId));
+
+        LocalDate today = LocalDate.now(ZoneId.of(timezone));
+
         Map<String, UserDto.StudentAttendanceResponse> out = new HashMap<>();
         for (User u : students) {
             List<Attendance> att = byStudent.getOrDefault(u.getId(), List.of());
-            int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-            int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-            int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-            int holiday = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
-            int totalDays = att.size();
+            List<ExcuseRequest> stExcuses = excusesByStudent.getOrDefault(u.getId(), List.of());
 
-            double rate = totalDays > 0 ? (double) (present + late) / totalDays * 100.0 : 0.0;
+            LocalDate effStart = startDate;
+            LocalDate effEnd = endDate;
+            if (effStart == null || effEnd == null) {
+                LocalDate creationDate = u.getCreatedAt() != null
+                        ? ZonedDateTime.ofInstant(u.getCreatedAt(), ZoneId.of(timezone)).toLocalDate() : today;
+                LocalDate earliestAtt = att.stream().map(Attendance::getDate).filter(Objects::nonNull).min(LocalDate::compareTo).orElse(creationDate);
+                effStart = creationDate.isBefore(earliestAtt) ? creationDate : earliestAtt;
+                if (effStart.isAfter(today)) effStart = today;
+                effEnd = today;
+            }
+
+            Set<LocalDate> holidays = holidayService.holidayDatesBetween(effStart, effEnd, u.getCohortId());
+            Map<LocalDate, Attendance> attMap = att.stream()
+                    .collect(Collectors.toMap(Attendance::getDate, Function.identity(), (a, b) -> a));
+
+            int present = 0, late = 0, absent = 0, excused = 0, holiday = 0, totalDays = 0;
+            for (LocalDate d = effStart; !d.isAfter(effEnd); d = d.plusDays(1)) {
+                if (!holidayService.isSchoolDay(d, holidays)) continue;
+                totalDays++;
+                final LocalDate currDate = d;
+                Attendance a = attMap.get(d);
+                boolean isExcused = stExcuses.stream().anyMatch(e -> e.getStartDate() != null &&
+                        !currDate.isBefore(e.getStartDate()) && !currDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)));
+
+                if (a != null) {
+                    if (a.getStatus() == Attendance.AttendanceStatus.PRESENT) present++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.LATE) late++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.EXCUSED) excused++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.HOLIDAY) holiday++;
+                    else absent++;
+                } else if (isExcused) {
+                    excused++;
+                } else {
+                    absent++;
+                }
+            }
+
+            int attended = present + late;
+            double rate = (totalDays - excused) > 0 ? (double) attended / (totalDays - excused) * 100.0
+                    : (attended > 0 ? 100.0 : 0.0);
             String rating = rate >= 90 ? "EXCELLENT" : rate >= 75 ? "GOOD" : rate >= 50 ? "FAIR" : "POOR";
 
             LocalDate lastDate = att.stream()

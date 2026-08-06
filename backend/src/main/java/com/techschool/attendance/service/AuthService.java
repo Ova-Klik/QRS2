@@ -32,7 +32,7 @@ public class AuthService {
 
     public AuthDto.LoginResponse login(AuthDto.LoginRequest request, String ipAddress) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> AppException.unauthorized("Invalid email or password"));
+                .orElseThrow(() -> AppException.unauthorized("User does not exist. Kindly register below."));
 
         if (!user.isActive()) {
             throw AppException.unauthorized("Account is deactivated. Contact admin.");

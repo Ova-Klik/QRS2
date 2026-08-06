@@ -47,6 +47,8 @@ public class AuditLog {
         // Cohort
         COHORT_CREATED, COHORT_UPDATED, COHORT_TOGGLED, COHORT_DELETED, FACILITATOR_REASSIGNED,
         // Excuse Request
-        EXCUSE_SUBMITTED, EXCUSE_REVIEWED
+        EXCUSE_SUBMITTED, EXCUSE_REVIEWED,
+        // Report Export
+        PROJECTION_REPORT_DOWNLOADED
     }
 }

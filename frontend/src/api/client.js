@@ -43,14 +43,15 @@ export function downloadBlob(res, fallbackName = 'download') {
   const disposition = res.headers?.['content-disposition'] || ''
   const match = disposition.match(/filename="?([^"]+)"?/)
   const filename = match ? match[1] : fallbackName
-  const url = window.URL.createObjectURL(new Blob([res.data]))
+  const blob = res.data instanceof Blob ? res.data : new Blob([res.data])
+  const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-  window.URL.revokeObjectURL(url)
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000)
 }
 
 // ── Typed API calls ──────────────────────────────────────
@@ -148,8 +149,9 @@ export const studentApi = {
 }
 
 export const publicApi = {
-  listCohorts:    ()                  => api.get('/public/cohorts'),
-  getQrSession:   (cohortId, origin)  => api.get(`/public/qr-session/${cohortId}?origin=${encodeURIComponent(origin || '')}`),
-  getTodaySummary:(cohortId)          => api.get(`/public/today-summary/${cohortId}`),
-  getSettings:    ()                  => api.get('/public/settings'),
+  listCohorts:            ()                  => api.get('/public/cohorts'),
+  getQrSession:           (cohortId, origin)  => api.get(`/public/qr-session/${cohortId}?origin=${encodeURIComponent(origin || '')}`),
+  getTodaySummary:        (cohortId)          => api.get(`/public/today-summary/${cohortId}`),
+  getSettings:            ()                  => api.get('/public/settings'),
+  exportProjectionReport: (cohortId, date)    => api.get(`/public/projection/export/${cohortId}`, { params: { date, format: 'xlsx' }, responseType: 'blob' }),
 }

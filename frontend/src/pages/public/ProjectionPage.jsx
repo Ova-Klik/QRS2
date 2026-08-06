@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { publicApi } from '../../api/client'
+import { publicApi, facilitatorApi, downloadBlob } from '../../api/client'
 import { useSchool } from '../../context/SchoolContext'
 import toast from 'react-hot-toast'
 import { useTheme } from '../../context/ThemeContext'
@@ -53,10 +53,39 @@ export function ProjectionPage() {
   const [session, setSession]       = useState(null)
   const [summary, setSummary]       = useState(null)
   const [loading, setLoading]       = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [totpCountdown, setTotpCountdown] = useState(10)
   const [liveRemaining, setLiveRemaining] = useState(0)
   const [isMobile, setIsMobile]     = useState(false)
   const expiresAtRef = useRef(null)
+
+  const handleDownloadReport = async () => {
+    if (!selectedCohort) {
+      toast.error('No cohort selected')
+      return
+    }
+    setDownloading(true)
+    try {
+      const todayStr = new Date().toLocaleDateString('en-CA')
+      const res = await publicApi.exportProjectionReport(selectedCohort, todayStr)
+      downloadBlob(res, `attendance_report_${selectedCohort}_${todayStr}.xlsx`)
+      toast.success('Attendance report downloaded')
+    } catch (err) {
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          const json = JSON.parse(text)
+          toast.error(json.message || 'Failed to download report')
+        } catch {
+          toast.error('Failed to download report')
+        }
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to download report')
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -215,6 +244,17 @@ export function ProjectionPage() {
             style={{ background: C.controlBg, color: C.fg, border: `1px solid ${C.controlBorder}` }}
           >
             ⛶ Fullscreen
+          </button>
+
+          <button
+            onClick={handleDownloadReport}
+            disabled={downloading}
+            title="Download Attendance Report for currently displayed cohort"
+            className="px-3 py-2 rounded-md text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center gap-1.5"
+            style={{ background: '#2563eb', color: '#ffffff', border: '1px solid #1d4ed8' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            {downloading ? 'Downloading...' : 'Download Attendance Report'}
           </button>
 
           <a

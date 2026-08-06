@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { facilitatorApi } from '../../api/client'
+import { facilitatorApi, downloadBlob } from '../../api/client'
 import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Select, Textarea, Modal, Pagination, Input } from '../../components/common/UI'
 import { useSchool } from '../../context/SchoolContext'
 import toast from 'react-hot-toast'
@@ -512,24 +512,19 @@ export function FacilitatorReports() {
 
   useEffect(() => { load() }, [load])
 
-  const exportCSV = async () => {
+  const exportExcel = async () => {
     try {
       const res = await facilitatorApi.exportReports({
         cohortId: selected || undefined,
         q: debouncedQ || undefined,
         date,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        format: 'csv'
+        format: 'xlsx'
       })
-      const blob = new Blob([res.data], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `attendance_report_${date}.csv`
-      a.click()
-      toast.success('CSV Report exported')
+      downloadBlob(res, `attendance_report_${date}.xlsx`)
+      toast.success('Excel Report exported')
     } catch {
-      toast.error('Failed to export CSV')
+      toast.error('Failed to export Excel report')
     }
   }
 
@@ -545,7 +540,7 @@ export function FacilitatorReports() {
   return (
     <>
       <PageHeader title="Reports" subtitle="Attendance data for your assigned cohorts"
-        actions={<Button variant="outline" size="sm" onClick={exportCSV}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV</Button>} />
+        actions={<Button variant="outline" size="sm" onClick={exportExcel}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export Excel</Button>} />
       <div className="p-4 sm:p-6 animate-fade-in">
         {isWeekendSelected() && (
           <Alert type="warning" className="mb-4"><strong>Weekend Selected:</strong> No attendance scheduled for Saturdays and Sundays.</Alert>

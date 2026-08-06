@@ -600,32 +600,8 @@ public class CohortService {
             );
         }).collect(Collectors.toList());
 
-        // Sort all records across cohort by Status Priority (PRESENT -> LATE -> ABSENT -> EXCUSED)
-        // and by markedAt DESCENDING for attended students before pagination
-        allRecords.sort((r1, r2) -> {
-            int rank1 = getStatusPriorityRank(r1.getStatus());
-            int rank2 = getStatusPriorityRank(r2.getStatus());
-            if (rank1 != rank2) {
-                return Integer.compare(rank1, rank2);
-            }
-
-            if (rank1 == 1 || rank1 == 2) {
-                Instant t1 = r1.getMarkedAt();
-                Instant t2 = r2.getMarkedAt();
-                if (t1 != null && t2 != null) {
-                    int cmp = t2.compareTo(t1);
-                    if (cmp != 0) return cmp;
-                } else if (t1 != null) {
-                    return -1;
-                } else if (t2 != null) {
-                    return 1;
-                }
-            }
-
-            String n1 = r1.getStudentName() != null ? r1.getStudentName() : "";
-            String n2 = r2.getStudentName() != null ? r2.getStudentName() : "";
-            return n1.compareToIgnoreCase(n2);
-        });
+        // Two-tier sorting: Attended (Early/Present/Late) ordered by markedAt ASCENDING (earliest first), Absent/Excused sorted A-Z by full name
+        AttendanceService.sortFacilitatorAttendanceRecords(allRecords);
 
         // Pagination for sorted student records
         int safeSize = Math.min(200, Math.max(1, size));
