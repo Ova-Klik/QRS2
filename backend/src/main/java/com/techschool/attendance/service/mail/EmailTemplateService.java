@@ -145,9 +145,28 @@ public class EmailTemplateService {
                        .replace("{{ACTION_URL}}", resetUrl);
     }
 
-    private String cleanUrl(String url) {
-        if (url == null || url.isBlank()) return "http://localhost:5173";
-        String trimmed = url.trim();
+    private String cleanUrl(String rawUrl) {
+        String envUrl = System.getenv("APP_FRONTEND_URL");
+        if (envUrl == null || envUrl.isBlank()) {
+            envUrl = System.getenv("FRONTEND_URL");
+        }
+        if (envUrl == null || envUrl.isBlank()) {
+            envUrl = System.getenv("CLIENT_URL");
+        }
+
+        String targetUrl = (envUrl != null && !envUrl.isBlank()) ? envUrl : rawUrl;
+
+        // In production cloud environments (e.g., Render), prevent fallback to localhost
+        boolean isCloudProd = System.getenv("RENDER") != null || System.getenv("RENDER_SERVICE_ID") != null;
+        if (isCloudProd && (targetUrl == null || targetUrl.isBlank() || targetUrl.contains("localhost"))) {
+            targetUrl = "https://qrsattendance.netlify.app";
+        }
+
+        if (targetUrl == null || targetUrl.isBlank()) {
+            targetUrl = "http://localhost:5173";
+        }
+
+        String trimmed = targetUrl.trim();
         while (trimmed.endsWith("/")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
