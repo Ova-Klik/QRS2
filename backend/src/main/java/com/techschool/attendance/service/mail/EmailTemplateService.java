@@ -1,8 +1,10 @@
 package com.techschool.attendance.service.mail;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class EmailTemplateService {
 
@@ -11,6 +13,7 @@ public class EmailTemplateService {
 
     public String buildVerificationEmailHtml(String recipientName, String token) {
         String baseUrl = cleanUrl(appFrontendUrl);
+        log.info("Constructing verification email link using base frontend URL: {}", baseUrl);
         String verifyUrl = baseUrl + "/verify-email?token=" + token;
         String name = (recipientName != null && !recipientName.isBlank()) ? recipientName.trim() : "User";
 
@@ -77,6 +80,7 @@ public class EmailTemplateService {
 
     public String buildPasswordResetEmailHtml(String recipientName, String token) {
         String baseUrl = cleanUrl(appFrontendUrl);
+        log.info("Constructing password reset email link using base frontend URL: {}", baseUrl);
         String resetUrl = baseUrl + "/reset-password?token=" + token;
         String name = (recipientName != null && !recipientName.isBlank()) ? recipientName.trim() : "User";
 
