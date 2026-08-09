@@ -374,7 +374,7 @@ public class AttendanceService {
             int excused = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
             int holidayCount = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.HOLIDAY).count();
             int absentMarked = (int) dayRecs.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int absent = weekend || isHoliday
+            int absent = (weekend || isHoliday)
                     ? 0
                     : Math.max(0, totalStudents - dayRecs.size()) + absentMarked;
 
@@ -529,8 +529,8 @@ public class AttendanceService {
                 if (curAtt > maxAtt) maxAtt = curAtt;
             } else if (st == Attendance.AttendanceStatus.EXCUSED || isExcused) {
                 excused++;
-                // excused days neither extend nor break streaks
             } else if (st == Attendance.AttendanceStatus.HOLIDAY) {
+                schoolDays--;
                 holiday++;
             } else {
                 absent++; curAbs++; curAtt = 0;
@@ -691,13 +691,17 @@ public class AttendanceService {
             Device d = a.getDeviceId() != null ? devices.get(a.getDeviceId()) : null;
             String deviceUsed = d != null
                     ? (d.getFingerprint() != null ? d.getFingerprint() : d.getImei()) : null;
+            boolean isWeekend = a.getDate() != null && a.getDate().getDayOfWeek().getValue() >= 6;
+            String status = isWeekend && a.getStatus() == Attendance.AttendanceStatus.ABSENT
+                    ? "WEEKEND"
+                    : (a.getStatus() != null ? a.getStatus().name() : null);
             return new AttendanceDto.AttendanceRecord(
                     a.getId(), a.getStudentId(),
                     s != null ? s.getName() : a.getStudentId(),
                     s != null ? s.getRegistrationNumber() : null,
                     a.getCohortId(), c != null ? c.getName() : a.getCohortId(),
                     a.getDate(), a.getMarkedAt(),
-                    a.getStatus() != null ? a.getStatus().name() : null,
+                    status,
                     a.isManual(), a.getManualReason(), deviceUsed);
         }).collect(Collectors.toList());
     }
@@ -761,7 +765,13 @@ public class AttendanceService {
             boolean manual = false;
             String manualReason = null;
 
-            if (a != null) {
+            boolean isWeekend = date.getDayOfWeek().getValue() >= 6;
+            if (isWeekend) {
+                status = (a != null && a.getStatus() != null && a.getStatus() != Attendance.AttendanceStatus.ABSENT) ? a.getStatus().name() : "WEEKEND";
+                markedAt = a != null ? a.getMarkedAt() : null;
+                manual = a != null && a.isManual();
+                manualReason = a != null ? a.getManualReason() : null;
+            } else if (a != null) {
                 status = a.getStatus() != null ? a.getStatus().name() : "ABSENT";
                 markedAt = a.getMarkedAt();
                 manual = a.isManual();
@@ -769,8 +779,6 @@ public class AttendanceService {
             } else if (exc != null) {
                 status = "EXCUSED";
                 manualReason = "Approved excuse: " + exc.getReason();
-            } else if (date.getDayOfWeek().getValue() >= 6) {
-                status = "WEEKEND";
             } else {
                 status = "ABSENT";
             }
@@ -838,8 +846,10 @@ public class AttendanceService {
             ExcuseRequest exc = excuseByStudent.get(s.getId());
 
             boolean isWeekend = date.getDayOfWeek().getValue() >= 6;
-            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : (isWeekend ? "WEEKEND" : "ABSENT"))
-                          : (exc != null ? "EXCUSED" : (isWeekend ? "WEEKEND" : "ABSENT"));
+            String status = isWeekend
+                    ? ((a != null && a.getStatus() != null && a.getStatus() != Attendance.AttendanceStatus.ABSENT) ? a.getStatus().name() : "WEEKEND")
+                    : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
+                                 : (exc != null ? "EXCUSED" : "ABSENT"));
 
             return new AttendanceDto.AttendanceRecord(
                     a != null ? a.getId() : null,
@@ -977,8 +987,10 @@ public class AttendanceService {
             ExcuseRequest exc = excuseByStudent.get(s.getId());
 
             boolean isWeekend = date.getDayOfWeek().getValue() >= 6;
-            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : (isWeekend ? "WEEKEND" : "ABSENT"))
-                          : (exc != null ? "EXCUSED" : (isWeekend ? "WEEKEND" : "ABSENT"));
+            String status = isWeekend
+                    ? ((a != null && a.getStatus() != null && a.getStatus() != Attendance.AttendanceStatus.ABSENT) ? a.getStatus().name() : "WEEKEND")
+                    : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
+                                 : (exc != null ? "EXCUSED" : "ABSENT"));
 
             return new AttendanceDto.AttendanceRecord(
                     a != null ? a.getId() : null,

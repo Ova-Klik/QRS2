@@ -34,6 +34,31 @@ public class AuthDto {
     }
 
     @Data
+    public static class ResetPasswordWithTokenRequest {
+        @NotBlank
+        private String token;
+        @NotBlank @Size(min = 6)
+        private String newPassword;
+    }
+
+    @Data
+    public static class VerifyEmailRequest {
+        @NotBlank
+        private String token;
+    }
+
+    @Data
+    public static class ResendVerificationRequest {
+        @NotBlank @Email
+        private String email;
+    }
+
+    @Data @AllArgsConstructor @NoArgsConstructor
+    public static class MessageResponse {
+        private String message;
+    }
+
+    @Data
     public static class ResetPasswordRequest {
         @NotBlank
         private String userId;

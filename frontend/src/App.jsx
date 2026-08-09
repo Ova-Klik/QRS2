@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/layout/AppLayout'
 import RegisterPage from './pages/auth/RegisterPage'
 import RegisterFacilitatorPage from './pages/auth/RegisterFacilitatorPage'
+import VerifyEmailPage from './pages/auth/VerifyEmailPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import { StudentDashboard, StudentScan, StudentHistory, StudentExcuse } from './pages/student/StudentPages'
 import { FacilitatorDashboard, FacilitatorQR, FacilitatorManual, FacilitatorReports, FacilitatorExcuses } from './pages/facilitator/FacilitatorPages'
 import { AdminDashboard, AdminStudents, AdminFacilitators, AdminCohorts, AdminDevices, AdminAudit, AdminAnalytics } from './pages/admin/AdminPages'
@@ -52,6 +54,8 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register/student" element={<RegisterPage />} />
         <Route path="/register/facilitator" element={<RegisterFacilitatorPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/project" element={<ProjectionPage />} />
         <Route path="/tester" element={<TesterPage />} />
         <Route path="/" element={<LandingPage />} />

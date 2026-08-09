@@ -234,7 +234,7 @@ export function AdminCalendar() {
                 <Table
                   columns={[
                     { key: 'studentName', label: 'Student', strong: true },
-                    { key: 'status', label: 'Status', render: v => <Badge status={v === 'PRESENT' ? 'PRESENT' : v === 'LATE' ? 'LATE' : v === 'EXCUSED' ? 'EXCUSED' : 'ABSENT'} /> },
+                    { key: 'status', label: 'Status', render: v => <Badge status={v} /> },
                   ]}
                   rows={dayRecords.content || []}
                   emptyMessage="No records for this day"

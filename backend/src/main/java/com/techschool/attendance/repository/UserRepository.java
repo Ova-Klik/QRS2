@@ -17,4 +17,6 @@ public interface UserRepository extends MongoRepository<User, String> {
     long countByCohortIdAndRole(String cohortId, User.Role role);
     long countByRole(User.Role role);
     boolean existsByEmail(String email);
+    Optional<User> findByVerificationToken(String verificationToken);
+    Optional<User> findByPasswordResetToken(String passwordResetToken);
 }

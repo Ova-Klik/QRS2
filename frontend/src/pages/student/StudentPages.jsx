@@ -29,11 +29,12 @@ export function StudentDashboard() {
           ? <Alert type="success"><strong>Attendance recorded today</strong> — You are marked <strong>{d.todayStatus?.toLowerCase()}</strong>.</Alert>
           : <Alert type="info"><strong>Attendance not yet recorded today.</strong> Go to Scan QR Code to mark attendance.</Alert>
         }
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
           <StatCard label="Attendance Rate" value={`${Math.round(d.rate || 0)}%`} progress={d.rate} />
-          <StatCard label="Present"  value={d.present  || 0} badge="On time"  badgeColor="green" />
-          <StatCard label="Late"     value={d.late     || 0} badge="After 7:30" badgeColor="yellow" />
-          <StatCard label="Absent"   value={d.absent   || 0} badge="No record"  badgeColor="red" color={d.absent > 0 ? 'var(--red)' : undefined} />
+          <StatCard label="Total Days" value={d.total || 0} />
+          <StatCard label="Present"  value={(d.present || 0) + (d.late || 0)} badge="Attended"  badgeColor="green" />
+          <StatCard label="Days Absent" value={d.absent || 0} badge="Absences" badgeColor="red" color={d.absent > 0 ? 'var(--red)' : undefined} />
+          <StatCard label="Excused"  value={d.excused || 0} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Card>
@@ -330,11 +331,16 @@ export function StudentScan() {
 // ── History ──────────────────────────────────────────────
 export function StudentHistory() {
   const [records, setRecords] = useState([])
+  const [stats, setStats]     = useState(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage]       = useState(0)
   const [size, setSize]       = useState(20)
   const [total, setTotal]     = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+
+  useEffect(() => {
+    studentApi.dashboard().then(r => setStats(r.data)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -346,11 +352,6 @@ export function StudentHistory() {
   }, [page, size])
 
   if (loading) return <LoadingPage />
-
-  const present = records.filter(r => r.status === 'PRESENT').length
-  const late    = records.filter(r => r.status === 'LATE').length
-  const absent  = records.filter(r => r.status === 'ABSENT').length
-  const excused = records.filter(r => r.status === 'EXCUSED').length
 
   const cols = [
     { key: 'date',         label: 'Date',     strong: true, render: v => v ? format(new Date(v), 'dd MMM yyyy') : '—' },
@@ -365,11 +366,12 @@ export function StudentHistory() {
     <>
       <PageHeader title="My Attendance" subtitle={`${total} records`} />
       <div className="p-4 sm:p-6 animate-fade-in">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          <StatCard label="Present" value={present} badgeColor="green" />
-          <StatCard label="Late"    value={late}    badgeColor="yellow" />
-          <StatCard label="Absent"  value={absent}  badgeColor="red" />
-          <StatCard label="Excused" value={excused} />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+          <StatCard label="Attendance Rate" value={`${Math.round(stats?.rate || 0)}%`} progress={stats?.rate} />
+          <StatCard label="Total Days" value={stats?.total || 0} />
+          <StatCard label="Present"  value={(stats?.present || 0) + (stats?.late || 0)} badgeColor="green" />
+          <StatCard label="Days Absent" value={stats?.absent || 0} badge="Absences" badgeColor="red" color={stats?.absent > 0 ? 'var(--red)' : undefined} />
+          <StatCard label="Excused"  value={stats?.excused || 0} />
         </div>
         <Card className="overflow-x-auto">
           <Table columns={cols} rows={records} emptyMessage="No attendance records yet" />

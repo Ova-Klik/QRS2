@@ -57,14 +57,18 @@ export function downloadBlob(res, fallbackName = 'download') {
 // ── Typed API calls ──────────────────────────────────────
 
 export const authApi = {
-  login:          (email, password)   => api.post('/auth/login', { email, password }),
-  me:             ()                  => api.get('/auth/me'),
-  changePassword: (body)              => api.post('/auth/change-password', body),
-  registerStudent:    (body)          => api.post('/auth/register/student', body),
-  registerFacilitator:(body)          => api.post('/auth/register/facilitator', body),
-  webauthnChallenge: ()               => api.post('/auth/webauthn/challenge'),
-  webauthnRegister:  (body)           => api.post('/auth/webauthn/register', body),
-  webauthnVerify:    (body)           => api.post('/auth/webauthn/verify', body),
+  login:              (email, password) => api.post('/auth/login', { email, password }),
+  me:                 ()                => api.get('/auth/me'),
+  changePassword:     (body)            => api.post('/auth/change-password', body),
+  registerStudent:    (body)            => api.post('/auth/register/student', body),
+  registerFacilitator:(body)            => api.post('/auth/register/facilitator', body),
+  verifyEmail:        (token)           => api.post('/auth/verify-email', { token }),
+  resendVerification: (email)           => api.post('/auth/resend-verification', { email }),
+  forgotPassword:     (email)           => api.post('/auth/forgot-password', { email }),
+  resetPassword:      (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),
+  webauthnChallenge:  ()                => api.post('/auth/webauthn/challenge'),
+  webauthnRegister:   (body)            => api.post('/auth/webauthn/register', body),
+  webauthnVerify:     (body)            => api.post('/auth/webauthn/verify', body),
 }
 
 export const adminApi = {

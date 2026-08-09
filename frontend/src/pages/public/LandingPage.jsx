@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSchool } from '../../context/SchoolContext'
 import { useTheme } from '../../context/ThemeContext'
-import { Input, Button, Alert } from '../../components/common/UI'
+import { Input, Button, Alert, Modal } from '../../components/common/UI'
+import { authApi } from '../../api/client'
 import toast from 'react-hot-toast'
 
 export default function LandingPage() {
@@ -18,9 +19,31 @@ export default function LandingPage() {
     const qrs = searchParams.get('qrs')
     if (qrs) localStorage.setItem('qrs_scan_token', qrs)
   }, [searchParams])
-  const [showPw, setShowPw] = useState(false)
+  
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Forgot password modal state
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotMessage, setForgotMessage] = useState('')
+
+  const handleForgotSubmit = async e => {
+    e.preventDefault()
+    if (!forgotEmail) return
+    setForgotLoading(true)
+    setForgotMessage('')
+    try {
+      const res = await authApi.forgotPassword(forgotEmail)
+      setForgotOpen(false)
+      toast.success(res.data?.message || 'If an account exists with that email, a password reset link has been sent!')
+    } catch (err) {
+      setForgotMessage(err.response?.data?.message || 'Failed to send reset link. Please check your email and try again.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -101,6 +124,15 @@ export default function LandingPage() {
             <form onSubmit={handleSubmit}>
               <Input label="Email" type="email" placeholder="you@school.edu" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
               <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
+              <div className="flex justify-end mb-4 -mt-1">
+                <button
+                  type="button"
+                  onClick={() => { setForgotOpen(true); setForgotEmail(form.email); setForgotMessage(''); }}
+                  className="text-xs text-red font-medium hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <Button type="submit" loading={loading} className="w-full justify-center mb-3">Sign in</Button>
             </form>
             <p className="text-center text-[13px] text-gray-400">
@@ -109,6 +141,32 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <Modal open={forgotOpen} onClose={() => setForgotOpen(false)} title="Reset Your Password">
+        <p className="text-xs text-gray-500 mb-4">
+          Enter your registered email address below and we will send you a password reset link.
+        </p>
+        {forgotMessage && <Alert type="error">{forgotMessage}</Alert>}
+        <form onSubmit={handleForgotSubmit} className="space-y-4">
+          <Input
+            label="Email Address"
+            type="email"
+            required
+            placeholder="you@school.edu"
+            value={forgotEmail}
+            onChange={e => setForgotEmail(e.target.value)}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={forgotLoading}>
+              Send Reset Link
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Footer */}
       <div className="text-center px-6 py-5 border-t border-gray-100 text-xs text-gray-400">

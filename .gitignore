@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.example
 *.log
 .vite/
 backend/target/
@@ -8,3 +9,7 @@ backend/.idea/
 backend/*.iml
 nginx/ssl/
 .DS_Store
+QR_ATTENDANCE_SYSTEM_DOCUMENTATION.md
+QR_ATTENDANCE_SYSTEM_DOCUMENTATION.pdf
+QR_ATTENDANCE_SYSTEM_DOCUMENTATION.docx
+

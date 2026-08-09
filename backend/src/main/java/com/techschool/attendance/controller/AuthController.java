@@ -54,6 +54,38 @@ public class AuthController {
                 authService.registerFacilitator(request, http.getRemoteAddr()));
     }
 
+    // ── Email Verification & Password Reset (Public) ─────
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<AuthDto.MessageResponse> verifyEmailPost(
+            @Valid @RequestBody AuthDto.VerifyEmailRequest request) {
+        return ResponseEntity.ok(authService.verifyEmail(request.getToken()));
+    }
+
+    @GetMapping("/verify-email")
+    public ResponseEntity<AuthDto.MessageResponse> verifyEmailGet(
+            @RequestParam("token") String token) {
+        return ResponseEntity.ok(authService.verifyEmail(token));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<AuthDto.MessageResponse> resendVerification(
+            @Valid @RequestBody AuthDto.ResendVerificationRequest request) {
+        return ResponseEntity.ok(authService.resendVerificationEmail(request.getEmail()));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthDto.MessageResponse> forgotPassword(
+            @Valid @RequestBody AuthDto.ForgotPasswordRequest request) {
+        return ResponseEntity.ok(authService.forgotPassword(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthDto.MessageResponse> resetPassword(
+            @Valid @RequestBody AuthDto.ResetPasswordWithTokenRequest request) {
+        return ResponseEntity.ok(authService.resetPasswordWithToken(request));
+    }
+
     // ── WebAuthn Biometric ──────────────────────────────
 
     @PostMapping("/webauthn/challenge")

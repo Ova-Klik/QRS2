@@ -56,6 +56,21 @@ public class User {
     private boolean active = true;
     private boolean passwordResetRequired = false;
 
+    // Email verification
+    private Boolean emailVerified = true;
+    @Indexed
+    private String verificationToken;
+    private Instant verificationTokenExpiry;
+
+    public boolean isEmailVerified() {
+        return emailVerified == null || emailVerified;
+    }
+
+    // Password reset
+    @Indexed
+    private String passwordResetToken;
+    private Instant passwordResetTokenExpiry;
+
     @CreatedDate
     private Instant createdAt;
 

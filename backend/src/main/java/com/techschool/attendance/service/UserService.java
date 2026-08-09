@@ -482,12 +482,15 @@ public class UserService {
         List<Attendance> all = attendanceRepository.findByStudentIdIn(ids);
         Map<String, UserDto.UserResponse.AttendanceSummary> out = new HashMap<>();
         all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
-            int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-            int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-            int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-            double rate = att.size() > 0 ? (double) (present + late) / att.size() * 100 : 0;
-            out.put(id, new UserDto.UserResponse.AttendanceSummary(att.size(), present, late, absent, excused, rate));
+            List<Attendance> validAtt = att.stream()
+                    .filter(a -> a.getDate() != null && a.getDate().getDayOfWeek().getValue() < 6)
+                    .collect(Collectors.toList());
+            int present = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+            int late = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
+            int absent = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
+            int excused = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+            double rate = validAtt.size() > 0 ? (double) (present + late) / validAtt.size() * 100 : 0;
+            out.put(id, new UserDto.UserResponse.AttendanceSummary(validAtt.size(), present, late, absent, excused, rate));
         });
         return out;
     }
@@ -671,16 +674,16 @@ public class UserService {
 
         // Attendance summary
         if (user.getRole() == User.Role.STUDENT) {
-            List<Attendance> att = attendanceRepository.findByStudentId(user.getId());
-            int present = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-            int late = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-            int absent = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int excused = (int) att.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-            double rate = att.size() > 0 ? (double)(present + late) / att.size() * 100 : 0;
+            AnalyticsDto.StudentAnalytics analytics = attendanceService.buildStudentAnalytics(user.getId());
             resp.setAttendanceSummary(new UserDto.UserResponse.AttendanceSummary(
-                    att.size(), present, late, absent, excused, rate));
+                    analytics.getTotalRecords(),
+                    analytics.getPresent(),
+                    analytics.getLate(),
+                    analytics.getAbsent(),
+                    analytics.getExcused(),
+                    analytics.getAttendanceRate()));
             if (includeAnalytics) {
-                resp.setAnalytics(attendanceService.buildStudentAnalytics(user.getId()));
+                resp.setAnalytics(analytics);
             }
         }
         return resp;

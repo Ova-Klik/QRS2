@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSchool } from '../../context/SchoolContext'
 import { useTheme } from '../../context/ThemeContext'
-import { Input, Button, Alert } from '../../components/common/UI'
+import { Input, Button, Alert, Modal } from '../../components/common/UI'
+import { authApi } from '../../api/client'
 import toast from 'react-hot-toast'
 
 const DEMO = [
@@ -20,6 +21,28 @@ export default function TesterPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Forgot password modal state
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotMessage, setForgotMessage] = useState('')
+
+  const handleForgotSubmit = async e => {
+    e.preventDefault()
+    if (!forgotEmail) return
+    setForgotLoading(true)
+    setForgotMessage('')
+    try {
+      const res = await authApi.forgotPassword(forgotEmail)
+      setForgotOpen(false)
+      toast.success(res.data?.message || 'If an account exists with that email, a password reset link has been sent!')
+    } catch (err) {
+      setForgotMessage(err.response?.data?.message || 'Failed to send reset link. Please check your email and try again.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -77,9 +100,44 @@ export default function TesterPage() {
           <form onSubmit={handleSubmit}>
             <Input label="Email" type="email" placeholder="you@school.edu" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
             <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
+            <div className="flex justify-end mb-4 -mt-1">
+              <button
+                type="button"
+                onClick={() => { setForgotOpen(true); setForgotEmail(form.email); setForgotMessage(''); }}
+                className="text-xs text-red font-medium hover:underline bg-transparent border-0 p-0 cursor-pointer"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <Button type="submit" loading={loading} className="w-full justify-center">Sign in</Button>
           </form>
         </div>
+
+        {/* Forgot Password Modal */}
+        <Modal open={forgotOpen} onClose={() => setForgotOpen(false)} title="Reset Your Password">
+          <p className="text-xs text-gray-500 mb-4">
+            Enter your registered email address below and we will send you a password reset link.
+          </p>
+          {forgotMessage && <Alert type="error">{forgotMessage}</Alert>}
+          <form onSubmit={handleForgotSubmit} className="space-y-4">
+            <Input
+              label="Email Address"
+              type="email"
+              required
+              placeholder="you@school.edu"
+              value={forgotEmail}
+              onChange={e => setForgotEmail(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={forgotLoading}>
+                Send Reset Link
+              </Button>
+            </div>
+          </form>
+        </Modal>
 
         {/* Seeded Demo Credentials */}
         <div className="bg-white border border-gray-100 rounded-lg p-6 shadow">

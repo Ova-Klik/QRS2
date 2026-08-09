@@ -427,7 +427,7 @@ export function FacilitatorManual() {
                   { key: 'studentName',        label: 'Student', strong: true },
                   { key: 'registrationNumber', label: 'Reg No', render: v => <span className="font-mono text-xs text-gray-500">{v || '—'}</span> },
                   { key: 'cohortName',         label: 'Cohort' },
-                  { key: 'status',             label: 'Status',  render: v => <Badge status={v || 'ABSENT'} /> },
+                  { key: 'status',             label: 'Status',  render: v => <Badge status={v} /> },
                   { key: 'markedAt',           label: 'Time',    render: v => v ? format(new Date(v), 'HH:mm') : '—' },
                   { key: 'manualReason',       label: 'Note',    render: v => v ? <span className="text-[11px] text-gray-400">{v}</span> : null },
                   { key: 'action',             label: '',        render: (_, row) => (

@@ -32,7 +32,19 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         if (!seedData) return;
         if (userRepository.count() > 0) {
-            log.info("Data already seeded — skipping");
+            userRepository.findAll().forEach(u -> {
+                if (u.getEmailVerified() == null) {
+                    u.setEmailVerified(true);
+                    userRepository.save(u);
+                }
+            });
+            // Clean up any legacy attendance records created on Saturdays or Sundays with status ABSENT
+            attendanceRepository.findAll().forEach(att -> {
+                if (att.getDate() != null && att.getDate().getDayOfWeek().getValue() >= 6 && att.getStatus() == Attendance.AttendanceStatus.ABSENT) {
+                    attendanceRepository.delete(att);
+                }
+            });
+            log.info("Data already seeded — verification flags checked and weekend absences purged");
             return;
         }
 
@@ -45,6 +57,7 @@ public class DataSeeder implements CommandLineRunner {
         admin.setPhone("+234 800 000 0001");
         admin.setPasswordHash(passwordEncoder.encode("Admin@1234"));
         admin.setRole(User.Role.SUPER_ADMIN);
+        admin.setEmailVerified(true);
         userRepository.save(admin);
 
         // ── Facilitators ──
@@ -54,6 +67,7 @@ public class DataSeeder implements CommandLineRunner {
         fac1.setPhone("+234 801 234 5678");
         fac1.setPasswordHash(passwordEncoder.encode("Fac@1234"));
         fac1.setRole(User.Role.FACILITATOR);
+        fac1.setEmailVerified(true);
 
         User fac2 = new User();
         fac2.setName("Dr. Sarah Mensah");
@@ -61,6 +75,7 @@ public class DataSeeder implements CommandLineRunner {
         fac2.setPhone("+234 802 345 6789");
         fac2.setPasswordHash(passwordEncoder.encode("Fac@1234"));
         fac2.setRole(User.Role.FACILITATOR);
+        fac2.setEmailVerified(true);
 
         // Save facilitators first to get IDs
         fac1 = userRepository.save(fac1);
@@ -104,6 +119,7 @@ public class DataSeeder implements CommandLineRunner {
             student.setRole(User.Role.STUDENT);
             student.setCohortId(s[3]);
             student.setRegistrationNumber(s[4]);
+            student.setEmailVerified(true);
             User saved = userRepository.save(student);
 
             // Register device for each student
@@ -146,6 +162,9 @@ public class DataSeeder implements CommandLineRunner {
         for (int si = 0; si < allStudents.size(); si++) {
             User student = allStudents.get(si);
             for (int di = 0; di < dates.length; di++) {
+                if (dates[di].getDayOfWeek().getValue() >= 6) {
+                    continue; // Do not record attendance on Saturdays and Sundays!
+                }
                 Attendance att = new Attendance();
                 att.setStudentId(student.getId());
                 att.setCohortId(student.getCohortId());

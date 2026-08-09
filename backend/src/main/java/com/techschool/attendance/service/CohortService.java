@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.*;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +33,7 @@ public class CohortService {
     private final AuditService auditService;
     private final MongoTemplate mongoTemplate;
     private final ExcuseRequestRepository excuseRepository;
+    private final HolidayService holidayService;
 
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone}")
     private String timezone;
@@ -414,9 +416,15 @@ public class CohortService {
      */
     private Map<String, AnalyticsDto.StudentAttendanceStats> aggregateStudentStats(String cohortId) {
         List<AggregationOperation> ops = new ArrayList<>();
+        Document matchDoc = new Document();
         if (cohortId != null && !cohortId.isBlank()) {
-            ops.add(context -> new Document("$match", new Document("cohortId", cohortId)));
+            matchDoc.append("cohortId", cohortId);
         }
+        matchDoc.append("$expr", new Document("$and", List.of(
+                new Document("$ne", List.of(new Document("$dayOfWeek", "$date"), 1)), // 1 = Sunday
+                new Document("$ne", List.of(new Document("$dayOfWeek", "$date"), 7))  // 7 = Saturday
+        )));
+        ops.add(context -> new Document("$match", matchDoc));
         Document group = new Document("_id", "$studentId")
                 .append("total", new Document("$sum", 1))
                 .append("present", new Document("$sum", statusCond("PRESENT")))
@@ -506,7 +514,8 @@ public class CohortService {
             activeCohortIds = assignedCohortIds;
         }
 
-        LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
+        LocalDate today = LocalDate.now(ZoneId.of(timezone));
+        LocalDate date = targetDate != null ? targetDate : today;
         DayOfWeek dow = date.getDayOfWeek();
         boolean isWeekend = dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
 
@@ -581,8 +590,10 @@ public class CohortService {
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
 
-            String status = a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
-                          : (exc != null ? "EXCUSED" : "ABSENT");
+            String status = isWeekend
+                    ? ((a != null && a.getStatus() != null && a.getStatus() != Attendance.AttendanceStatus.ABSENT) ? a.getStatus().name() : "WEEKEND")
+                    : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
+                                 : (exc != null ? "EXCUSED" : "ABSENT"));
 
             return new AttendanceDto.AttendanceRecord(
                     a != null ? a.getId() : null,
@@ -632,23 +643,58 @@ public class CohortService {
     public DashboardDto.StudentStats buildStudentStats(String studentId) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
-        List<Attendance> rawAtt = attendanceRepository.findByStudentId(studentId);
-        List<Attendance> allAtt = rawAtt.stream()
-                .filter(a -> a.getDate() != null && a.getDate().getDayOfWeek().getValue() < 6)
-                .collect(Collectors.toList());
+        String cohortId = student.getCohortId();
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
-        int present = (int) allAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
-        int late = (int) allAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-        int absent = (int) allAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-        int excused = (int) allAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
-        double rate = allAtt.size() > 0 ? (double)(present+late)/allAtt.size()*100 : 0;
+        List<Attendance> all = attendanceRepository.findByStudentIdOrderByDateAsc(studentId);
+        Map<LocalDate, Attendance.AttendanceStatus> statusByDate = all.stream()
+                .collect(Collectors.toMap(Attendance::getDate, Attendance::getStatus, (a, b) -> a, LinkedHashMap::new));
+
+        List<ExcuseRequest> excuses = excuseRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .collect(Collectors.toList());
+
+        LocalDate creationDate = student.getCreatedAt() != null
+                ? ZonedDateTime.ofInstant(student.getCreatedAt(), ZoneId.of(timezone)).toLocalDate() : today;
+        LocalDate earliestAttDate = all.isEmpty() ? creationDate : all.get(0).getDate();
+        LocalDate startDate = creationDate.isBefore(earliestAttDate) ? creationDate : earliestAttDate;
+        if (startDate.isAfter(today)) startDate = today;
+
+        Set<LocalDate> holidays = holidayService.holidayDatesBetween(startDate, today, cohortId);
+
+        int totalDays = 0, present = 0, late = 0, excused = 0, absent = 0;
+
+        for (LocalDate d = startDate; !d.isAfter(today); d = d.plusDays(1)) {
+            if (!holidayService.isSchoolDay(d, holidays)) continue;
+            totalDays++;
+            final LocalDate currDate = d;
+            Attendance.AttendanceStatus st = statusByDate.get(d);
+            boolean isExcused = excuses.stream().anyMatch(e -> e.getStartDate() != null &&
+                    !currDate.isBefore(e.getStartDate()) && !currDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)));
+
+            if (st == Attendance.AttendanceStatus.PRESENT) {
+                present++;
+            } else if (st == Attendance.AttendanceStatus.LATE) {
+                late++;
+            } else if (st == Attendance.AttendanceStatus.EXCUSED || isExcused) {
+                excused++;
+            } else if (st == Attendance.AttendanceStatus.HOLIDAY) {
+                totalDays--;
+            } else {
+                absent++;
+            }
+        }
+
+        int attended = present + late;
+        double rate = (totalDays - excused) > 0 ? (double) attended / (totalDays - excused) * 100.0
+                : (attended > 0 ? 100.0 : 0.0);
+        rate = Math.round(rate * 10.0) / 10.0;
 
         java.util.Optional<Attendance> todayRecord = attendanceRepository.findByStudentIdAndDate(studentId, today);
         boolean markedToday = todayRecord.isPresent();
         String todayStatus = markedToday ? todayRecord.get().getStatus().name() : null;
 
-        List<AttendanceDto.AttendanceRecord> recent = allAtt.stream()
+        List<AttendanceDto.AttendanceRecord> recent = all.stream()
                 .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
                 .limit(10)
                 .map(a -> new AttendanceDto.AttendanceRecord(
@@ -665,7 +711,7 @@ public class CohortService {
                 : new DashboardDto.StudentStats.DeviceStatus(false, null, null);
 
         return new DashboardDto.StudentStats(
-                allAtt.size(), present, late, absent, excused, rate,
+                totalDays, present, late, absent, excused, rate,
                 markedToday, todayStatus, recent, deviceStatus);
     }
 
