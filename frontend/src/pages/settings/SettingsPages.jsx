@@ -926,18 +926,21 @@ export function AdminSettings() {
                   sublabel="ON (default) regenerates QR codes every specified interval. OFF keeps QR code static until session ends."
                 />
               </Section>
-              <Section title="Attendance Rules" last>
+              <Section title="Attendance Security Policies" last>
                 <Toggle
                   checked={netSettings.network_enforce === 'true'}
                   onChange={v => updateNet('network_enforce', v ? 'true' : 'false')}
-                  label="Require School Network"
-                  sublabel="Students must be on the school WiFi to mark attendance"
+                  label="Require School Wi-Fi Network"
+                  sublabel="Students must be connected to the authorized school Wi-Fi network (SSID/IP) to mark attendance"
                 />
                 <Toggle
-                  checked={netSettings.geofence_fallback_enabled === 'true'}
-                  onChange={v => updateNet('geofence_fallback_enabled', v ? 'true' : 'false')}
-                  label="Enable GPS Geofence Fallback"
-                  sublabel="Use location check when network validation is unavailable"
+                  checked={netSettings.geofence_enforce === 'true' || netSettings.geofence_fallback_enabled === 'true'}
+                  onChange={v => {
+                    updateNet('geofence_enforce', v ? 'true' : 'false')
+                    updateNet('geofence_fallback_enabled', v ? 'true' : 'false')
+                  }}
+                  label="Require GPS Geofence Location"
+                  sublabel="Students must be physically within the authorized school campus location perimeter to mark attendance"
                 />
               </Section>
               <Button loading={netSaving} onClick={saveNetwork}>{ICONS.save} Save Policy</Button>

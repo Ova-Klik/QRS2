@@ -162,58 +162,59 @@ public class AttendanceService {
 
     // ── Network & GPS Geofence Validation ────────────────
     private void validateSchoolNetwork(QrDto.ScanRequest request, String studentId) {
-        String enforceVal = getSetting("network_enforce", "false");
-        if (!Boolean.parseBoolean(enforceVal)) return;
+        boolean wifiEnforce = Boolean.parseBoolean(getSetting("network_enforce", "false"));
+        boolean geofenceEnforce = Boolean.parseBoolean(getSetting("geofence_enforce", "false")) ||
+                Boolean.parseBoolean(getSetting("geofence_fallback_enabled", "false"));
 
-        String schoolSsid = getSetting("school_wifi_ssid", schoolWifiSsid);
-        String ipRange = getSetting("school_ip_range", schoolIpRange);
+        // 1. Wi-Fi Enforcement Check
+        if (wifiEnforce) {
+            String schoolSsid = getSetting("school_wifi_ssid", schoolWifiSsid);
+            String ipRange = getSetting("school_ip_range", schoolIpRange);
 
-        boolean onSchoolNetwork = false;
-
-        if (request.getNetworkSSID() != null && !request.getNetworkSSID().isEmpty()) {
-            if (schoolSsid.equalsIgnoreCase(request.getNetworkSSID())) {
-                onSchoolNetwork = true;
-            }
-        }
-
-        if (!onSchoolNetwork && request.getClientIP() != null) {
-            onSchoolNetwork = isIpInSchoolRange(request.getClientIP(), ipRange);
-        }
-
-        if (onSchoolNetwork) return; // Passed via WiFi/IP network!
-
-        // If network check fails, test GPS Geofence Fallback!
-        boolean gpsFallbackEnabled = Boolean.parseBoolean(getSetting("geofence_fallback_enabled", "true"));
-        if (gpsFallbackEnabled) {
-            if (request.getLatitude() != null && request.getLongitude() != null) {
-                double schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
-                double schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
-                double maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
-
-                double distanceMeters = calculateHaversineDistanceMeters(
-                        request.getLatitude(), request.getLongitude(), schoolLat, schoolLng);
-
-                if (distanceMeters <= maxRadiusMeters) {
-                    log.info("Student {} passed network check via GPS Geofence Fallback! Distance: {}m",
-                            studentId, Math.round(distanceMeters));
-                    return; // Passed via GPS Geofence!
-                } else {
-                    log.warn("Student {} failed GPS Geofence Fallback! Distance: {}m (max allowed: {}m)",
-                            studentId, Math.round(distanceMeters), maxRadiusMeters);
-                    throw AppException.forbidden(
-                            "Network validation failed and your GPS location (" + Math.round(distanceMeters) +
-                            "m away) is outside the school campus geofence perimeter (" + (int)maxRadiusMeters + "m max).");
+            boolean onSchoolNetwork = false;
+            if (request.getNetworkSSID() != null && !request.getNetworkSSID().trim().isEmpty()) {
+                if (schoolSsid.equalsIgnoreCase(request.getNetworkSSID().trim())) {
+                    onSchoolNetwork = true;
                 }
-            } else {
-                throw AppException.forbidden(
-                        "School WiFi network disconnected. Please enable device GPS location services to mark attendance on campus.");
             }
+
+            if (!onSchoolNetwork && request.getClientIP() != null && !request.getClientIP().trim().isEmpty()) {
+                onSchoolNetwork = isIpInSchoolRange(request.getClientIP().trim(), ipRange);
+            }
+
+            if (!onSchoolNetwork) {
+                log.warn("Student {} failed Wi-Fi enforcement check. SSID={}, clientIP={}",
+                        studentId, request.getNetworkSSID(), request.getClientIP());
+                throw AppException.forbidden(
+                        "Attendance can only be marked while connected to the authorized school network (" + schoolSsid + ").");
+            }
+            log.info("Student {} passed Wi-Fi network enforcement check.", studentId);
         }
 
-        log.warn("Student {} attempted attendance from non-school network. SSID={}, clientIP={}",
-                studentId, request.getNetworkSSID(), request.getClientIP());
-        throw AppException.forbidden(
-                "You must be connected to the school WiFi network (" + schoolSsid + ") to mark attendance.");
+        // 2. Geofence Location Enforcement Check
+        if (geofenceEnforce) {
+            if (request.getLatitude() == null || request.getLongitude() == null) {
+                log.warn("Student {} failed Geofence check: missing GPS coordinates", studentId);
+                throw AppException.forbidden(
+                        "GPS location access is required to mark attendance on campus. Please enable location services on your device.");
+            }
+
+            double schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
+            double schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
+            double maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
+
+            double distanceMeters = calculateHaversineDistanceMeters(
+                    request.getLatitude(), request.getLongitude(), schoolLat, schoolLng);
+
+            if (distanceMeters > maxRadiusMeters) {
+                log.warn("Student {} failed GPS Geofence check! Distance: {}m (max allowed: {}m)",
+                        studentId, Math.round(distanceMeters), maxRadiusMeters);
+                throw AppException.forbidden(
+                        "Attendance can only be marked within the permitted school location (" +
+                        Math.round(distanceMeters) + "m away, max allowed: " + (int)maxRadiusMeters + "m).");
+            }
+            log.info("Student {} passed GPS Geofence check! Distance: {}m", studentId, Math.round(distanceMeters));
+        }
     }
 
     private double calculateHaversineDistanceMeters(double lat1, double lon1, double lat2, double lon2) {

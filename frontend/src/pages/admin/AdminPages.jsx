@@ -1473,16 +1473,20 @@ export function AdminSettings() {
                 </p>
               </div>
               <div className="h-px bg-gray-100 my-4" />
-              <div className="font-medium text-[13px] mb-2 text-gray-600">GPS Geofence Fallback</div>
+              <div className="font-medium text-[13px] mb-2 text-gray-600">GPS Geofence Enforcement</div>
               <div className="mb-2.5">
                 <label className="flex items-center gap-2 cursor-pointer text-[13px] text-gray-600">
                   <input
                     type="checkbox"
-                    checked={netSettings.geofence_fallback_enabled === 'true'}
-                    onChange={e => updateNet('geofence_fallback_enabled', e.target.checked ? 'true' : 'false')}
+                    checked={netSettings.geofence_enforce === 'true' || netSettings.geofence_fallback_enabled === 'true'}
+                    onChange={e => {
+                      const val = e.target.checked ? 'true' : 'false';
+                      updateNet('geofence_enforce', val);
+                      updateNet('geofence_fallback_enabled', val);
+                    }}
                     className="w-4 h-4 accent-red"
                   />
-                  Enable GPS Geofence Fallback when school network is offline/disconnected
+                  Enforce GPS Geofence location for attendance
                 </label>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

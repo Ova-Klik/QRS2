@@ -694,14 +694,14 @@ public class UserService {
         "school_name", "school_address", "school_email", "school_website",
         "school_wifi_ssid", "school_ip_range", "network_enforce",
         "qr_window_start", "qr_window_end", "late_threshold",
-        "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_fallback_enabled",
+        "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_enforce", "geofence_fallback_enabled",
         "qr_refresh_interval", "qr_refresh_enabled"
     };
     private static final String[] NETWORK_DEFAULTS = {
         "Tech School", "Lagos, Nigeria", "admin@techschool.edu.ng", "https://techschool.edu.ng",
         "TechSchool-WiFi", "192.168.1.0/24", "false",
         "07:00", "12:00", "08:31",
-        "6.5244", "3.3792", "150", "true",
+        "6.5244", "3.3792", "150", "false", "true",
         "15", "true"
     };
 
