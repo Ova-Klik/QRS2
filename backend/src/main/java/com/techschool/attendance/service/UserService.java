@@ -214,41 +214,53 @@ public class UserService {
                     .collect(Collectors.toList());
         }
 
-        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
-        Map<String, UserDto.StudentAttendanceResponse> responsesByStudent =
-                loadStudentAttendanceResponses(filtered, effStart, effEnd, cohortsById);
-
-        boolean asc = !"desc".equalsIgnoreCase(order);
-        String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
-        Comparator<User> cmp;
-        switch (sortKey) {
-            case "email":
-                cmp = Comparator.comparing(User::getEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-                break;
-            case "registrationnumber":
-            case "registration":
-                cmp = Comparator.comparing(User::getRegistrationNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-                break;
-            case "rate":
-            case "attendancerate":
-            case "attendance":
-                cmp = Comparator.comparing(u -> {
-                    UserDto.StudentAttendanceResponse r = responsesByStudent.get(u.getId());
-                    return r != null ? r.getAttendanceRate() : 0.0;
-                });
-                break;
-            default:
-                cmp = Comparator.comparing(User::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-        }
-        filtered.sort(asc ? cmp : cmp.reversed());
-
         int total = filtered.size();
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
         int from = Math.min(safePage * safeSize, total);
         int to = Math.min(from + safeSize, total);
 
-        List<UserDto.StudentAttendanceResponse> content = filtered.subList(from, to).stream()
+        boolean sortByRate = "rate".equalsIgnoreCase(sort) || "attendancerate".equalsIgnoreCase(sort) || "attendance".equalsIgnoreCase(sort);
+
+        List<User> pageUsers;
+        Map<String, UserDto.StudentAttendanceResponse> responsesByStudent;
+
+        if (sortByRate) {
+            Map<String, Cohort> cohortsById = loadCohortsById(filtered);
+            responsesByStudent = loadStudentAttendanceResponses(filtered, effStart, effEnd, cohortsById);
+            boolean asc = !"desc".equalsIgnoreCase(order);
+            filtered.sort((u1, u2) -> {
+                UserDto.StudentAttendanceResponse r1 = responsesByStudent.get(u1.getId());
+                UserDto.StudentAttendanceResponse r2 = responsesByStudent.get(u2.getId());
+                double rate1 = r1 != null ? r1.getAttendanceRate() : 0.0;
+                double rate2 = r2 != null ? r2.getAttendanceRate() : 0.0;
+                return asc ? Double.compare(rate1, rate2) : Double.compare(rate2, rate1);
+            });
+            pageUsers = filtered.subList(from, to);
+        } else {
+            // Fast path: Sort candidate users first, then compute attendance stats ONLY for the paged slice
+            boolean asc = !"desc".equalsIgnoreCase(order);
+            String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
+            Comparator<User> cmp;
+            switch (sortKey) {
+                case "email":
+                    cmp = Comparator.comparing(User::getEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                    break;
+                case "registrationnumber":
+                case "registration":
+                    cmp = Comparator.comparing(User::getRegistrationNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                    break;
+                default:
+                    cmp = Comparator.comparing(User::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            }
+            filtered.sort(asc ? cmp : cmp.reversed());
+
+            pageUsers = filtered.subList(from, to);
+            Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
+            responsesByStudent = loadStudentAttendanceResponses(pageUsers, effStart, effEnd, cohortsById);
+        }
+
+        List<UserDto.StudentAttendanceResponse> content = pageUsers.stream()
                 .map(u -> responsesByStudent.get(u.getId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());

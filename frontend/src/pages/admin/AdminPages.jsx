@@ -242,26 +242,26 @@ export function AdminStudents() {
     }
   }, [datePreset, startDate, endDate])
 
+  useEffect(() => {
+    adminApi.listCohorts().then(c => setCohorts(c.data || [])).catch(() => {})
+  }, [])
+
   const load = useCallback(() => {
     setLoading(true)
-    Promise.all([
-      adminApi.searchStudents({
-        q: debouncedQ,
-        cohortId: cohortFilter || undefined,
-        start: resolvedDates.start,
-        end: resolvedDates.end,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        page,
-        size,
-        sort: 'name',
-        order: 'asc',
-      }),
-      adminApi.listCohorts(),
-    ]).then(([u, c]) => {
+    adminApi.searchStudents({
+      q: debouncedQ,
+      cohortId: cohortFilter || undefined,
+      start: resolvedDates.start,
+      end: resolvedDates.end,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      page,
+      size,
+      sort: 'name',
+      order: 'asc',
+    }).then(u => {
       setStudents(u.data.content || [])
       setTotal(u.data.totalElements || 0)
       setTotalPages(Math.max(u.data.totalPages || 1, 1))
-      setCohorts(c.data || [])
     }).catch(() => {
       toast.error('Failed to load students')
     }).finally(() => setLoading(false))
