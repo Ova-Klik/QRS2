@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailTemplateService {
 
-    @Value("${app.frontend-url:http://localhost:5173}")
+    @Value("${app.frontend-url:https://qrsattendance.netlify.app}")
     private String appFrontendUrl;
 
     public String buildVerificationEmailHtml(String recipientName, String token) {
