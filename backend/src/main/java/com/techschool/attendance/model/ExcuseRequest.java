@@ -5,6 +5,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.Instant;
@@ -13,6 +15,10 @@ import java.time.LocalDate;
 @Data
 @NoArgsConstructor
 @Document(collection = "excuse_requests")
+@CompoundIndexes({
+    @CompoundIndex(name = "student_status", def = "{'studentId': 1, 'status': 1}"),
+    @CompoundIndex(name = "cohort_status", def = "{'cohortId': 1, 'status': 1}")
+})
 public class ExcuseRequest {
 
     @Id

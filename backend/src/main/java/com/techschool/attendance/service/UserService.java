@@ -22,6 +22,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.http.ResponseEntity;
 
 @Service
@@ -38,6 +44,7 @@ public class UserService {
     private final AuditService auditService;
     private final AttendanceService attendanceService;
     private final HolidayService holidayService;
+    private final MongoTemplate mongoTemplate;
 
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone:Africa/Lagos}")
     private String timezone;
@@ -86,63 +93,77 @@ public class UserService {
     public AnalyticsDto.PageResponse<UserDto.UserResponse> searchStudents(String cohortId, String query,
                                                                            int page, int size,
                                                                            String sort, String order) {
-        List<User> candidates = (cohortId != null && !cohortId.isBlank())
-                ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
-                : userRepository.findByRole(User.Role.STUDENT);
-
-        String q = query == null ? "" : query.trim().toLowerCase();
-        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
-                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
-                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q))
-                        || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
-                .collect(Collectors.toList());
-
-        // Batched lookups — replaces per-student N+1 queries.
-        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
-        Map<String, Device> devicesByStudent = loadDevicesByStudent(filtered);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(filtered);
-
-        boolean asc = !"desc".equalsIgnoreCase(order);
-        filtered.sort(comparatorFor(sort, filtered, asc, summariesByStudent));
-
-        int total = filtered.size();
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, total);
-        int to = Math.min(from + safeSize, total);
 
-        List<UserDto.UserResponse> content = filtered.subList(from, to).stream()
+        Criteria criteria = Criteria.where("role").is(User.Role.STUDENT);
+        if (cohortId != null && !cohortId.isBlank()) {
+            criteria.and("cohortId").is(cohortId.trim());
+        }
+        if (query != null && !query.trim().isEmpty()) {
+            String q = query.trim();
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            criteria.andOperator(new Criteria().orOperator(
+                    Criteria.where("name").regex(regex),
+                    Criteria.where("email").regex(regex),
+                    Criteria.where("registrationNumber").regex(regex)
+            ));
+        }
+
+        long total = mongoTemplate.count(Query.query(criteria), User.class);
+
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        String sortProp = "name";
+        if ("email".equalsIgnoreCase(sort)) sortProp = "email";
+        else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort)) sortProp = "registrationNumber";
+
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
+        Query pageQuery = Query.query(criteria).with(pageable);
+
+        List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
+        Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+
+        List<UserDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
     public AnalyticsDto.PageResponse<UserDto.UserResponse> searchDevices(
             String query, int page, int size, String sort, String order) {
-        List<User> candidates = userRepository.findByRole(User.Role.STUDENT);
-        String q = query == null ? "" : query.trim().toLowerCase();
-        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
-                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
-                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q)))
-                .collect(Collectors.toList());
-
-        Map<String, Cohort> cohortsById = loadCohortsById(filtered);
-        Map<String, Device> devicesByStudent = loadDevicesByStudent(filtered);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(filtered);
-
-        int total = filtered.size();
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, total);
-        int to = Math.min(from + safeSize, total);
 
-        List<UserDto.UserResponse> content = filtered.subList(from, to).stream()
+        Criteria criteria = Criteria.where("role").is(User.Role.STUDENT);
+        if (query != null && !query.trim().isEmpty()) {
+            String q = query.trim();
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            criteria.andOperator(new Criteria().orOperator(
+                    Criteria.where("name").regex(regex),
+                    Criteria.where("email").regex(regex)
+            ));
+        }
+
+        long total = mongoTemplate.count(Query.query(criteria), User.class);
+
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, "name"));
+        Query pageQuery = Query.query(criteria).with(pageable);
+
+        List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
+        Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
+        Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
+        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+
+        List<UserDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
@@ -153,16 +174,24 @@ public class UserService {
             int page, int size,
             String sort, String order) {
 
-        List<User> candidates = (cohortId != null && !cohortId.isBlank())
-                ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
-                : userRepository.findByRole(User.Role.STUDENT);
+        int safeSize = Math.min(200, Math.max(1, size));
+        int safePage = Math.max(0, page);
 
-        String q = query == null ? "" : query.trim().toLowerCase();
-        List<User> filtered = q.isEmpty() ? candidates : candidates.stream()
-                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q))
-                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q))
-                        || (u.getRegistrationNumber() != null && u.getRegistrationNumber().toLowerCase().contains(q)))
-                .collect(Collectors.toList());
+        Criteria criteria = Criteria.where("role").is(User.Role.STUDENT);
+
+        if (cohortId != null && !cohortId.isBlank()) {
+            criteria.and("cohortId").is(cohortId.trim());
+        }
+
+        if (query != null && !query.trim().isEmpty()) {
+            String q = query.trim();
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            criteria.andOperator(new Criteria().orOperator(
+                    Criteria.where("name").regex(regex),
+                    Criteria.where("email").regex(regex),
+                    Criteria.where("registrationNumber").regex(regex)
+            ));
+        }
 
         final LocalDate effStart = startDate;
         final LocalDate effEnd = endDate;
@@ -176,86 +205,65 @@ public class UserService {
             Map<String, Attendance> attByStudent = dateAtt.stream()
                     .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
 
-            List<ExcuseRequest> excuses = excuseRepository.findAll().stream()
-                    .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+            List<ExcuseRequest> excuses = excuseRepository.findActiveExcusesOnOrBefore(targetDate).stream()
                     .filter(e -> e.getStartDate() != null && !targetDate.isBefore(e.getStartDate()) && !targetDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
                     .collect(Collectors.toList());
             Set<String> excusedStudentIds = excuses.stream().map(ExcuseRequest::getStudentId).collect(Collectors.toSet());
+
+            Query candidateQuery = Query.query(criteria);
+            candidateQuery.fields().include("_id");
+            List<User> candidates = mongoTemplate.find(candidateQuery, User.class);
 
             for (User u : candidates) {
                 Attendance a = attByStudent.get(u.getId());
                 boolean hasExcuse = excusedStudentIds.contains(u.getId()) || (a != null && a.getStatus() == Attendance.AttendanceStatus.EXCUSED);
 
-                if ("PRESENT".equals(s)) {
-                    if (a != null && (a.getStatus() == Attendance.AttendanceStatus.PRESENT || a.getStatus() == Attendance.AttendanceStatus.LATE)) {
-                        matchingIds.add(u.getId());
-                    }
-                } else if ("EARLY".equals(s)) {
-                    if (a != null && a.getStatus() == Attendance.AttendanceStatus.PRESENT) {
-                        matchingIds.add(u.getId());
-                    }
-                } else if ("LATE".equals(s)) {
-                    if (a != null && a.getStatus() == Attendance.AttendanceStatus.LATE) {
-                        matchingIds.add(u.getId());
-                    }
-                } else if ("EXCUSED".equals(s)) {
-                    if (hasExcuse) {
-                        matchingIds.add(u.getId());
-                    }
-                } else if ("ABSENT".equals(s)) {
-                    if (a == null && !hasExcuse) {
-                        matchingIds.add(u.getId());
-                    }
+                if ("PRESENT".equals(s) && a != null && (a.getStatus() == Attendance.AttendanceStatus.PRESENT || a.getStatus() == Attendance.AttendanceStatus.LATE)) {
+                    matchingIds.add(u.getId());
+                } else if ("EARLY".equals(s) && a != null && a.getStatus() == Attendance.AttendanceStatus.PRESENT) {
+                    matchingIds.add(u.getId());
+                } else if ("LATE".equals(s) && a != null && a.getStatus() == Attendance.AttendanceStatus.LATE) {
+                    matchingIds.add(u.getId());
+                } else if ("EXCUSED".equals(s) && hasExcuse) {
+                    matchingIds.add(u.getId());
+                } else if ("ABSENT".equals(s) && a == null && !hasExcuse) {
+                    matchingIds.add(u.getId());
                 }
             }
-
-            filtered = filtered.stream()
-                    .filter(u -> matchingIds.contains(u.getId()))
-                    .collect(Collectors.toList());
+            criteria.and("_id").in(matchingIds);
         }
 
-        int total = filtered.size();
-        int safeSize = Math.min(200, Math.max(1, size));
-        int safePage = Math.max(0, page);
-        int from = Math.min(safePage * safeSize, total);
-        int to = Math.min(from + safeSize, total);
+        long total = mongoTemplate.count(Query.query(criteria), User.class);
 
+        boolean asc = !"desc".equalsIgnoreCase(order);
         boolean sortByRate = "rate".equalsIgnoreCase(sort) || "attendancerate".equalsIgnoreCase(sort) || "attendance".equalsIgnoreCase(sort);
 
         List<User> pageUsers;
         Map<String, UserDto.StudentAttendanceResponse> responsesByStudent;
 
         if (sortByRate) {
-            Map<String, Cohort> cohortsById = loadCohortsById(filtered);
-            responsesByStudent = loadStudentAttendanceResponses(filtered, effStart, effEnd, cohortsById);
-            boolean asc = !"desc".equalsIgnoreCase(order);
-            filtered.sort((u1, u2) -> {
+            List<User> allFiltered = mongoTemplate.find(Query.query(criteria), User.class);
+            Map<String, Cohort> cohortsById = loadCohortsById(allFiltered);
+            responsesByStudent = loadStudentAttendanceResponses(allFiltered, effStart, effEnd, cohortsById);
+            allFiltered.sort((u1, u2) -> {
                 UserDto.StudentAttendanceResponse r1 = responsesByStudent.get(u1.getId());
                 UserDto.StudentAttendanceResponse r2 = responsesByStudent.get(u2.getId());
                 double rate1 = r1 != null ? r1.getAttendanceRate() : 0.0;
                 double rate2 = r2 != null ? r2.getAttendanceRate() : 0.0;
                 return asc ? Double.compare(rate1, rate2) : Double.compare(rate2, rate1);
             });
-            pageUsers = filtered.subList(from, to);
+            int from = Math.min(safePage * safeSize, (int) total);
+            int to = Math.min(from + safeSize, (int) total);
+            pageUsers = allFiltered.subList(from, to);
         } else {
-            // Fast path: Sort candidate users first, then compute attendance stats ONLY for the paged slice
-            boolean asc = !"desc".equalsIgnoreCase(order);
-            String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
-            Comparator<User> cmp;
-            switch (sortKey) {
-                case "email":
-                    cmp = Comparator.comparing(User::getEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-                    break;
-                case "registrationnumber":
-                case "registration":
-                    cmp = Comparator.comparing(User::getRegistrationNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-                    break;
-                default:
-                    cmp = Comparator.comparing(User::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-            }
-            filtered.sort(asc ? cmp : cmp.reversed());
+            String sortProp = "name";
+            if ("email".equalsIgnoreCase(sort)) sortProp = "email";
+            else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort)) sortProp = "registrationNumber";
 
-            pageUsers = filtered.subList(from, to);
+            Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
+            Query pageQuery = Query.query(criteria).with(pageable);
+
+            pageUsers = mongoTemplate.find(pageQuery, User.class);
             Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
             responsesByStudent = loadStudentAttendanceResponses(pageUsers, effStart, effEnd, cohortsById);
         }
@@ -265,7 +273,7 @@ public class UserService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 

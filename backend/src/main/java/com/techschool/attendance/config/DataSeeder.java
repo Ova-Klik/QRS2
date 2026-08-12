@@ -32,19 +32,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         if (!seedData) return;
         if (userRepository.count() > 0) {
-            userRepository.findAll().forEach(u -> {
-                if (u.getEmailVerified() == null) {
-                    u.setEmailVerified(true);
-                    userRepository.save(u);
-                }
-            });
-            // Clean up any legacy attendance records created on Saturdays or Sundays with status ABSENT
-            attendanceRepository.findAll().forEach(att -> {
-                if (att.getDate() != null && att.getDate().getDayOfWeek().getValue() >= 6 && att.getStatus() == Attendance.AttendanceStatus.ABSENT) {
-                    attendanceRepository.delete(att);
-                }
-            });
-            log.info("Data already seeded — verification flags checked and weekend absences purged");
+            log.info("Data already seeded — fast startup complete");
             return;
         }
 
