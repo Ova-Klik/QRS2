@@ -10,8 +10,36 @@ const api = axios.create({
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('qrs_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  if (config.url && config.url.includes('/admin/students/search')) {
+    apiCallStats.studentsSearchCount++
+    apiCallStats.calls.push({
+      url: config.url,
+      params: config.params,
+      timestamp: new Date().toISOString()
+    })
+  }
   return config
 })
+
+// API Call Tracker for Admin Student queries
+let apiCallStats = {
+  studentsSearchCount: 0,
+  calls: []
+}
+
+export function getApiCallStats() {
+  return { ...apiCallStats }
+}
+
+export function resetApiCallStats() {
+  apiCallStats.studentsSearchCount = 0
+  apiCallStats.calls = []
+}
+
+if (typeof window !== 'undefined') {
+  window.getStudentApiCallCount = () => apiCallStats.studentsSearchCount
+  window.resetStudentApiCallCount = resetApiCallStats
+}
 
 // Auth-flow requests return 401 as a normal outcome (e.g. wrong credentials).
 // Redirecting the browser for these breaks login/registration UX.

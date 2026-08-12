@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { adminApi } from '../../api/client'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { adminApi, getApiCallStats, resetApiCallStats } from '../../api/client'
 import { Card, StatCard, Badge, Table, PageHeader, LoadingPage, Alert, Button, Modal, Input, Select, Textarea, Pagination, Skeleton, useDebounce } from '../../components/common/UI'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -190,15 +191,16 @@ export function AdminDashboard() {
 }
 
 // ── Students ─────────────────────────────────────────────
+// ── Students ─────────────────────────────────────────────
 export function AdminStudents() {
-  const [students, setStudents] = useState([])
-  const [loading, setLoading]   = useState(true)
+  const queryClient = useQueryClient()
   const [modal, setModal]       = useState(null) // 'add'
   const [deleteTarget, setDeleteTarget] = useState(null) // student object to delete
   const [form, setForm]         = useState({ name: '', email: '', password: 'Student@1234', cohortId: '', registrationNumber: '' })
   const [cohorts, setCohorts]   = useState([])
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [, setForceCounterUpdate] = useState(0)
 
   // Filters
   const [q, setQ]                     = useState('')
@@ -211,10 +213,13 @@ export function AdminStudents() {
   // Pagination (default 10 per page)
   const [page, setPage]         = useState(0)
   const [size, setSize]         = useState(10)
-  const [total, setTotal]       = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
 
   const debouncedQ = useDebounce(q, 400)
+
+  // Reset page to 0 when filter parameters change
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedQ, cohortFilter, datePreset, startDate, endDate, statusFilter])
 
   // Resolve start and end dates based on preset
   const resolvedDates = useMemo(() => {
@@ -246,29 +251,53 @@ export function AdminStudents() {
     adminApi.listCohorts().then(c => setCohorts(c.data || [])).catch(() => {})
   }, [])
 
-  const load = useCallback(() => {
-    setLoading(true)
-    adminApi.searchStudents({
-      q: debouncedQ,
-      cohortId: cohortFilter || undefined,
-      start: resolvedDates.start,
-      end: resolvedDates.end,
-      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+  // TanStack Query for independent page, search, and cohort caching
+  const queryKey = useMemo(() => [
+    'students',
+    'search',
+    {
+      cohortId: cohortFilter || '',
+      q: debouncedQ || '',
+      start: resolvedDates.start || '',
+      end: resolvedDates.end || '',
+      status: statusFilter,
       page,
       size,
-      sort: 'name',
-      order: 'asc',
-    }).then(u => {
-      setStudents(u.data.content || [])
-      setTotal(u.data.totalElements || 0)
-      setTotalPages(Math.max(u.data.totalPages || 1, 1))
-    }).catch(() => {
-      toast.error('Failed to load students')
-    }).finally(() => setLoading(false))
-  }, [debouncedQ, cohortFilter, resolvedDates, statusFilter, page, size])
+    }
+  ], [cohortFilter, debouncedQ, resolvedDates, statusFilter, page, size])
 
-  useEffect(() => { setPage(0) }, [debouncedQ, cohortFilter, datePreset, startDate, endDate, statusFilter])
-  useEffect(() => { load() }, [load])
+  const {
+    data: studentPageData,
+    isLoading,
+    isFetching,
+    isPlaceholderData,
+    refetch,
+  } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const res = await adminApi.searchStudents({
+        q: debouncedQ || undefined,
+        cohortId: cohortFilter || undefined,
+        start: resolvedDates.start,
+        end: resolvedDates.end,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        page,
+        size,
+        sort: 'name',
+        order: 'asc',
+      })
+      // Trigger UI update for API call stats tracker
+      setForceCounterUpdate(prev => prev + 1)
+      return res.data
+    },
+    staleTime: 30000,
+    gcTime: 300000,
+    placeholderData: keepPreviousData,
+  })
+
+  const students = studentPageData?.content || []
+  const total = studentPageData?.totalElements || 0
+  const totalPages = Math.max(studentPageData?.totalPages || 1, 1)
 
   const addStudent = async () => {
     if (!form.name || !form.email || !form.password || !form.cohortId) {
@@ -279,7 +308,7 @@ export function AdminStudents() {
       await adminApi.createUser({ ...form, role: 'STUDENT' })
       toast.success('Student added successfully')
       setModal(null)
-      load()
+      queryClient.invalidateQueries({ queryKey: ['students'] })
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add student')
     } finally { setSaving(false) }
@@ -292,7 +321,7 @@ export function AdminStudents() {
       await adminApi.deleteStudent(deleteTarget.id)
       toast.success(`Student ${deleteTarget.name} deleted`)
       setDeleteTarget(null)
-      load()
+      queryClient.invalidateQueries({ queryKey: ['students'] })
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete student')
     } finally { setDeleting(false) }
@@ -351,13 +380,16 @@ export function AdminStudents() {
     }
   }
 
+  const currentCallCount = getApiCallStats().studentsSearchCount
+
   return (
     <>
       <PageHeader
         title="Students Attendance & Analytics"
         subtitle={`${total} student records`}
         actions={
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <Button variant="outline" size="sm" onClick={() => { refetch(); toast.success('Revalidating student data...') }}>↻ Refresh</Button>
             <Button variant="outline" onClick={() => handleExportAll('csv')}>↓ CSV Export</Button>
             <Button variant="outline" onClick={() => handleExportAll('xlsx')}>↓ Excel Export</Button>
             <Button onClick={() => { setForm({ name: '', email: '', password: 'Student@1234', cohortId: cohorts[0]?.id || '', registrationNumber: '' }); setModal('add'); }}>+ Add Student</Button>
@@ -366,6 +398,24 @@ export function AdminStudents() {
       />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card className="mb-4">
+          <div className="flex items-center justify-between gap-3 mb-3 bg-gray-50 dark:bg-gray-800 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 flex-wrap">
+            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 font-medium">
+              <span className="font-semibold text-gray-800 dark:text-gray-100">Frontend Cache:</span>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${isPlaceholderData ? 'bg-amber-100 text-amber-800' : isFetching ? 'bg-blue-100 text-blue-800 animate-pulse' : 'bg-emerald-100 text-emerald-800'}`}>
+                {isPlaceholderData ? 'Cached Data (Previous)' : isFetching ? 'Fetching Backend...' : 'Cached & Ready'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+              <span>Backend API Calls: <strong>{currentCallCount}</strong></span>
+              <button
+                onClick={() => { resetApiCallStats(); setForceCounterUpdate(p => p + 1); toast.success('API call counter reset') }}
+                className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-1"
+              >
+                Reset Counter
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <Input
               placeholder="Search name, email, reg no..."
@@ -394,7 +444,7 @@ export function AdminStudents() {
               <option value="EXCUSED">Excused</option>
             </Select>
             <div className="flex items-center text-xs text-gray-500 font-medium px-2">
-              Showing {students.length} of {total} students
+              Showing {students.length} of {total} students (Page {page + 1} of {totalPages})
             </div>
           </div>
           {datePreset === 'CUSTOM' && (
@@ -406,7 +456,7 @@ export function AdminStudents() {
             </div>
           )}
 
-          {loading ? (
+          {isLoading ? (
             <Skeleton rows={8} height={40} />
           ) : (
             <Table
