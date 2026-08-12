@@ -200,7 +200,6 @@ export function AdminStudents() {
   const [cohorts, setCohorts]   = useState([])
   const [saving, setSaving]     = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [, setForceCounterUpdate] = useState(0)
 
   // Filters
   const [q, setQ]                     = useState('')
@@ -286,8 +285,6 @@ export function AdminStudents() {
         sort: 'name',
         order: 'asc',
       })
-      // Trigger UI update for API call stats tracker
-      setForceCounterUpdate(prev => prev + 1)
       return res.data
     },
     staleTime: 30000,
@@ -398,24 +395,6 @@ export function AdminStudents() {
       />
       <div className="p-4 sm:p-6 animate-fade-in">
         <Card className="mb-4">
-          <div className="flex items-center justify-between gap-3 mb-3 bg-gray-50 dark:bg-gray-800 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 flex-wrap">
-            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 font-medium">
-              <span className="font-semibold text-gray-800 dark:text-gray-100">Frontend Cache:</span>
-              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${isPlaceholderData ? 'bg-amber-100 text-amber-800' : isFetching ? 'bg-blue-100 text-blue-800 animate-pulse' : 'bg-emerald-100 text-emerald-800'}`}>
-                {isPlaceholderData ? 'Cached Data (Previous)' : isFetching ? 'Fetching Backend...' : 'Cached & Ready'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-              <span>Backend API Calls: <strong>{currentCallCount}</strong></span>
-              <button
-                onClick={() => { resetApiCallStats(); setForceCounterUpdate(p => p + 1); toast.success('API call counter reset') }}
-                className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-1"
-              >
-                Reset Counter
-              </button>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <Input
               placeholder="Search name, email, reg no..."
