@@ -193,27 +193,41 @@ public class AttendanceService {
 
         // 2. Geofence Location Enforcement Check
         if (geofenceEnforce) {
-            if (request.getLatitude() == null || request.getLongitude() == null) {
-                log.warn("Student {} failed Geofence check: missing GPS coordinates", studentId);
-                throw AppException.forbidden(
-                        "GPS location access is required to mark attendance on campus. Please enable location services on your device.");
+            Double lat = request.getLatitude();
+            Double lng = request.getLongitude();
+            Double accuracy = request.getAccuracy();
+
+            if (lat == null || lng == null) {
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"MISSING_COORDINATES\", \"accuracy\":null, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":null}", studentId);
+                throw AppException.badRequest("Location coordinates are required to mark attendance when geofencing is enabled.");
+            }
+
+            if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 || (lat == 0.0 && lng == 0.0)) {
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_COORDINATES\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":null, \"lat\":{}, \"lng\":{}}", studentId, accuracy, lat, lng);
+                throw AppException.badRequest("Invalid location coordinates received. Please ensure your device has a valid GPS fix and try again.");
             }
 
             double schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
             double schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
             double maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
 
-            double distanceMeters = calculateHaversineDistanceMeters(
-                    request.getLatitude(), request.getLongitude(), schoolLat, schoolLng);
+            if (accuracy != null && accuracy > Math.max(1000.0, maxRadiusMeters * 5.0)) {
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"POOR_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, Math.round(accuracy), maxRadiusMeters);
+                throw AppException.badRequest("Your location accuracy (" + Math.round(accuracy) + "m) is too low. Please move to an open area with better GPS signal and try again.");
+            }
+
+            double distanceMeters = calculateHaversineDistanceMeters(lat, lng, schoolLat, schoolLng);
 
             if (distanceMeters > maxRadiusMeters) {
-                log.warn("Student {} failed GPS Geofence check! Distance: {}m (max allowed: {}m)",
-                        studentId, Math.round(distanceMeters), maxRadiusMeters);
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"OUTSIDE_GEOFENCE\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":{}, \"allowedRadius\":{}}",
+                        studentId, accuracy != null ? Math.round(accuracy) : null, Math.round(distanceMeters), maxRadiusMeters);
                 throw AppException.forbidden(
-                        "Attendance can only be marked within the permitted school location (" +
+                        "You are outside the allowed attendance location (" +
                         Math.round(distanceMeters) + "m away, max allowed: " + (int)maxRadiusMeters + "m).");
             }
-            log.info("Student {} passed GPS Geofence check! Distance: {}m", studentId, Math.round(distanceMeters));
+
+            log.info("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INSIDE_GEOFENCE\", \"accuracy\":{}, \"geofenceResult\":\"PASSED\", \"distance\":{}, \"allowedRadius\":{}}",
+                    studentId, accuracy != null ? Math.round(accuracy) : null, Math.round(distanceMeters), maxRadiusMeters);
         }
     }
 

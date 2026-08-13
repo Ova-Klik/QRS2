@@ -74,6 +74,7 @@ export function StudentScan() {
   const [cameraActive, setCameraActive] = useState(false)
   const [scannerError, setScannerError] = useState(null)
   const [autoScanning, setAutoScanning] = useState(false)
+  const [locationError, setLocationError] = useState(null)
   const scannerRef = useRef(null)
   const html5QrRef = useRef(null)
   const autoScanDoneRef = useRef(false)
@@ -114,6 +115,7 @@ export function StudentScan() {
 
   const startCamera = async () => {
     setScannerError(null)
+    setLocationError(null)
     try {
       const html5Qr = new Html5Qrcode('qr-reader')
       html5QrRef.current = html5Qr
@@ -169,22 +171,53 @@ export function StudentScan() {
     if (!tok.trim()) { toast.error('Enter or scan an attendance code'); return }
 
     setLoading(true)
+    setLocationError(null)
     try {
-      let coords = { latitude: null, longitude: null }
+      let coords = { latitude: null, longitude: null, accuracy: null }
       if ('geolocation' in navigator) {
         try {
-          const pos = await new Promise((resolve) => {
+          if (navigator.permissions && navigator.permissions.query) {
+            try {
+              const perm = await navigator.permissions.query({ name: 'geolocation' })
+              if (perm.state === 'denied') {
+                throw new Error('Location permission is required to mark attendance. Please allow location access for this site.')
+              }
+            } catch (pErr) {
+              if (pErr.message && pErr.message.includes('permission')) throw pErr
+            }
+          }
+
+          const pos = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               p => resolve(p.coords),
-              () => resolve(null),
-              { enableHighAccuracy: true, timeout: 3000 }
+              err => {
+                let msg = 'Failed to get location.'
+                if (err.code === 1) { // PERMISSION_DENIED
+                  msg = 'Location permission is required to mark attendance. Please allow location access for this site.'
+                } else if (err.code === 2) { // POSITION_UNAVAILABLE
+                  msg = 'Your device could not determine your current location. Please ensure Location/GPS is enabled and try again.'
+                } else if (err.code === 3) { // TIMEOUT
+                  msg = 'Getting your location is taking too long. Please move to an area with better location reception and try again.'
+                } else if (err.message) {
+                  msg = err.message
+                }
+                reject(new Error(msg))
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             )
           })
           if (pos) {
             coords.latitude = pos.latitude
             coords.longitude = pos.longitude
+            coords.accuracy = pos.accuracy
           }
-        } catch (e) {}
+        } catch (locErr) {
+          const errMsg = locErr?.message || 'Unable to determine location. Please try again.'
+          setLocationError(errMsg)
+          toast.error(errMsg)
+          setLoading(false)
+          return
+        }
       }
 
       const payload = {
@@ -195,15 +228,19 @@ export function StudentScan() {
         clientIP: null,
         latitude: coords.latitude,
         longitude: coords.longitude,
+        accuracy: coords.accuracy,
       }
       const { data } = await studentApi.scan(payload)
       setResult(data)
+      setLocationError(null)
       toast.success(`Marked ${data.status?.toLowerCase()}!`)
       studentApi.dashboard().then(r => {
         setDash(r.data)
       })
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Scan failed')
+      const errMsg = err.response?.data?.message || err.message || 'Scan failed'
+      setLocationError(errMsg)
+      toast.error(errMsg)
     } finally {
       setLoading(false)
     }
@@ -243,6 +280,19 @@ export function StudentScan() {
             </span>
           </div>
         </Card>
+
+        {locationError && (
+          <Alert type="warning" className="mb-4">
+            <div className="flex flex-col gap-1.5">
+              <div><strong>Location Status:</strong> {locationError}</div>
+              <div className="mt-1">
+                <Button size="sm" variant="outline" onClick={() => submitScan()} loading={loading}>
+                  Retry Location &amp; Mark Attendance
+                </Button>
+              </div>
+            </div>
+          </Alert>
+        )}
 
         {/* Camera Scanner */}
         <Card className="mb-4 overflow-hidden">

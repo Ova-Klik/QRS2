@@ -63,6 +63,7 @@ public class QrDto {
         // Geolocation Fallback
         private Double latitude;
         private Double longitude;
+        private Double accuracy;
         // Biometric
         private boolean biometricVerified;
         private String biometricCredentialId;
