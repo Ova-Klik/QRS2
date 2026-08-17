@@ -184,8 +184,8 @@ export function StudentScan() {
 
     let pos = null
     try {
-      // Stage 1: High accuracy request with 12s timeout and 5s cached fix tolerance
-      pos = await fetchPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 })
+      // Stage 1: High accuracy request with 20s timeout and 60s cached fix tolerance
+      pos = await fetchPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 })
     } catch (err1) {
       console.warn('[DIAGNOSTIC] Stage 1 (High Accuracy) location acquisition failed/timed out:', err1?.code, err1?.message)
       if (err1?.code === 1) { // PERMISSION_DENIED
@@ -195,7 +195,7 @@ export function StudentScan() {
       // Stage 2: Fallback to standard accuracy (Cell/Wi-Fi positioning, fast & reliable)
       try {
         console.log('[DIAGNOSTIC] Attempting Stage 2 (Standard Accuracy) location fallback...')
-        pos = await fetchPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 10000 })
+        pos = await fetchPosition({ enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 })
       } catch (err2) {
         console.error('[DIAGNOSTIC] LOCATION_ERROR', { code: err2?.code, message: err2?.message })
         let msg = 'Unable to determine location. Please try again.'

@@ -211,7 +211,7 @@ public class AttendanceService {
             double schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
             double maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
 
-            if (accuracy != null && accuracy > Math.max(1000.0, maxRadiusMeters * 5.0)) {
+            if (accuracy != null && accuracy > Math.max(3000.0, maxRadiusMeters * 10.0)) {
                 log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"POOR_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, Math.round(accuracy), maxRadiusMeters);
                 throw AppException.badRequest("Your location accuracy (" + Math.round(accuracy) + "m) is too low. Please move to an open area with better GPS signal and try again.");
             }

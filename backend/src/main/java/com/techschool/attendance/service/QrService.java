@@ -18,6 +18,8 @@ import com.techschool.attendance.repository.SystemSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -63,14 +65,9 @@ public class QrService {
         ZonedDateTime nowZone = ZonedDateTime.now(zone);
         LocalDate today = nowZone.toLocalDate();
 
-        // Check for existing active session & expire it to allow generating a new
-        // session
-        Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
-        if (existing.isPresent()) {
-            QrSession oldSession = existing.get();
-            oldSession.setState(QrSession.SessionState.EXPIRED);
-            qrSessionRepository.save(oldSession);
-        }
+        // Reuse existing session document for this cohort to prevent duplicate record accumulation
+        Optional<QrSession> existing = qrSessionRepository.findFirstByCohortId(cohortId);
+        QrSession session = existing.orElseGet(QrSession::new);
 
         // Build session window & custom duration
         ZonedDateTime activeFrom = ZonedDateTime.now(zone);
@@ -92,7 +89,6 @@ public class QrService {
         String masterToken = UUID.randomUUID().toString().replace("-", "") +
                 Long.toHexString(System.currentTimeMillis());
 
-        QrSession session = new QrSession();
         session.setCohortId(cohortId);
         session.setFacilitatorId(facilitatorId);
         session.setToken(masterToken);
@@ -100,6 +96,7 @@ public class QrService {
         session.setActiveFrom(activeFrom.toInstant());
         session.setExpiresAt(expiresAt.toInstant());
         session.setState(QrSession.SessionState.ACTIVE);
+        session.setScanCount(0);
         QrSession saved = qrSessionRepository.save(session);
 
         // Generate 20-second dynamic TOTP rolling payload
@@ -315,16 +312,30 @@ public class QrService {
         }
     }
 
-    // ── Auto-expire sessions ─────────────────────────────
+    // ── Startup & Auto-expire sessions ───────────────────
+    @EventListener(ApplicationReadyEvent.class)
+    public void cleanupLegacyExpiredSessions() {
+        try {
+            Instant now = Instant.now();
+            qrSessionRepository.deleteByExpiresAtBefore(now);
+            qrSessionRepository.deleteByState(QrSession.SessionState.EXPIRED);
+            log.info("Cleaned up legacy expired QR sessions from MongoDB on application startup.");
+        } catch (Exception e) {
+            log.warn("Failed to clean up legacy QR sessions on startup: {}", e.getMessage());
+        }
+    }
+
     @Scheduled(fixedDelay = 60000) // every minute
     public void autoExpireSessions() {
+        Instant now = Instant.now();
         List<QrSession> expired = qrSessionRepository
-                .findByStateAndExpiresAtBefore(QrSession.SessionState.ACTIVE, Instant.now());
+                .findByStateAndExpiresAtBefore(QrSession.SessionState.ACTIVE, now);
         for (QrSession s : expired) {
             s.setState(QrSession.SessionState.EXPIRED);
             qrSessionRepository.save(s);
             log.info("Auto-expired QR session {} for cohort {}", s.getId(), s.getCohortId());
         }
+        qrSessionRepository.deleteByExpiresAtBefore(now);
     }
 
     // ── QR image generation ──────────────────────────────

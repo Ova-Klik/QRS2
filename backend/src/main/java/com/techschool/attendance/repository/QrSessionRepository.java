@@ -23,4 +23,9 @@ public interface QrSessionRepository extends MongoRepository<QrSession, String> 
 
     @Query("{ 'cohortId': { $in: ?0 }, 'state': 'ACTIVE' }")
     List<QrSession> findActiveSessionsByCohortIds(List<String> cohortIds);
+
+    Optional<QrSession> findFirstByCohortId(String cohortId);
+
+    void deleteByExpiresAtBefore(Instant now);
+    void deleteByState(QrSession.SessionState state);
 }

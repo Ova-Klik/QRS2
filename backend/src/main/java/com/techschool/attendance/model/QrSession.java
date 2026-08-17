@@ -34,6 +34,8 @@ public class QrSession {
     private LocalDate date;
 
     private Instant activeFrom;
+
+    @Indexed(expireAfter = "0s")
     private Instant expiresAt;
 
     private SessionState state = SessionState.CREATED;
