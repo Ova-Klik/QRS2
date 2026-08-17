@@ -166,6 +166,62 @@ export function StudentScan() {
     return fp.substring(0, 32)
   }
 
+  const requestFreshLocation = async () => {
+    console.log('[DIAGNOSTIC] LOCATION_REQUEST_STARTED', { timestamp: new Date().toISOString() })
+    if (!('geolocation' in navigator)) {
+      throw new Error('Geolocation is not supported by your browser.')
+    }
+
+    const fetchPosition = (options) => {
+      return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          p => resolve(p.coords),
+          err => reject(err),
+          options
+        )
+      })
+    }
+
+    let pos = null
+    try {
+      // Stage 1: High accuracy request with 12s timeout and 5s cached fix tolerance
+      pos = await fetchPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 })
+    } catch (err1) {
+      console.warn('[DIAGNOSTIC] Stage 1 (High Accuracy) location acquisition failed/timed out:', err1?.code, err1?.message)
+      if (err1?.code === 1) { // PERMISSION_DENIED
+        console.error('[DIAGNOSTIC] LOCATION_ERROR', { code: err1.code, message: err1.message })
+        throw new Error('Location permission is required to mark attendance. Please allow location access for this site.')
+      }
+      // Stage 2: Fallback to standard accuracy (Cell/Wi-Fi positioning, fast & reliable)
+      try {
+        console.log('[DIAGNOSTIC] Attempting Stage 2 (Standard Accuracy) location fallback...')
+        pos = await fetchPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 10000 })
+      } catch (err2) {
+        console.error('[DIAGNOSTIC] LOCATION_ERROR', { code: err2?.code, message: err2?.message })
+        let msg = 'Unable to determine location. Please try again.'
+        if (err2?.code === 1) { // PERMISSION_DENIED
+          msg = 'Location permission is required to mark attendance. Please allow location access for this site.'
+        } else if (err2?.code === 2) { // POSITION_UNAVAILABLE
+          msg = "We couldn't determine your current location. Please ensure Location/GPS is enabled and try again."
+        } else if (err2?.code === 3) { // TIMEOUT
+          msg = 'Location request timed out. Please try again.'
+        } else if (err2?.message) {
+          msg = err2.message
+        }
+        throw new Error(msg)
+      }
+    }
+
+    const res = {
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      accuracy: pos.accuracy,
+      timestamp: new Date().toISOString()
+    }
+    console.log('[DIAGNOSTIC] LOCATION_SUCCESS', res)
+    return res
+  }
+
   const submitScan = async (scanToken) => {
     const tok = scanToken || token
     if (!tok.trim()) { toast.error('Enter or scan an attendance code'); return }
@@ -176,41 +232,10 @@ export function StudentScan() {
       let coords = { latitude: null, longitude: null, accuracy: null }
       if ('geolocation' in navigator) {
         try {
-          if (navigator.permissions && navigator.permissions.query) {
-            try {
-              const perm = await navigator.permissions.query({ name: 'geolocation' })
-              if (perm.state === 'denied') {
-                throw new Error('Location permission is required to mark attendance. Please allow location access for this site.')
-              }
-            } catch (pErr) {
-              if (pErr.message && pErr.message.includes('permission')) throw pErr
-            }
-          }
-
-          const pos = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
-              p => resolve(p.coords),
-              err => {
-                let msg = 'Failed to get location.'
-                if (err.code === 1) { // PERMISSION_DENIED
-                  msg = 'Location permission is required to mark attendance. Please allow location access for this site.'
-                } else if (err.code === 2) { // POSITION_UNAVAILABLE
-                  msg = 'Your device could not determine your current location. Please ensure Location/GPS is enabled and try again.'
-                } else if (err.code === 3) { // TIMEOUT
-                  msg = 'Getting your location is taking too long. Please move to an area with better location reception and try again.'
-                } else if (err.message) {
-                  msg = err.message
-                }
-                reject(new Error(msg))
-              },
-              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            )
-          })
-          if (pos) {
-            coords.latitude = pos.latitude
-            coords.longitude = pos.longitude
-            coords.accuracy = pos.accuracy
-          }
+          const loc = await requestFreshLocation()
+          coords.latitude = loc.latitude
+          coords.longitude = loc.longitude
+          coords.accuracy = loc.accuracy
         } catch (locErr) {
           const errMsg = locErr?.message || 'Unable to determine location. Please try again.'
           setLocationError(errMsg)
@@ -230,6 +255,16 @@ export function StudentScan() {
         longitude: coords.longitude,
         accuracy: coords.accuracy,
       }
+
+      console.log('[DIAGNOSTIC] ATTENDANCE_REQUEST', {
+        latitudePresent: coords.latitude !== null && coords.latitude !== undefined,
+        longitudePresent: coords.longitude !== null && coords.longitude !== undefined,
+        accuracyPresent: coords.accuracy !== null && coords.accuracy !== undefined,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      })
+
       const { data } = await studentApi.scan(payload)
       setResult(data)
       setLocationError(null)
