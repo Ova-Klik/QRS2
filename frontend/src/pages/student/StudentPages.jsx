@@ -169,7 +169,8 @@ export function StudentScan() {
   const requestFreshLocation = async () => {
     console.log('[DIAGNOSTIC] LOCATION_REQUEST_STARTED', { timestamp: new Date().toISOString() })
     if (!('geolocation' in navigator)) {
-      throw new Error('Geolocation is not supported by your browser.')
+      console.warn('[DIAGNOSTIC] Geolocation not supported by browser.')
+      return null
     }
 
     const fetchPosition = (options) => {
@@ -189,26 +190,16 @@ export function StudentScan() {
     } catch (err1) {
       console.warn('[DIAGNOSTIC] Stage 1 (High Accuracy) location acquisition failed/timed out:', err1?.code, err1?.message)
       if (err1?.code === 1) { // PERMISSION_DENIED
-        console.error('[DIAGNOSTIC] LOCATION_ERROR', { code: err1.code, message: err1.message })
-        throw new Error('Location permission is required to mark attendance. Please allow location access for this site.')
+        console.warn('[DIAGNOSTIC] Location permission denied — proceeding without GPS coordinates.')
+        return null
       }
       // Stage 2: Fallback to standard accuracy (Cell/Wi-Fi positioning, fast & reliable)
       try {
         console.log('[DIAGNOSTIC] Attempting Stage 2 (Standard Accuracy) location fallback...')
         pos = await fetchPosition({ enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 })
       } catch (err2) {
-        console.error('[DIAGNOSTIC] LOCATION_ERROR', { code: err2?.code, message: err2?.message })
-        let msg = 'Unable to determine location. Please try again.'
-        if (err2?.code === 1) { // PERMISSION_DENIED
-          msg = 'Location permission is required to mark attendance. Please allow location access for this site.'
-        } else if (err2?.code === 2) { // POSITION_UNAVAILABLE
-          msg = "We couldn't determine your current location. Please ensure Location/GPS is enabled and try again."
-        } else if (err2?.code === 3) { // TIMEOUT
-          msg = 'Location request timed out. Please try again.'
-        } else if (err2?.message) {
-          msg = err2.message
-        }
-        throw new Error(msg)
+        console.warn('[DIAGNOSTIC] Stage 2 also failed:', err2?.code, err2?.message)
+        return null
       }
     }
 
@@ -230,19 +221,18 @@ export function StudentScan() {
     setLocationError(null)
     try {
       let coords = { latitude: null, longitude: null, accuracy: null }
-      if ('geolocation' in navigator) {
-        try {
-          const loc = await requestFreshLocation()
+      try {
+        const loc = await requestFreshLocation()
+        if (loc) {
           coords.latitude = loc.latitude
           coords.longitude = loc.longitude
           coords.accuracy = loc.accuracy
-        } catch (locErr) {
-          const errMsg = locErr?.message || 'Unable to determine location. Please try again.'
-          setLocationError(errMsg)
-          toast.error(errMsg)
-          setLoading(false)
-          return
+        } else {
+          setLocationError('Unable to determine location.')
         }
+      } catch (locErr) {
+        console.warn('[DIAGNOSTIC] Could not obtain location — sending without GPS coordinates:', locErr?.message)
+        setLocationError(locErr?.message || 'Unable to determine location.')
       }
 
       const payload = {
