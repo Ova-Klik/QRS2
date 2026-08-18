@@ -78,7 +78,7 @@ class AuthServiceMailTest {
         request.setEmail("alice@example.com");
         request.setPhone("+234 800 000 0000");
         request.setPassword("Password123");
-        request.setCohortNumber("29");
+        request.setCohortNumber("Cohort 29");
 
         when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
         when(cohortRepository.findByActive(true)).thenReturn(List.of(sampleCohort));

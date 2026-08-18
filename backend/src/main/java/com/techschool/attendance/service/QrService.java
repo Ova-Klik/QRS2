@@ -165,6 +165,18 @@ public class QrService {
             return getActiveSession(cohortId, origin);
         }
 
+        // Check if a session was manually expired/disabled today for this cohort
+        LocalDate today = ZonedDateTime.now(ZoneId.of(timezone)).toLocalDate();
+        Optional<QrSession> todaySession = qrSessionRepository.findByCohortIdAndDate(cohortId, today);
+        if (todaySession.isPresent()) {
+            QrSession session = todaySession.get();
+            if (session.getState() == QrSession.SessionState.EXPIRED ||
+                session.getState() == QrSession.SessionState.ARCHIVED ||
+                session.getState() == QrSession.SessionState.CREATED) {
+                throw AppException.forbidden("QR session for this cohort has been closed by the facilitator. Please wait for the facilitator to open a new session.");
+            }
+        }
+
         ZonedDateTime nowZone = ZonedDateTime.now(ZoneId.of(timezone));
         java.time.LocalTime currentTime = nowZone.toLocalTime();
         java.time.LocalTime autoStartTime = java.time.LocalTime.of(7, 0);

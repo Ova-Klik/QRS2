@@ -36,16 +36,21 @@ export default function RegisterPage() {
     if (!form.cohortNumber.trim()) { setError('Please select your cohort'); return }
     setLoading(true)
     try {
-      const cohortNumber = form.cohortNumber.match(/\d+/)
       const payload = {
         name: form.name,
         email: form.email,
         phone: form.phone,
         password: form.password,
-        cohortNumber: cohortNumber ? cohortNumber[0] : form.cohortNumber.trim()
+        cohortNumber: form.cohortNumber.trim()
       }
 
       const { data } = await authApi.registerStudent(payload)
+
+      if (!data.token) {
+        toast.success(`Account created! Please check your email to verify before signing in.`)
+        navigate('/verify-email?email=' + encodeURIComponent(data.email))
+        return
+      }
 
       localStorage.setItem('qrs_token', data.token)
       toast.success(`Welcome, ${data.name}! Student account created.`)

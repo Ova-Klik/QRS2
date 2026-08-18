@@ -67,12 +67,19 @@ public class AuthService {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
 
-        // Resolve cohort by number (e.g. "29" -> finds "Cohort 29")
+        // Resolve cohort by name or ID (supports "Cohort 29", "Fullstack Web Dev", or raw cohort ID)
+        String cohortInput = request.getCohortNumber().trim();
         Cohort cohort = cohortRepository.findByActive(true).stream()
-                .filter(c -> c.getName() != null && c.getName().toLowerCase()
-                        .contains("cohort " + request.getCohortNumber().trim().toLowerCase()))
+                .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
                 .findFirst()
-                .orElseThrow(() -> AppException.notFound("Cohort " + request.getCohortNumber() + " not found or inactive"));
+                .orElseGet(() -> cohortRepository.findByActive(true).stream()
+                        .filter(c -> c.getId() != null && c.getId().equals(cohortInput))
+                        .findFirst()
+                        .orElse(null));
+
+        if (cohort == null) {
+            throw AppException.notFound("Cohort '" + request.getCohortNumber() + "' not found or inactive");
+        }
 
         User user = new User();
         user.setName(request.getName());

@@ -58,7 +58,7 @@ class AttendanceServiceLocationTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(attendanceService, "timezone", "Africa/Lagos");
-        ReflectionTestUtils.setField(attendanceService, "windowStartDefault", "07:00");
+        ReflectionTestUtils.setField(attendanceService, "windowStartDefault", "00:00");
         ReflectionTestUtils.setField(attendanceService, "windowEndDefault", "23:59");
         ReflectionTestUtils.setField(attendanceService, "lateThreshold", "09:00");
 

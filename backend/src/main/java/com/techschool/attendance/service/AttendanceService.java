@@ -70,18 +70,14 @@ public class AttendanceService {
         }
 
         java.time.LocalTime currentTime = nowZone.toLocalTime();
-        java.time.LocalTime autoStartTime = java.time.LocalTime.of(7, 0);
 
-        // Enforce standard time window settings starting at 7:00 AM
-        if (!currentTime.isBefore(autoStartTime)) {
-            String windowStartStr = getSetting("qr_window_start", windowStartDefault);
-            String windowEndStr = getSetting("qr_window_end", windowEndDefault);
-            java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
-            java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
+        String windowStartStr = getSetting("qr_window_start", windowStartDefault);
+        String windowEndStr = getSetting("qr_window_end", windowEndDefault);
+        java.time.LocalTime startTime = java.time.LocalTime.parse(windowStartStr);
+        java.time.LocalTime endTime = java.time.LocalTime.parse(windowEndStr);
 
-            if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
-                throw AppException.badRequest("Attendance is unavailable outside the permitted time window (" + windowStartStr + " – " + windowEndStr + " Mon-Fri).");
-            }
+        if (currentTime.isBefore(startTime) || currentTime.isAfter(endTime)) {
+            throw AppException.badRequest("Attendance is unavailable outside the permitted time window (" + windowStartStr + " – " + windowEndStr + " Mon-Fri).");
         }
 
         LocalDate today = nowZone.toLocalDate();
@@ -202,14 +198,44 @@ public class AttendanceService {
                 throw AppException.badRequest("Location coordinates are required to mark attendance when geofencing is enabled.");
             }
 
-            if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 || (lat == 0.0 && lng == 0.0)) {
+            if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 || (lat == 0.0 && lng == 0.0)
+                    || Double.isNaN(lat) || Double.isNaN(lng) || Double.isInfinite(lat) || Double.isInfinite(lng)) {
                 log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_COORDINATES\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":null, \"lat\":{}, \"lng\":{}}", studentId, accuracy, lat, lng);
                 throw AppException.badRequest("Invalid location coordinates received. Please ensure your device has a valid GPS fix and try again.");
             }
 
-            double schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
-            double schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
-            double maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
+            double schoolLat;
+            double schoolLng;
+            double maxRadiusMeters;
+            try {
+                schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
+                schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
+                maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
+            } catch (NumberFormatException e) {
+                log.warn("Invalid geofence system settings (non-numeric). Rejecting attendance.");
+                throw AppException.badRequest("Geofence system settings are misconfigured. Please contact your administrator.");
+            }
+
+            if (Double.isNaN(schoolLat) || Double.isInfinite(schoolLat) ||
+                Double.isNaN(schoolLng) || Double.isInfinite(schoolLng)) {
+                log.warn("Geofence school coordinates are NaN/Infinity. Rejecting attendance.");
+                throw AppException.badRequest("Geofence school location is misconfigured. Please contact your administrator.");
+            }
+
+            if (schoolLat < -90.0 || schoolLat > 90.0 || schoolLng < -180.0 || schoolLng > 180.0) {
+                log.warn("Geofence school coordinates out of range: lat={}, lng={}", schoolLat, schoolLng);
+                throw AppException.badRequest("Geofence school location is out of valid range. Please contact your administrator.");
+            }
+
+            if (Double.isNaN(maxRadiusMeters) || Double.isInfinite(maxRadiusMeters) || maxRadiusMeters <= 0) {
+                log.warn("Invalid geofence radius: {}. Must be a positive finite number.", maxRadiusMeters);
+                throw AppException.badRequest("Geofence radius is misconfigured (must be > 0). Please contact your administrator.");
+            }
+
+            if (accuracy != null && !Double.isFinite(accuracy)) {
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, accuracy, maxRadiusMeters);
+                throw AppException.badRequest("Invalid location accuracy value received. Please try again.");
+            }
 
             if (accuracy != null && accuracy > Math.max(3000.0, maxRadiusMeters * 10.0)) {
                 log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"POOR_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, Math.round(accuracy), maxRadiusMeters);
@@ -217,6 +243,11 @@ public class AttendanceService {
             }
 
             double distanceMeters = calculateHaversineDistanceMeters(lat, lng, schoolLat, schoolLng);
+
+            if (!Double.isFinite(distanceMeters)) {
+                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_DISTANCE\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, accuracy, maxRadiusMeters);
+                throw AppException.badRequest("Unable to calculate distance from school. Please ensure your device has a valid GPS fix and try again.");
+            }
 
             if (distanceMeters > maxRadiusMeters) {
                 log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"OUTSIDE_GEOFENCE\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":{}, \"allowedRadius\":{}}",
@@ -232,14 +263,20 @@ public class AttendanceService {
     }
 
     private double calculateHaversineDistanceMeters(double lat1, double lon1, double lat2, double lon2) {
+        if (!Double.isFinite(lat1) || !Double.isFinite(lon1) || !Double.isFinite(lat2) || !Double.isFinite(lon2)) {
+            return Double.NaN;
+        }
+
         final int R = 6371000; // Radius of earth in meters
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                    Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        a = Math.max(0.0, Math.min(1.0, a));
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+        double distance = R * c;
+        return Double.isFinite(distance) ? distance : Double.NaN;
     }
 
     private boolean isIpInSchoolRange(String clientIp, String ipRange) {
