@@ -41,18 +41,6 @@ The first build takes ~3–5 minutes (downloads Java + Node images, compiles cod
 ### 4. Open the app
 Visit **http://localhost** in your browser.
 
-### Demo Accounts (auto-created on first boot)
-
-| Role        | Email                          | Password       |
-|-------------|--------------------------------|----------------|
-| Super Admin | admin@techschool.edu           | Admin@1234     |
-| Facilitator | james.obi@techschool.edu       | Fac@1234       |
-| Facilitator | sarah.mensah@techschool.edu    | Fac@1234       |
-| Student     | ada.okafor@techschool.edu      | Student@1234   |
-| Student     | emeka.nwosu@techschool.edu     | Student@1234   |
-| Student     | chioma.eze@techschool.edu      | Student@1234   |
-
----
 
 ## Architecture
 
