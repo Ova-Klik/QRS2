@@ -1,9 +1,12 @@
 package com.techschool.attendance.controller;
 
 import com.google.zxing.WriterException;
-import com.techschool.attendance.dto.AttendanceDto;
-import com.techschool.attendance.dto.CohortDto;
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.AttendanceRequestDto;
+import com.techschool.attendance.dto.response.AttendanceResponseDto;
+import com.techschool.attendance.dto.request.CohortRequestDto;
+import com.techschool.attendance.dto.response.CohortResponseDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.service.AttendanceService;
 import com.techschool.attendance.service.CohortService;
 import com.techschool.attendance.service.QrService;
@@ -26,7 +29,7 @@ public class PublicController {
     private final com.techschool.attendance.service.ExportService exportService;
 
     @GetMapping("/cohorts")
-    public ResponseEntity<List<CohortDto.CohortResponse>> getActiveCohorts() {
+    public ResponseEntity<List<CohortResponseDto.CohortResponse>> getActiveCohorts() {
         return ResponseEntity.ok(cohortService.getActiveCohorts());
     }
 
@@ -36,14 +39,14 @@ public class PublicController {
     }
 
     @GetMapping("/qr-session/{cohortId}")
-    public ResponseEntity<QrDto.QrResponse> getPublicQrSession(
+    public ResponseEntity<QrResponseDto.QrResponse> getPublicQrSession(
             @PathVariable String cohortId,
             @RequestParam(required = false) String origin) throws WriterException, IOException {
         return ResponseEntity.ok(qrService.getOrGeneratePublicSession(cohortId, origin));
     }
 
     @GetMapping("/today-summary/{cohortId}")
-    public ResponseEntity<AttendanceDto.DailySummary> getTodaySummary(@PathVariable String cohortId) {
+    public ResponseEntity<AttendanceResponseDto.DailySummary> getTodaySummary(@PathVariable String cohortId) {
         return ResponseEntity.ok(attendanceService.getCohortSummaryToday(cohortId));
     }
 

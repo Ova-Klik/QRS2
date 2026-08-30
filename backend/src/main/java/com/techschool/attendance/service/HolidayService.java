@@ -1,12 +1,13 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.HolidayDto;
+import com.techschool.attendance.dto.request.HolidayRequestDto;
+import com.techschool.attendance.dto.response.HolidayResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.AuditLog;
-import com.techschool.attendance.model.Cohort;
-import com.techschool.attendance.model.Holiday;
-import com.techschool.attendance.repository.CohortRepository;
-import com.techschool.attendance.repository.HolidayRepository;
+import com.techschool.attendance.data.model.AuditLog;
+import com.techschool.attendance.data.model.Cohort;
+import com.techschool.attendance.data.model.Holiday;
+import com.techschool.attendance.data.repository.CohortRepository;
+import com.techschool.attendance.data.repository.HolidayRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +31,7 @@ public class HolidayService {
 
     // ── Admin CRUD ─────────────────────────────────────────
 
-    public List<HolidayDto.Response> getAll() {
+    public List<HolidayResponseDto.Response> getAll() {
         List<Holiday> holidays = holidayRepository.findAll();
         Set<String> cohortIds = holidays.stream()
                 .filter(h -> !h.isAppliesToAll() && h.getCohortId() != null)
@@ -48,7 +49,7 @@ public class HolidayService {
                 .collect(Collectors.toList());
     }
 
-    public HolidayDto.Response create(String actorId, String actorName, HolidayDto.CreateRequest request) {
+    public HolidayResponseDto.Response create(String actorId, String actorName, HolidayRequestDto.CreateRequest request) {
         validate(request.getStartDate(), request.getEndDate(), request.getCohortId(), request.isAppliesToAll());
         Holiday h = new Holiday();
         h.setName(request.getName().trim());
@@ -68,7 +69,7 @@ public class HolidayService {
         return toResponse(saved);
     }
 
-    public HolidayDto.Response update(String actorId, String actorName, String id, HolidayDto.UpdateRequest request) {
+    public HolidayResponseDto.Response update(String actorId, String actorName, String id, HolidayRequestDto.UpdateRequest request) {
         Holiday h = holidayRepository.findById(id)
                 .orElseThrow(() -> AppException.notFound("Holiday not found"));
         if (request.getName() != null && !request.getName().isBlank()) h.setName(request.getName().trim());
@@ -99,7 +100,7 @@ public class HolidayService {
                 "Holiday deleted: " + h.getName(), null);
     }
 
-    public HolidayDto.Response toggle(String actorId, String actorName, String id) {
+    public HolidayResponseDto.Response toggle(String actorId, String actorName, String id) {
         Holiday h = holidayRepository.findById(id)
                 .orElseThrow(() -> AppException.notFound("Holiday not found"));
         h.setActive(!h.isActive());
@@ -238,16 +239,16 @@ public class HolidayService {
         return LocalDate.of(year, month, day);
     }
 
-    private HolidayDto.Response toResponse(Holiday h) {
+    private HolidayResponseDto.Response toResponse(Holiday h) {
         return toResponse(h, Map.of());
     }
 
-    private HolidayDto.Response toResponse(Holiday h, Map<String, String> cohortNames) {
+    private HolidayResponseDto.Response toResponse(Holiday h, Map<String, String> cohortNames) {
         String cohortName = null;
         if (!h.isAppliesToAll() && h.getCohortId() != null) {
             cohortName = cohortNames.get(h.getCohortId());
         }
-        return new HolidayDto.Response(
+        return new HolidayResponseDto.Response(
                 h.getId(), h.getName(), h.getStartDate(), h.getEndDate(), h.getReason(),
                 h.isAppliesToAll(), h.getCohortId(), cohortName, h.isActive(), h.getCreatedAt());
     }

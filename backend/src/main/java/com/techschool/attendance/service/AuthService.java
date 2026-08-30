@@ -1,9 +1,10 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AuthDto;
+import com.techschool.attendance.dto.request.AuthRequestDto;
+import com.techschool.attendance.dto.response.AuthResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.*;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.*;
+import com.techschool.attendance.data.repository.*;
 import com.techschool.attendance.security.JwtUtils;
 import com.techschool.attendance.service.mail.MailService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class AuthService {
     @Value("${app.network.school-wifi-ssid:TechSchool-WiFi}")
     private String schoolWifiSsid;
 
-    public AuthDto.LoginResponse login(AuthDto.LoginRequest request, String ipAddress) {
+    public AuthResponseDto.LoginResponse login(AuthRequestDto.LoginRequest request, String ipAddress) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> AppException.unauthorized("User does not exist. Kindly register below."));
 
@@ -54,7 +55,7 @@ public class AuthService {
         auditService.log(user.getId(), user.getName(), user.getRole().name(),
                 AuditLog.ActionType.LOGIN, null, null, "Login from " + ipAddress, ipAddress);
 
-        return new AuthDto.LoginResponse(
+        return new AuthResponseDto.LoginResponse(
                 token, user.getId(), user.getName(),
                 user.getEmail(), user.getRole().name(), user.getCohortId()
         );
@@ -62,7 +63,7 @@ public class AuthService {
 
     // ── Self-Registration ────────────────────────────────
 
-    public AuthDto.LoginResponse registerStudent(AuthDto.RegisterStudentRequest request, String ipAddress) {
+    public AuthResponseDto.LoginResponse registerStudent(AuthRequestDto.RegisterStudentRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
@@ -108,13 +109,13 @@ public class AuthService {
                 AuditLog.ActionType.USER_CREATED, saved.getId(), saved.getName(),
                 "Self-registration as student in " + cohort.getName(), ipAddress);
 
-        return new AuthDto.LoginResponse(
+        return new AuthResponseDto.LoginResponse(
                 null, saved.getId(), saved.getName(),
                 saved.getEmail(), saved.getRole().name(), saved.getCohortId()
         );
     }
 
-    public AuthDto.LoginResponse registerFacilitator(AuthDto.RegisterFacilitatorRequest request, String ipAddress) {
+    public AuthResponseDto.LoginResponse registerFacilitator(AuthRequestDto.RegisterFacilitatorRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
@@ -145,7 +146,7 @@ public class AuthService {
                 AuditLog.ActionType.USER_CREATED, saved.getId(), saved.getName(),
                 "Self-registration as facilitator", ipAddress);
 
-        return new AuthDto.LoginResponse(
+        return new AuthResponseDto.LoginResponse(
                 null, saved.getId(), saved.getName(),
                 saved.getEmail(), saved.getRole().name(), null
         );
@@ -153,7 +154,7 @@ public class AuthService {
 
     // ── Email Verification & Resend ───────────────────────
 
-    public AuthDto.MessageResponse verifyEmail(String token) {
+    public AuthResponseDto.MessageResponse verifyEmail(String token) {
         if (token == null || token.isBlank()) {
             throw AppException.badRequest("Verification token is required");
         }
@@ -173,10 +174,10 @@ public class AuthService {
                 AuditLog.ActionType.USER_UPDATED, user.getId(), user.getName(),
                 "Email verified successfully", null);
 
-        return new AuthDto.MessageResponse("Email verified successfully. You can now log in.");
+        return new AuthResponseDto.MessageResponse("Email verified successfully. You can now log in.");
     }
 
-    public AuthDto.MessageResponse resendVerificationEmail(String email) {
+    public AuthResponseDto.MessageResponse resendVerificationEmail(String email) {
         if (email == null || email.isBlank()) {
             throw AppException.badRequest("Email address is required");
         }
@@ -184,7 +185,7 @@ public class AuthService {
                 .orElseThrow(() -> AppException.notFound("User with specified email not found"));
 
         if (user.isEmailVerified()) {
-            return new AuthDto.MessageResponse("Your email address is already verified. Please log in.");
+            return new AuthResponseDto.MessageResponse("Your email address is already verified. Please log in.");
         }
 
         String vToken = generateSecureToken();
@@ -194,12 +195,12 @@ public class AuthService {
 
         mailService.sendVerificationEmail(user.getEmail(), user.getName(), vToken);
 
-        return new AuthDto.MessageResponse("Verification email has been resent. Please check your inbox.");
+        return new AuthResponseDto.MessageResponse("Verification email has been resent. Please check your inbox.");
     }
 
     // ── Password Reset (Email Token Based) ─────────────────
 
-    public AuthDto.MessageResponse forgotPassword(AuthDto.ForgotPasswordRequest request) {
+    public AuthResponseDto.MessageResponse forgotPassword(AuthRequestDto.ForgotPasswordRequest request) {
         if (request.getEmail() == null || request.getEmail().isBlank()) {
             throw AppException.badRequest("Email address is required");
         }
@@ -218,10 +219,10 @@ public class AuthService {
             }
         }
 
-        return new AuthDto.MessageResponse("If an account exists with that email, a password reset link has been sent.");
+        return new AuthResponseDto.MessageResponse("If an account exists with that email, a password reset link has been sent.");
     }
 
-    public AuthDto.MessageResponse resetPasswordWithToken(AuthDto.ResetPasswordWithTokenRequest request) {
+    public AuthResponseDto.MessageResponse resetPasswordWithToken(AuthRequestDto.ResetPasswordWithTokenRequest request) {
         if (request.getToken() == null || request.getToken().isBlank()) {
             throw AppException.badRequest("Password reset token is required");
         }
@@ -243,20 +244,20 @@ public class AuthService {
                 AuditLog.ActionType.PASSWORD_RESET, user.getId(), user.getName(),
                 "Password reset successfully via email token", null);
 
-        return new AuthDto.MessageResponse("Your password has been reset successfully. You can now log in with your new password.");
+        return new AuthResponseDto.MessageResponse("Your password has been reset successfully. You can now log in with your new password.");
     }
 
     // ── WebAuthn Biometric ───────────────────────────────
 
-    public AuthDto.ChallengeResponse generateBiometricChallenge(String userId) {
+    public AuthResponseDto.ChallengeResponse generateBiometricChallenge(String userId) {
         byte[] challengeBytes = new byte[32];
         secureRandom.nextBytes(challengeBytes);
         String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(challengeBytes);
 
-        return new AuthDto.ChallengeResponse(challenge, "Tech School", "localhost");
+        return new AuthResponseDto.ChallengeResponse(challenge, "Tech School", "localhost");
     }
 
-    public void registerBiometric(String userId, AuthDto.WebAuthnRegisterRequest request) {
+    public void registerBiometric(String userId, AuthRequestDto.WebAuthnRegisterRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -269,7 +270,7 @@ public class AuthService {
                 "Biometric credential registered", null);
     }
 
-    public boolean verifyBiometric(String userId, AuthDto.WebAuthnVerifyRequest request) {
+    public boolean verifyBiometric(String userId, AuthRequestDto.WebAuthnVerifyRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -288,7 +289,7 @@ public class AuthService {
 
     // ── Password Management ──────────────────────────────
 
-    public void changePassword(String userId, AuthDto.ChangePasswordRequest request) {
+    public void changePassword(String userId, AuthRequestDto.ChangePasswordRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -303,7 +304,7 @@ public class AuthService {
                 AuditLog.ActionType.PASSWORD_RESET, userId, user.getName(), "Password changed by user", null);
     }
 
-    public void adminResetPassword(String adminId, AuthDto.ResetPasswordRequest request) {
+    public void adminResetPassword(String adminId, AuthRequestDto.ResetPasswordRequest request) {
         User admin = userRepository.findById(adminId)
                 .orElseThrow(() -> AppException.notFound("Admin not found"));
         User target = userRepository.findById(request.getUserId())

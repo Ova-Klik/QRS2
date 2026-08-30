@@ -1,6 +1,7 @@
 package com.techschool.attendance.controller;
 
-import com.techschool.attendance.dto.*;
+import com.techschool.attendance.dto.request.*;
+import com.techschool.attendance.dto.response.*;
 import com.techschool.attendance.exception.AppException;
 import com.techschool.attendance.service.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,9 +32,9 @@ public class FacilitatorController {
     // ── QR ────────────────────────────────────────────────
 
     @PostMapping("/qr/generate")
-    public ResponseEntity<QrDto.QrResponse> generateQr(
+    public ResponseEntity<QrResponseDto.QrResponse> generateQr(
             @AuthenticationPrincipal String facId,
-            @Valid @RequestBody QrDto.GenerateRequest request,
+            @Valid @RequestBody QrRequestDto.GenerateRequest request,
             @RequestParam(required = false) String origin) throws Exception {
         var fac = userService.getById(facId);
         return ResponseEntity.ok(
@@ -41,7 +42,7 @@ public class FacilitatorController {
     }
 
     @GetMapping("/qr/active/{cohortId}")
-    public ResponseEntity<QrDto.QrResponse> getActiveQr(
+    public ResponseEntity<QrResponseDto.QrResponse> getActiveQr(
             @PathVariable String cohortId,
             @RequestParam(required = false) String origin) throws Exception {
         return ResponseEntity.ok(qrService.getActiveSession(cohortId, origin));
@@ -59,9 +60,9 @@ public class FacilitatorController {
     // ── Attendance ────────────────────────────────────────
 
     @PostMapping("/attendance/manual")
-    public ResponseEntity<AttendanceDto.AttendanceRecord> manualAttendance(
+    public ResponseEntity<AttendanceResponseDto.AttendanceRecord> manualAttendance(
             @AuthenticationPrincipal String facId,
-            @Valid @RequestBody AttendanceDto.ManualMarkRequest request,
+            @Valid @RequestBody AttendanceRequestDto.ManualMarkRequest request,
             HttpServletRequest http) {
         var fac = userService.getById(facId);
         return ResponseEntity.ok(attendanceService.markManual(
@@ -69,13 +70,13 @@ public class FacilitatorController {
     }
 
     @GetMapping("/attendance/today/{cohortId}")
-    public ResponseEntity<AttendanceDto.DailySummary> todaySummary(
+    public ResponseEntity<AttendanceResponseDto.DailySummary> todaySummary(
             @PathVariable String cohortId) {
         return ResponseEntity.ok(attendanceService.getCohortSummaryToday(cohortId));
     }
 
     @GetMapping("/attendance/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> searchAttendance(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord>> searchAttendance(
             @RequestParam String cohortId,
             @RequestParam(required = false) LocalDate start,
             @RequestParam(required = false) LocalDate end,
@@ -86,7 +87,7 @@ public class FacilitatorController {
     }
 
     @GetMapping("/attendance/calendar")
-    public ResponseEntity<AnalyticsDto.CalendarMonth> calendar(
+    public ResponseEntity<AnalyticsResponseDto.CalendarMonth> calendar(
             @RequestParam String cohortId,
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
@@ -105,10 +106,10 @@ public class FacilitatorController {
         LocalDate[] range = attendanceService.resolveDateRange(start, end, lastNDays);
         LocalDate effStart = range[0];
         LocalDate effEnd = range[1];
-        List<AttendanceDto.AttendanceRecord> rows =
+        List<AttendanceResponseDto.AttendanceRecord> rows =
                 attendanceService.findRecordsInRange(cohortId, effStart, effEnd);
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (AttendanceDto.AttendanceRecord r : rows) {
+        for (AttendanceResponseDto.AttendanceRecord r : rows) {
             table.add(List.of(
                     r.getStudentName() != null ? r.getStudentName() : "",
                     r.getStudentId() != null ? r.getStudentId() : "",
@@ -125,16 +126,16 @@ public class FacilitatorController {
     // ── Excuse Requests ───────────────────────────────────
 
     @GetMapping("/excuse-requests/{cohortId}")
-    public ResponseEntity<List<ExcuseDto.Response>> getCohortExcuseRequests(
+    public ResponseEntity<List<ExcuseResponseDto.Response>> getCohortExcuseRequests(
             @PathVariable String cohortId) {
         return ResponseEntity.ok(excuseService.getCohortRequests(cohortId));
     }
 
     @PatchMapping("/excuse-requests/{requestId}/review")
-    public ResponseEntity<ExcuseDto.Response> reviewExcuseRequest(
+    public ResponseEntity<ExcuseResponseDto.Response> reviewExcuseRequest(
             @AuthenticationPrincipal String facId,
             @PathVariable String requestId,
-            @Valid @RequestBody ExcuseDto.ReviewRequest request) {
+            @Valid @RequestBody ExcuseRequestDto.ReviewRequest request) {
         var fac = userService.getById(facId);
         return ResponseEntity.ok(excuseService.reviewRequest(facId, fac.getName(), fac.getRole(), requestId, request));
     }
@@ -142,7 +143,7 @@ public class FacilitatorController {
     // ── Cohorts ───────────────────────────────────────────
 
     @GetMapping("/cohorts")
-    public ResponseEntity<List<CohortDto.CohortResponse>> myCohorts(
+    public ResponseEntity<List<CohortResponseDto.CohortResponse>> myCohorts(
             @AuthenticationPrincipal String facId) {
         return ResponseEntity.ok(cohortService.getCohortsByFacilitator(facId));
     }
@@ -163,7 +164,7 @@ public class FacilitatorController {
     }
 
     @GetMapping("/attendance/manual-list")
-    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.ManualStudentAttendanceResponse>> getManualAttendanceList(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AttendanceResponseDto.ManualStudentAttendanceResponse>> getManualAttendanceList(
             @AuthenticationPrincipal String facId,
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) String q,
@@ -171,12 +172,12 @@ public class FacilitatorController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
-        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        var assignedCohortIds = myCohorts.stream().map(CohortResponseDto.CohortResponse::getId).collect(Collectors.toList());
         return ResponseEntity.ok(attendanceService.getManualAttendancePage(assignedCohortIds, cohortId, q, date, page, size));
     }
 
     @GetMapping("/attendance/reports")
-    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> getReports(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord>> getReports(
             @AuthenticationPrincipal String facId,
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) String q,
@@ -185,7 +186,7 @@ public class FacilitatorController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
-        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        var assignedCohortIds = myCohorts.stream().map(CohortResponseDto.CohortResponse::getId).collect(Collectors.toList());
         return ResponseEntity.ok(attendanceService.getFacilitatorReportPage(assignedCohortIds, cohortId, q, date, status, page, size));
     }
 
@@ -199,7 +200,7 @@ public class FacilitatorController {
             @RequestParam(defaultValue = "xlsx") String format,
             @RequestParam(required = false) String source) {
         var myCohorts = cohortService.getCohortsByFacilitator(facId);
-        var assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+        var assignedCohortIds = myCohorts.stream().map(CohortResponseDto.CohortResponse::getId).collect(Collectors.toList());
         if (cohortId != null && !cohortId.isBlank() && !assignedCohortIds.contains(cohortId)) {
             throw AppException.forbidden("You are not authorized to download reports for cohort: " + cohortId);
         }
@@ -209,7 +210,7 @@ public class FacilitatorController {
     // ── Dashboard ─────────────────────────────────────────
 
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardDto.FacilitatorStats> dashboard(
+    public ResponseEntity<DashboardResponseDto.FacilitatorStats> dashboard(
             @AuthenticationPrincipal String facId,
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) String q,

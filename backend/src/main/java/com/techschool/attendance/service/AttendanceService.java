@@ -1,12 +1,13 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AnalyticsDto;
-import com.techschool.attendance.dto.AuthDto;
-import com.techschool.attendance.dto.AttendanceDto;
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.response.AnalyticsResponseDto;
+import com.techschool.attendance.dto.request.AttendanceRequestDto;
+import com.techschool.attendance.dto.response.AttendanceResponseDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.*;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.*;
+import com.techschool.attendance.data.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,10 +33,10 @@ public class AttendanceService {
     private final SystemSettingRepository systemSettingRepository;
     private final QrService qrService;
     private final AuditService auditService;
-    private final AuthService authService;
     private final HolidayService holidayService;
     private final ExcuseRequestRepository excuseRepository;
     private final AuditLogRepository auditLogRepository;
+    private final NetworkSettingsService networkSettingsService;
 
     @Value("${app.attendance.late-threshold}")
     private String lateThreshold;
@@ -49,17 +50,8 @@ public class AttendanceService {
     @Value("${app.attendance.timezone}")
     private String timezone;
 
-    @Value("${app.network.school-wifi-ssid:TechSchool-WiFi}")
-    private String schoolWifiSsid;
-
-    @Value("${app.network.school-ip-range:192.168.1.0/24}")
-    private String schoolIpRange;
-
-    @Value("${app.network.enforce:false}")
-    private boolean enforceNetwork;
-
     // ── QR Scan ──────────────────────────────────────────
-    public QrDto.ScanResponse scanQr(String studentId, QrDto.ScanRequest request, String ipAddress) {
+    public QrResponseDto.ScanResponse scanQr(String studentId, QrRequestDto.ScanRequest request, String ipAddress) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
 
@@ -95,8 +87,8 @@ public class AttendanceService {
             throw AppException.forbidden("This QR code is not for your cohort");
         }
 
-        // 4. School network validation
-        validateSchoolNetwork(request, studentId);
+        // 4. School network & geofence validation
+        String verificationMethod = verifyCheckIn(request, studentId, ipAddress);
 
         // 5. Device validation & first-scan auto-registration
         Device device = deviceRepository.findByStudentId(studentId).orElse(null);
@@ -141,133 +133,169 @@ public class AttendanceService {
         attendance.setManual(false);
         attendance.setDeviceId(device.getId());
         attendance.setIpAddress(ipAddress);
+        attendance.setVerificationMethod(verificationMethod);
         attendanceRepository.save(attendance);
 
         // 9. Increment scan count
-        session.setScanCount(session.getScanCount() + 1);
+        qrService.incrementScanCount(session.getId());
 
         auditService.log(studentId, student.getName(), "STUDENT",
                 AuditLog.ActionType.ATTENDANCE_MARKED,
                 attendance.getId(), student.getName(),
-                status + " — " + getCohortName(student.getCohortId()), ipAddress);
+                status + " (" + verificationMethod + ") — " + getCohortName(student.getCohortId()), ipAddress);
 
-        return new QrDto.ScanResponse(true,
+        return new QrResponseDto.ScanResponse(true,
                 "Attendance marked: " + status.name().toLowerCase(),
-                status, attendance.getMarkedAt());
+                status, attendance.getMarkedAt(), verificationMethod);
     }
 
-    // ── Network & GPS Geofence Validation ────────────────
-    private void validateSchoolNetwork(QrDto.ScanRequest request, String studentId) {
-        boolean wifiEnforce = Boolean.parseBoolean(getSetting("network_enforce", "false"));
-        boolean geofenceEnforce = Boolean.parseBoolean(getSetting("geofence_enforce", "false")) ||
-                Boolean.parseBoolean(getSetting("geofence_fallback_enabled", "false"));
+    // ── Network & GPS Geofence Verification Logic ────────
+    public String verifyCheckIn(QrRequestDto.ScanRequest request, String studentId, String remoteIp) {
+        NetworkSettings settings = networkSettingsService.getSettingsEntity();
 
-        // 1. Wi-Fi Enforcement Check
-        if (wifiEnforce) {
-            String schoolSsid = getSetting("school_wifi_ssid", schoolWifiSsid);
-            String ipRange = getSetting("school_ip_range", schoolIpRange);
+        boolean enforceWifi = settings.isEnforceNetwork();
+        boolean enforceGeo = settings.isEnforceGeolocation();
 
-            boolean onSchoolNetwork = false;
-            if (request.getNetworkSSID() != null && !request.getNetworkSSID().trim().isEmpty()) {
-                if (schoolSsid.equalsIgnoreCase(request.getNetworkSSID().trim())) {
-                    onSchoolNetwork = true;
+        // 1. Both enforced: Check WiFi first (SSID + IP required). If pass -> WIFI. Else fallback to Geolocation.
+        if (enforceWifi && enforceGeo) {
+            boolean wifiSuccess = isWifiVerified(request, remoteIp, settings);
+            if (wifiSuccess) {
+                log.info("Student {} verified check-in via WIFI.", studentId);
+                return "WIFI";
+            }
+            log.info("Student {} failed Wi-Fi check; falling back to Geolocation check.", studentId);
+            boolean geoSuccess = isGeolocationVerified(request, studentId, settings);
+            if (geoSuccess) {
+                log.info("Student {} verified check-in via GEOLOCATION (Wi-Fi fallback).", studentId);
+                return "GEOLOCATION";
+            }
+            throw AppException.forbidden("Check-in failed: Unable to verify location via school Wi-Fi network or GPS geofence.");
+        }
+
+        // 2. Wi-Fi enforced, Geolocation disabled: Check WiFi only (no fallback).
+        if (enforceWifi && !enforceGeo) {
+            boolean wifiSuccess = isWifiVerified(request, remoteIp, settings);
+            if (!wifiSuccess) {
+                String ssids = (settings.getSchoolWifiSsids() != null && !settings.getSchoolWifiSsids().isEmpty()) 
+                        ? String.join(", ", settings.getSchoolWifiSsids()) : "None configured";
+                log.warn("Student {} failed Wi-Fi check (Wi-Fi only mode). SSID={}, clientIP={}",
+                        studentId, request.getNetworkSSID(), request.getClientIP());
+                throw AppException.forbidden("Attendance can only be marked while connected to an authorized school network (" + ssids + ").");
+            }
+            log.info("Student {} verified check-in via WIFI.", studentId);
+            return "WIFI";
+        }
+
+        // 3. Geolocation enforced, Wi-Fi disabled: Check Geolocation only.
+        if (!enforceWifi && enforceGeo) {
+            boolean geoSuccess = isGeolocationVerified(request, studentId, settings);
+            if (!geoSuccess) {
+                throw AppException.forbidden("Attendance verification failed for geolocation.");
+            }
+            log.info("Student {} verified check-in via GEOLOCATION.", studentId);
+            return "GEOLOCATION";
+        }
+
+        // 4. Both disabled: Free check-in.
+        log.info("Student {} check-in unverified (network and geolocation enforcement disabled).", studentId);
+        return "UNVERIFIED";
+    }
+
+    private boolean isWifiVerified(QrRequestDto.ScanRequest request, String remoteIp, NetworkSettings settings) {
+        List<String> allowedSsids = settings.getSchoolWifiSsids();
+        String ipRange = settings.getSchoolIpRange();
+
+        // Must match ANY SSID in allowedSsids
+        boolean ssidMatch = false;
+        if (allowedSsids != null && !allowedSsids.isEmpty() && request.getNetworkSSID() != null && !request.getNetworkSSID().isBlank()) {
+            String clientSsid = request.getNetworkSSID().trim();
+            for (String allowed : allowedSsids) {
+                if (allowed != null && allowed.equalsIgnoreCase(clientSsid)) {
+                    ssidMatch = true;
+                    break;
                 }
             }
-
-            if (!onSchoolNetwork && request.getClientIP() != null && !request.getClientIP().trim().isEmpty()) {
-                onSchoolNetwork = isIpInSchoolRange(request.getClientIP().trim(), ipRange);
-            }
-
-            if (!onSchoolNetwork) {
-                log.warn("Student {} failed Wi-Fi enforcement check. SSID={}, clientIP={}",
-                        studentId, request.getNetworkSSID(), request.getClientIP());
-                throw AppException.forbidden(
-                        "Attendance can only be marked while connected to the authorized school network (" + schoolSsid + ").");
-            }
-            log.info("Student {} passed Wi-Fi network enforcement check.", studentId);
         }
 
-        // 2. Geofence Location Enforcement Check
-        if (geofenceEnforce) {
-            Double lat = request.getLatitude();
-            Double lng = request.getLongitude();
-            Double accuracy = request.getAccuracy();
+        // Must match IP range
+        boolean ipMatch = false;
+        String clientIp = (request.getClientIP() != null && !request.getClientIP().isBlank())
+                ? request.getClientIP().trim()
+                : (remoteIp != null ? remoteIp.trim() : null);
 
-            if (lat == null || lng == null) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"MISSING_COORDINATES\", \"accuracy\":null, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":null}", studentId);
-                throw AppException.badRequest("Location coordinates are required to mark attendance when geofencing is enabled.");
-            }
-
-            if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 || (lat == 0.0 && lng == 0.0)
-                    || Double.isNaN(lat) || Double.isNaN(lng) || Double.isInfinite(lat) || Double.isInfinite(lng)) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_COORDINATES\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":null, \"lat\":{}, \"lng\":{}}", studentId, accuracy, lat, lng);
-                throw AppException.badRequest("Invalid location coordinates received. Please ensure your device has a valid GPS fix and try again.");
-            }
-
-            double schoolLat;
-            double schoolLng;
-            double maxRadiusMeters;
-            try {
-                schoolLat = Double.parseDouble(getSetting("school_latitude", "6.5244"));
-                schoolLng = Double.parseDouble(getSetting("school_longitude", "3.3792"));
-                maxRadiusMeters = Double.parseDouble(getSetting("school_geofence_radius_meters", "150"));
-            } catch (NumberFormatException e) {
-                log.warn("Invalid geofence system settings (non-numeric). Rejecting attendance.");
-                throw AppException.badRequest("Geofence system settings are misconfigured. Please contact your administrator.");
-            }
-
-            if (Double.isNaN(schoolLat) || Double.isInfinite(schoolLat) ||
-                Double.isNaN(schoolLng) || Double.isInfinite(schoolLng)) {
-                log.warn("Geofence school coordinates are NaN/Infinity. Rejecting attendance.");
-                throw AppException.badRequest("Geofence school location is misconfigured. Please contact your administrator.");
-            }
-
-            if (schoolLat < -90.0 || schoolLat > 90.0 || schoolLng < -180.0 || schoolLng > 180.0) {
-                log.warn("Geofence school coordinates out of range: lat={}, lng={}", schoolLat, schoolLng);
-                throw AppException.badRequest("Geofence school location is out of valid range. Please contact your administrator.");
-            }
-
-            if (Double.isNaN(maxRadiusMeters) || Double.isInfinite(maxRadiusMeters) || maxRadiusMeters <= 0) {
-                log.warn("Invalid geofence radius: {}. Must be a positive finite number.", maxRadiusMeters);
-                throw AppException.badRequest("Geofence radius is misconfigured (must be > 0). Please contact your administrator.");
-            }
-
-            if (accuracy != null && !Double.isFinite(accuracy)) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, accuracy, maxRadiusMeters);
-                throw AppException.badRequest("Invalid location accuracy value received. Please try again.");
-            }
-
-            if (accuracy != null && accuracy > Math.max(3000.0, maxRadiusMeters * 10.0)) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"POOR_ACCURACY\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, Math.round(accuracy), maxRadiusMeters);
-                throw AppException.badRequest("Your location accuracy (" + Math.round(accuracy) + "m) is too low. Please move to an open area with better GPS signal and try again.");
-            }
-
-            double distanceMeters = calculateHaversineDistanceMeters(lat, lng, schoolLat, schoolLng);
-
-            if (!Double.isFinite(distanceMeters)) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_DISTANCE\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":null, \"allowedRadius\":{}}", studentId, accuracy, maxRadiusMeters);
-                throw AppException.badRequest("Unable to calculate distance from school. Please ensure your device has a valid GPS fix and try again.");
-            }
-
-            if (distanceMeters > maxRadiusMeters) {
-                log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"OUTSIDE_GEOFENCE\", \"accuracy\":{}, \"geofenceResult\":\"REJECTED\", \"distance\":{}, \"allowedRadius\":{}}",
-                        studentId, accuracy != null ? Math.round(accuracy) : null, Math.round(distanceMeters), maxRadiusMeters);
-                throw AppException.forbidden(
-                        "You are outside the allowed attendance location (" +
-                        Math.round(distanceMeters) + "m away, max allowed: " + (int)maxRadiusMeters + "m).");
-            }
-
-            log.info("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INSIDE_GEOFENCE\", \"accuracy\":{}, \"geofenceResult\":\"PASSED\", \"distance\":{}, \"allowedRadius\":{}}",
-                    studentId, accuracy != null ? Math.round(accuracy) : null, Math.round(distanceMeters), maxRadiusMeters);
+        if (clientIp != null && ipRange != null && !ipRange.isBlank()) {
+            ipMatch = isIpInSchoolRange(clientIp, ipRange);
         }
+
+        // Both SSID match AND IP match required for WiFi verification
+        return ssidMatch && ipMatch;
     }
+
+    private boolean isGeolocationVerified(QrRequestDto.ScanRequest request, String studentId, NetworkSettings settings) {
+        Double lat = request.getLatitude();
+        Double lng = request.getLongitude();
+        Double accuracy = request.getAccuracy();
+
+        if (lat == null || lng == null) {
+            log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"MISSING_COORDINATES\"}", studentId);
+            throw AppException.badRequest("Location coordinates are required to mark attendance when geofencing is enabled.");
+        }
+
+        if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0 || (lat == 0.0 && lng == 0.0)
+                || Double.isNaN(lat) || Double.isNaN(lng) || Double.isInfinite(lat) || Double.isInfinite(lng)) {
+            log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INVALID_COORDINATES\"}", studentId);
+            throw AppException.badRequest("Invalid location coordinates received. Please ensure your device has a valid GPS fix and try again.");
+        }
+
+        double schoolLat = settings.getSchoolLatitude();
+        double schoolLng = settings.getSchoolLongitude();
+        double allowedRadius = settings.getAllowedRadiusMeters();
+
+        if (Double.isNaN(schoolLat) || Double.isInfinite(schoolLat) || schoolLat < -90.0 || schoolLat > 90.0 ||
+            Double.isNaN(schoolLng) || Double.isInfinite(schoolLng) || schoolLng < -180.0 || schoolLng > 180.0) {
+            log.warn("Geofence school location misconfigured: lat={}, lng={}", schoolLat, schoolLng);
+            throw AppException.badRequest("Geofence school location is misconfigured. Please contact your administrator.");
+        }
+
+        if (Double.isNaN(allowedRadius) || Double.isInfinite(allowedRadius) || allowedRadius <= 0) {
+            log.warn("Invalid geofence radius: {}. Must be > 0.", allowedRadius);
+            throw AppException.badRequest("Geofence radius is misconfigured (must be > 0). Please contact your administrator.");
+        }
+
+        if (accuracy != null && !Double.isFinite(accuracy)) {
+            throw AppException.badRequest("Invalid location accuracy value received. Please try again.");
+        }
+
+        if (accuracy != null && accuracy > Math.max(3000.0, allowedRadius * 10.0)) {
+            throw AppException.badRequest("Your location accuracy (" + Math.round(accuracy) + "m) is too low. Please move to an open area with better GPS signal and try again.");
+        }
+
+        double distanceMeters = calculateHaversineDistanceMeters(lat, lng, schoolLat, schoolLng);
+
+        if (!Double.isFinite(distanceMeters)) {
+            throw AppException.badRequest("Unable to calculate distance from school. Please ensure your device has a valid GPS fix and try again.");
+        }
+
+        if (distanceMeters > allowedRadius) {
+            log.warn("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"OUTSIDE_GEOFENCE\", \"distance\":{}, \"allowedRadius\":{}}",
+                    studentId, Math.round(distanceMeters), allowedRadius);
+            throw AppException.forbidden(
+                    "You are outside the allowed attendance location (" +
+                    Math.round(distanceMeters) + "m away, max allowed: " + (int)allowedRadius + "m).");
+        }
+
+        log.info("Structured Location Audit: {\"studentId\":\"{}\", \"locationStatus\":\"INSIDE_GEOFENCE\", \"distance\":{}, \"allowedRadius\":{}}",
+                studentId, Math.round(distanceMeters), allowedRadius);
+        return true;
+    }
+
+    private static final int EARTH_RADIUS_METERS = 6371000;
 
     private double calculateHaversineDistanceMeters(double lat1, double lon1, double lat2, double lon2) {
         if (!Double.isFinite(lat1) || !Double.isFinite(lon1) || !Double.isFinite(lat2) || !Double.isFinite(lon2)) {
             return Double.NaN;
         }
 
-        final int R = 6371000; // Radius of earth in meters
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -275,7 +303,7 @@ public class AttendanceService {
                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
         a = Math.max(0.0, Math.min(1.0, a));
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        double distance = R * c;
+        double distance = EARTH_RADIUS_METERS * c;
         return Double.isFinite(distance) ? distance : Double.NaN;
     }
 
@@ -284,22 +312,43 @@ public class AttendanceService {
         try {
             String cleanIp = clientIp.trim();
             String range = ipRange.trim();
+
+            String subnetStr;
+            int prefixLength;
+
             if (range.contains("/")) {
-                String subnet = range.split("/")[0];
-                int lastDot = subnet.lastIndexOf('.');
-                if (lastDot > 0) {
-                    String prefix = subnet.substring(0, lastDot);
-                    return cleanIp.startsWith(prefix);
-                }
+                String[] parts = range.split("/", 2);
+                subnetStr = parts[0].trim();
+                prefixLength = Integer.parseInt(parts[1].trim());
             } else {
-                int lastDot = range.lastIndexOf('.');
-                if (lastDot > 0) {
-                    String prefix = range.substring(0, lastDot);
-                    return cleanIp.startsWith(prefix);
-                }
+                subnetStr = range;
+                prefixLength = 32;
             }
-            return cleanIp.equals(range);
+
+            java.net.InetAddress ipAddr = java.net.InetAddress.getByName(cleanIp);
+            java.net.InetAddress subnetAddr = java.net.InetAddress.getByName(subnetStr);
+
+            byte[] ipBytes = ipAddr.getAddress();
+            byte[] subnetBytes = subnetAddr.getAddress();
+
+            if (ipBytes.length != subnetBytes.length) return false;
+            if (prefixLength < 0 || prefixLength > ipBytes.length * 8) return false;
+
+            int fullBytes = prefixLength / 8;
+            int remainingBits = prefixLength % 8;
+
+            for (int i = 0; i < fullBytes; i++) {
+                if (ipBytes[i] != subnetBytes[i]) return false;
+            }
+
+            if (remainingBits > 0 && fullBytes < ipBytes.length) {
+                int mask = 0xFF << (8 - remainingBits) & 0xFF;
+                if ((ipBytes[fullBytes] & mask) != (subnetBytes[fullBytes] & mask)) return false;
+            }
+
+            return true;
         } catch (Exception e) {
+            log.warn("Failed to evaluate IP range match for ip={}, range={}: {}", clientIp, ipRange, e.getMessage());
             return false;
         }
     }
@@ -311,8 +360,8 @@ public class AttendanceService {
     }
 
     // ── Manual Attendance ────────────────────────────────
-    public AttendanceDto.AttendanceRecord markManual(String actorId, String actorName, String actorRole,
-                                                      AttendanceDto.ManualMarkRequest request,
+    public AttendanceResponseDto.AttendanceRecord markManual(String actorId, String actorName, String actorRole,
+                                                      AttendanceRequestDto.ManualMarkRequest request,
                                                       String ipAddress) {
         User student = userRepository.findById(request.getStudentId())
                 .orElseThrow(() -> AppException.notFound("Student not found"));
@@ -344,26 +393,26 @@ public class AttendanceService {
     }
 
     // ── Queries ──────────────────────────────────────────
-    public List<AttendanceDto.AttendanceRecord> getStudentHistory(String studentId) {
+    public List<AttendanceResponseDto.AttendanceRecord> getStudentHistory(String studentId) {
         return buildRecords(attendanceRepository.findByStudentId(studentId));
     }
 
-    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getStudentHistoryPage(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> getStudentHistoryPage(
             String studentId, int page, int size) {
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
         Pageable pageable = PageRequest.of(safePage, safeSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "date"));
         Page<Attendance> result = attendanceRepository.findByStudentId(studentId, pageable);
-        return new AnalyticsDto.PageResponse<>(buildRecords(result.getContent()),
+        return new AnalyticsResponseDto.PageResponse<>(buildRecords(result.getContent()),
                 safePage, safeSize, result.getTotalElements(), result.getTotalPages());
     }
 
-    public AttendanceDto.DailySummary getCohortSummaryToday(String cohortId) {
+    public AttendanceResponseDto.DailySummary getCohortSummaryToday(String cohortId) {
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
         return buildDailySummary(cohortId, today);
     }
 
-    public AttendanceDto.DailySummary buildDailySummary(String cohortId, LocalDate date) {
+    public AttendanceResponseDto.DailySummary buildDailySummary(String cohortId, LocalDate date) {
         List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
         List<Attendance> records = attendanceRepository.findByCohortIdAndDate(cohortId, date);
         Cohort cohort = cohortRepository.findById(cohortId).orElse(null);
@@ -381,7 +430,7 @@ public class AttendanceService {
         int absent = isHoliday ? 0 : Math.max(0, total - records.size());
         double rate = total > 0 ? (double) (present + late) / total * 100 : 0;
 
-        return new AttendanceDto.DailySummary(
+        return new AttendanceResponseDto.DailySummary(
                 date, cohortId, cohortName,
                 total, present, late, absent, excused, holiday, manual, rate,
                 buildRecords(records)
@@ -390,7 +439,7 @@ public class AttendanceService {
 
     // ── Calendar ─────────────────────────────────────────
 
-    public AnalyticsDto.CalendarMonth buildCalendarMonth(String cohortId, int year, int month) {
+    public AnalyticsResponseDto.CalendarMonth buildCalendarMonth(String cohortId, int year, int month) {
         LocalDate first = LocalDate.of(year, month, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
 
@@ -414,7 +463,7 @@ public class AttendanceService {
         Map<LocalDate, String> holidays = holidayService.holidayNamesBetween(first, last,
                 cohortId != null && !cohortId.isBlank() ? cohortId : null);
 
-        List<AnalyticsDto.CalendarDay> days = new ArrayList<>();
+        List<AnalyticsResponseDto.CalendarDay> days = new ArrayList<>();
         for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
             boolean weekend = d.getDayOfWeek().getValue() >= 6;
             boolean isHoliday = holidays.containsKey(d);
@@ -430,15 +479,15 @@ public class AttendanceService {
                     ? 0
                     : Math.max(0, totalStudents - dayRecs.size()) + absentMarked;
 
-            days.add(new AnalyticsDto.CalendarDay(
+            days.add(new AnalyticsResponseDto.CalendarDay(
                     d, weekend, isHoliday, holidayName,
                     present, late, absent, excused, holidayCount, totalStudents));
         }
 
-        return new AnalyticsDto.CalendarMonth(year, month, cohortId, cohortName, days);
+        return new AnalyticsResponseDto.CalendarMonth(year, month, cohortId, cohortName, days);
     }
 
-    public AnalyticsDto.CalendarMonth buildStudentCalendarMonth(String studentId, int year, int month) {
+    public AnalyticsResponseDto.CalendarMonth buildStudentCalendarMonth(String studentId, int year, int month) {
         LocalDate first = LocalDate.of(year, month, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
 
@@ -453,7 +502,7 @@ public class AttendanceService {
                 .collect(Collectors.toMap(Attendance::getDate, Function.identity(), (a, b) -> a));
         Map<LocalDate, String> holidays = holidayService.holidayNamesBetween(first, last, cohortId);
 
-        List<AnalyticsDto.CalendarDay> days = new ArrayList<>();
+        List<AnalyticsResponseDto.CalendarDay> days = new ArrayList<>();
         for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
             boolean weekend = d.getDayOfWeek().getValue() >= 6;
             boolean isHoliday = holidays.containsKey(d);
@@ -466,22 +515,22 @@ public class AttendanceService {
             int holidayCount = st == Attendance.AttendanceStatus.HOLIDAY ? 1 : 0;
             int absent = (!weekend && !isHoliday && (st == null || st == Attendance.AttendanceStatus.ABSENT)) ? 1 : 0;
 
-            days.add(new AnalyticsDto.CalendarDay(
+            days.add(new AnalyticsResponseDto.CalendarDay(
                     d, weekend, isHoliday, holidays.get(d),
                     present, late, absent, excused, holidayCount, 1));
         }
 
-        return new AnalyticsDto.CalendarMonth(year, month, cohortId, cohortName, days);
+        return new AnalyticsResponseDto.CalendarMonth(year, month, cohortId, cohortName, days);
     }
 
     // ── Attendance search by date ────────────────────────
 
-    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> searchByDate(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> searchByDate(
             String cohortId, LocalDate start, LocalDate end, int page, int size) {
         return searchByDate(cohortId, start, end, null, page, size);
     }
 
-    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> searchByDate(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> searchByDate(
             String cohortId, LocalDate start, LocalDate end, Integer lastNDays, int page, int size) {
         LocalDate[] range = resolveDateRange(start, end, lastNDays);
 
@@ -492,7 +541,7 @@ public class AttendanceService {
                 ? attendanceRepository.findByCohortIdAndDateBetween(cohortId, range[0], range[1], pageable)
                 : attendanceRepository.findByDateBetween(range[0], range[1], pageable);
 
-        return new AnalyticsDto.PageResponse<>(buildRecords(result.getContent()),
+        return new AnalyticsResponseDto.PageResponse<>(buildRecords(result.getContent()),
                 page, size, result.getTotalElements(), result.getTotalPages());
     }
 
@@ -512,7 +561,7 @@ public class AttendanceService {
     }
 
     /** Non-paginated list used for calendar / date-range exports. */
-    public List<AttendanceDto.AttendanceRecord> findRecordsInRange(String cohortId, LocalDate start, LocalDate end) {
+    public List<AttendanceResponseDto.AttendanceRecord> findRecordsInRange(String cohortId, LocalDate start, LocalDate end) {
         LocalDate[] range = resolveDateRange(start, end, null);
         List<Attendance> records = (cohortId != null && !cohortId.isBlank())
                 ? attendanceRepository.findByCohortIdAndDateBetween(cohortId, range[0], range[1])
@@ -521,7 +570,7 @@ public class AttendanceService {
         return buildRecords(records);
     }
 
-    public List<AttendanceDto.AttendanceRecord> findStudentRecordsInRange(String studentId, LocalDate start, LocalDate end) {
+    public List<AttendanceResponseDto.AttendanceRecord> findStudentRecordsInRange(String studentId, LocalDate start, LocalDate end) {
         LocalDate[] range = resolveDateRange(start, end, null);
         List<Attendance> records = attendanceRepository.findByStudentIdAndDateBetween(studentId, range[0], range[1]);
         records.sort((a, b) -> b.getDate().compareTo(a.getDate()));
@@ -532,13 +581,13 @@ public class AttendanceService {
      * Builds a single-student summary export row (attendance %, present, absent,
      * late, excused, holiday, days attended/missed, streaks and rating).
      */
-    public AnalyticsDto.StudentAnalytics buildStudentSummaryExport(String studentId) {
+    public AnalyticsResponseDto.StudentAnalytics buildStudentSummaryExport(String studentId) {
         return buildStudentAnalytics(studentId);
     }
 
     // ── Behaviour Analytics ──────────────────────────────
 
-    public AnalyticsDto.StudentAnalytics buildStudentAnalytics(String studentId) {
+    public AnalyticsResponseDto.StudentAnalytics buildStudentAnalytics(String studentId) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
         String cohortId = student.getCohortId();
@@ -595,17 +644,17 @@ public class AttendanceService {
                 : (attended > 0 ? 100.0 : 0.0);
         String rating = rate >= 90 ? "EXCELLENT" : rate >= 75 ? "GOOD" : rate >= 50 ? "FAIR" : "POOR";
 
-        List<AnalyticsDto.StudentAnalytics.MonthlyTrend> trend = buildMonthlyTrend(today, statusByDate, holidays);
+        List<AnalyticsResponseDto.StudentAnalytics.MonthlyTrend> trend = buildMonthlyTrend(today, statusByDate, holidays);
 
-        return new AnalyticsDto.StudentAnalytics(
+        return new AnalyticsResponseDto.StudentAnalytics(
                 studentId, student.getName(), cohortId, cohortName,
                 Math.round(rate * 10.0) / 10.0, schoolDays, present, late, absent, excused, holiday, late,
                 maxAtt, maxAbs, rating, trend);
     }
 
-    private List<AnalyticsDto.StudentAnalytics.MonthlyTrend> buildMonthlyTrend(
+    private List<AnalyticsResponseDto.StudentAnalytics.MonthlyTrend> buildMonthlyTrend(
             LocalDate today, Map<LocalDate, Attendance.AttendanceStatus> statusByDate, Set<LocalDate> holidays) {
-        List<AnalyticsDto.StudentAnalytics.MonthlyTrend> trend = new ArrayList<>();
+        List<AnalyticsResponseDto.StudentAnalytics.MonthlyTrend> trend = new ArrayList<>();
         LocalDate monthStart = today.withDayOfMonth(1).minusMonths(5);
         for (int i = 0; i < 6; i++) {
             LocalDate ms = monthStart.plusMonths(i);
@@ -618,19 +667,17 @@ public class AttendanceService {
                 if (st == Attendance.AttendanceStatus.PRESENT || st == Attendance.AttendanceStatus.LATE) attended++;
             }
             double mRate = schoolDays > 0 ? (double) attended / schoolDays * 100 : 0;
-            trend.add(new AnalyticsDto.StudentAnalytics.MonthlyTrend(
+            trend.add(new AnalyticsResponseDto.StudentAnalytics.MonthlyTrend(
                     ms.getMonth().toString().substring(0, 3), ms.getYear(), mRate));
         }
         return trend;
     }
 
-    private int count(List<Attendance> records, Attendance.AttendanceStatus status) {
-        return (int) records.stream().filter(a -> a.getStatus() == status).count();
-    }
+
 
     // ── Cohort export data ───────────────────────────────
 
-    public List<AnalyticsDto.CohortExportRow> buildCohortExportRows(String cohortId) {
+    public List<AnalyticsResponseDto.CohortExportRow> buildCohortExportRows(String cohortId) {
         if (!cohortRepository.existsById(cohortId)) {
             throw AppException.notFound("Cohort not found");
         }
@@ -649,7 +696,7 @@ public class AttendanceService {
         }
         Set<LocalDate> holidays = holidayService.holidayDatesBetween(globalStart, today, cohortId);
 
-        List<AnalyticsDto.CohortExportRow> rows = new ArrayList<>();
+        List<AnalyticsResponseDto.CohortExportRow> rows = new ArrayList<>();
         for (User s : students) {
             List<Attendance> recs = byStudent.getOrDefault(s.getId(), List.of());
             Map<LocalDate, Attendance.AttendanceStatus> statusByDate = recs.stream()
@@ -672,7 +719,7 @@ public class AttendanceService {
                 }
             }
             double rate = schoolDays > 0 ? (double) attended / schoolDays * 100 : 0;
-            rows.add(new AnalyticsDto.CohortExportRow(
+            rows.add(new AnalyticsResponseDto.CohortExportRow(
                     s.getName(), s.getRegistrationNumber(), rate, present, late,
                     excused, holidayDays, attended,
                     Math.max(0, schoolDays - attended - excused), schoolDays));
@@ -705,10 +752,10 @@ public class AttendanceService {
         return cohortRepository.findById(cohortId).map(Cohort::getName).orElse(cohortId);
     }
 
-    public AttendanceDto.AttendanceRecord toRecord(Attendance a) {
+    public AttendanceResponseDto.AttendanceRecord toRecord(Attendance a) {
         User student = userRepository.findById(a.getStudentId()).orElse(null);
         Cohort cohort = a.getCohortId() != null ? cohortRepository.findById(a.getCohortId()).orElse(null) : null;
-        return new AttendanceDto.AttendanceRecord(
+        return new AttendanceResponseDto.AttendanceRecord(
                 a.getId(), a.getStudentId(),
                 student != null ? student.getName() : a.getStudentId(),
                 student != null ? student.getRegistrationNumber() : null,
@@ -720,7 +767,7 @@ public class AttendanceService {
     }
 
     /** Bulk record conversion with batched lookups to avoid N+1 queries. */
-    public List<AttendanceDto.AttendanceRecord> buildRecords(List<Attendance> records) {
+    public List<AttendanceResponseDto.AttendanceRecord> buildRecords(List<Attendance> records) {
         if (records.isEmpty()) return List.of();
 
         Set<String> studentIds = records.stream().map(Attendance::getStudentId)
@@ -747,7 +794,7 @@ public class AttendanceService {
             String status = isWeekend && a.getStatus() == Attendance.AttendanceStatus.ABSENT
                     ? "WEEKEND"
                     : (a.getStatus() != null ? a.getStatus().name() : null);
-            return new AttendanceDto.AttendanceRecord(
+            return new AttendanceResponseDto.AttendanceRecord(
                     a.getId(), a.getStudentId(),
                     s != null ? s.getName() : a.getStudentId(),
                     s != null ? s.getRegistrationNumber() : null,
@@ -758,7 +805,7 @@ public class AttendanceService {
         }).collect(Collectors.toList());
     }
 
-    public AnalyticsDto.PageResponse<AttendanceDto.ManualStudentAttendanceResponse> getManualAttendancePage(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.ManualStudentAttendanceResponse> getManualAttendancePage(
             List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, int page, int size) {
         
         LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
@@ -767,7 +814,7 @@ public class AttendanceService {
                 ? List.of(cohortId) : assignedCohortIds;
 
         if (targetCohortIds.isEmpty()) {
-            return new AnalyticsDto.PageResponse<>(List.of(), page, size, 0, 1);
+            return new AnalyticsResponseDto.PageResponse<>(List.of(), page, size, 0, 1);
         }
 
         List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
@@ -807,7 +854,7 @@ public class AttendanceService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.ManualStudentAttendanceResponse> content = pagedStudents.stream().map(s -> {
+        List<AttendanceResponseDto.ManualStudentAttendanceResponse> content = pagedStudents.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -835,23 +882,23 @@ public class AttendanceService {
                 status = "ABSENT";
             }
 
-            return new AttendanceDto.ManualStudentAttendanceResponse(
+            return new AttendanceResponseDto.ManualStudentAttendanceResponse(
                     s.getId(), s.getName(), s.getRegistrationNumber(), s.getEmail(),
                     s.getCohortId(), c != null ? c.getName() : s.getCohortId(),
                     date, status, markedAt, manual, manualReason
             );
         }).collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        return new AnalyticsResponseDto.PageResponse<>(content, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
-    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getFacilitatorReportPage(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> getFacilitatorReportPage(
             List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, int page, int size) {
         return getFacilitatorReportPage(assignedCohortIds, cohortId, queryStr, targetDate, null, page, size);
     }
 
-    public AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> getFacilitatorReportPage(
+    public AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> getFacilitatorReportPage(
             List<String> assignedCohortIds, String cohortId, String queryStr, LocalDate targetDate, String statusFilter, int page, int size) {
         
         LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
@@ -859,7 +906,7 @@ public class AttendanceService {
                 ? List.of(cohortId) : assignedCohortIds;
 
         if (targetCohortIds.isEmpty()) {
-            return new AnalyticsDto.PageResponse<>(List.of(), page, size, 0, 1);
+            return new AnalyticsResponseDto.PageResponse<>(List.of(), page, size, 0, 1);
         }
 
         List<User> students = userRepository.findByCohortIdIn(targetCohortIds);
@@ -892,7 +939,7 @@ public class AttendanceService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.AttendanceRecord> allRecords = students.stream().map(s -> {
+        List<AttendanceResponseDto.AttendanceRecord> allRecords = students.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -903,7 +950,7 @@ public class AttendanceService {
                     : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
                                  : (exc != null ? "EXCUSED" : "ABSENT"));
 
-            return new AttendanceDto.AttendanceRecord(
+            return new AttendanceResponseDto.AttendanceRecord(
                     a != null ? a.getId() : null,
                     s.getId(),
                     s.getName(),
@@ -936,9 +983,9 @@ public class AttendanceService {
         int from = Math.min(safePage * safeSize, total);
         int to = Math.min(from + safeSize, total);
 
-        List<AttendanceDto.AttendanceRecord> pagedContent = allRecords.subList(from, to);
+        List<AttendanceResponseDto.AttendanceRecord> pagedContent = allRecords.subList(from, to);
 
-        return new AnalyticsDto.PageResponse<>(pagedContent, safePage, safeSize, total,
+        return new AnalyticsResponseDto.PageResponse<>(pagedContent, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
@@ -950,16 +997,6 @@ public class AttendanceService {
         }
 
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
-        Instant startOfDay = today.atStartOfDay(ZoneId.of(timezone)).toInstant();
-        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.of(timezone)).toInstant();
-
-        long todayCount = auditLogRepository.countByTargetIdAndActionAndCreatedAtBetween(
-                cohortId, AuditLog.ActionType.PROJECTION_REPORT_DOWNLOADED, startOfDay, endOfDay);
-
-        if (todayCount >= 3) {
-            throw AppException.badRequest("You have reached today's Projection Screen download limit (3 downloads). Please try again tomorrow.");
-        }
-
         LocalDate date = targetDate != null ? targetDate : today;
         return exportFacilitatorReport(
                 "PUBLIC_PROJECTION", List.of(cohortId), cohortId, null, date, null, format, "projection", exportService);
@@ -981,6 +1018,10 @@ public class AttendanceService {
         boolean isProjection = source != null && ("projection".equalsIgnoreCase(source.trim()) || "projection_screen".equalsIgnoreCase(source.trim()));
 
         if (isProjection) {
+            // TODO: TOCTOU Race Condition — the rate limit check is performed here before generating the export,
+            // while the audit log entry recording the download is created after the report generation succeeds.
+            // Under high concurrency, simultaneous requests may pass this check before any audit log is saved.
+            // Since this is a soft usage limit for projection report exports and not a security boundary, it is accepted as low-risk.
             LocalDate today = LocalDate.now(ZoneId.of(timezone));
             Instant startOfDay = today.atStartOfDay(ZoneId.of(timezone)).toInstant();
             Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.of(timezone)).toInstant();
@@ -1033,7 +1074,7 @@ public class AttendanceService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(targetCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.AttendanceRecord> allRecords = students.stream().map(s -> {
+        List<AttendanceResponseDto.AttendanceRecord> allRecords = students.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -1044,7 +1085,7 @@ public class AttendanceService {
                     : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
                                  : (exc != null ? "EXCUSED" : "ABSENT"));
 
-            return new AttendanceDto.AttendanceRecord(
+            return new AttendanceResponseDto.AttendanceRecord(
                     a != null ? a.getId() : null,
                     s.getId(),
                     s.getName(),
@@ -1074,7 +1115,7 @@ public class AttendanceService {
         List<List<Object>> table = new ArrayList<>();
         java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of(timezone));
 
-        for (AttendanceDto.AttendanceRecord r : allRecords) {
+        for (AttendanceResponseDto.AttendanceRecord r : allRecords) {
             String checkInTime = (r.getMarkedAt() != null) ? timeFmt.format(r.getMarkedAt()) : "—";
 
             table.add(List.of(
@@ -1103,7 +1144,7 @@ public class AttendanceService {
         return response;
     }
 
-    public static void sortFacilitatorAttendanceRecords(List<AttendanceDto.AttendanceRecord> records) {
+    public static void sortFacilitatorAttendanceRecords(List<AttendanceResponseDto.AttendanceRecord> records) {
         records.sort((r1, r2) -> {
             Instant t1 = r1.getMarkedAt();
             Instant t2 = r2.getMarkedAt();
@@ -1125,7 +1166,7 @@ public class AttendanceService {
         });
     }
 
-    public static boolean isAttendedRecord(AttendanceDto.AttendanceRecord r) {
+    public static boolean isAttendedRecord(AttendanceResponseDto.AttendanceRecord r) {
         if (r == null || r.getStatus() == null) return false;
         String status = r.getStatus().toUpperCase();
         return "PRESENT".equals(status) || "LATE".equals(status) || "EARLY".equals(status)

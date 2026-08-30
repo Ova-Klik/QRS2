@@ -1,9 +1,10 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.*;
+import com.techschool.attendance.dto.request.*;
+import com.techschool.attendance.dto.response.*;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.*;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.*;
+import com.techschool.attendance.data.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -38,8 +39,8 @@ public class CohortService {
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone}")
     private String timezone;
 
-    public CohortDto.CohortResponse createCohort(String actorId, String actorName,
-                                                   CohortDto.CreateCohortRequest request) {
+    public CohortResponseDto.CohortResponse createCohort(String actorId, String actorName,
+                                                   CohortRequestDto.CreateCohortRequest request) {
         Cohort cohort = new Cohort();
         cohort.setName(request.getName());
         cohort.setFacilitatorId(request.getFacilitatorId());
@@ -60,15 +61,15 @@ public class CohortService {
         return toResponse(saved);
     }
 
-    public List<CohortDto.CohortResponse> getAllCohorts() {
+    public List<CohortResponseDto.CohortResponse> getAllCohorts() {
         return toResponses(cohortRepository.findAll());
     }
 
-    public List<CohortDto.CohortResponse> getActiveCohorts() {
+    public List<CohortResponseDto.CohortResponse> getActiveCohorts() {
         return toResponses(cohortRepository.findByActive(true));
     }
 
-    public List<CohortDto.CohortResponse> getCohortsByFacilitator(String facId) {
+    public List<CohortResponseDto.CohortResponse> getCohortsByFacilitator(String facId) {
         User fac = userRepository.findById(facId).orElse(null);
         Set<String> cohortIds = new java.util.HashSet<>();
         cohortRepository.findByFacilitatorId(facId).forEach(c -> cohortIds.add(c.getId()));
@@ -80,11 +81,11 @@ public class CohortService {
     }
 
     /** Batched cohort mapping — zero per-cohort queries. */
-    private List<CohortDto.CohortResponse> toResponses(List<Cohort> cohorts) {
+    private List<CohortResponseDto.CohortResponse> toResponses(List<Cohort> cohorts) {
         return toResponses(cohorts, null);
     }
 
-    private List<CohortDto.CohortResponse> toResponses(List<Cohort> cohorts, LocalDate targetDate) {
+    private List<CohortResponseDto.CohortResponse> toResponses(List<Cohort> cohorts, LocalDate targetDate) {
         if (cohorts.isEmpty()) return List.of();
 
         LocalDate date = targetDate != null ? targetDate : LocalDate.now(ZoneId.of(timezone));
@@ -141,7 +142,7 @@ public class CohortService {
                     ? (double) presentCount / (studentCount - excusedCount) * 100.0
                     : 0.0;
 
-            CohortDto.CohortResponse resp = new CohortDto.CohortResponse();
+            CohortResponseDto.CohortResponse resp = new CohortResponseDto.CohortResponse();
             resp.setId(c.getId());
             resp.setName(c.getName());
             resp.setFacilitatorId(c.getFacilitatorId());
@@ -163,12 +164,12 @@ public class CohortService {
         }).collect(Collectors.toList());
     }
 
-    public AnalyticsDto.PageResponse<CohortDto.CohortResponse> searchCohorts(
+    public AnalyticsResponseDto.PageResponse<CohortResponseDto.CohortResponse> searchCohorts(
             String query, String statusStr, int page, int size, String sort, String order) {
         return searchCohorts(query, statusStr, null, null, page, size, sort, order);
     }
 
-    public AnalyticsDto.PageResponse<CohortDto.CohortResponse> searchCohorts(
+    public AnalyticsResponseDto.PageResponse<CohortResponseDto.CohortResponse> searchCohorts(
             String query, String statusStr, LocalDate targetDate, String cohortIdFilter,
             int page, int size, String sort, String order) {
 
@@ -201,26 +202,26 @@ public class CohortService {
             }).collect(Collectors.toList());
         }
 
-        List<CohortDto.CohortResponse> responses = toResponses(filtered, targetDate);
+        List<CohortResponseDto.CohortResponse> responses = toResponses(filtered, targetDate);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
         String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
-        java.util.Comparator<CohortDto.CohortResponse> cmp;
+        java.util.Comparator<CohortResponseDto.CohortResponse> cmp;
         switch (sortKey) {
             case "students":
             case "studentcount":
-                cmp = java.util.Comparator.comparingInt(CohortDto.CohortResponse::getStudentCount);
+                cmp = java.util.Comparator.comparingInt(CohortResponseDto.CohortResponse::getStudentCount);
                 break;
             case "rate":
             case "attendancerate":
-                cmp = java.util.Comparator.comparingDouble(CohortDto.CohortResponse::getAttendanceRate);
+                cmp = java.util.Comparator.comparingDouble(CohortResponseDto.CohortResponse::getAttendanceRate);
                 break;
             case "createdat":
             case "date":
-                cmp = java.util.Comparator.comparing(CohortDto.CohortResponse::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
+                cmp = java.util.Comparator.comparing(CohortResponseDto.CohortResponse::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
                 break;
             default:
-                cmp = java.util.Comparator.comparing(CohortDto.CohortResponse::getName, java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+                cmp = java.util.Comparator.comparing(CohortResponseDto.CohortResponse::getName, java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
         }
         responses.sort(asc ? cmp : cmp.reversed());
 
@@ -230,14 +231,14 @@ public class CohortService {
         int from = Math.min(safePage * safeSize, total);
         int to = Math.min(from + safeSize, total);
 
-        List<CohortDto.CohortResponse> content = responses.subList(from, to);
+        List<CohortResponseDto.CohortResponse> content = responses.subList(from, to);
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, total,
+        return new AnalyticsResponseDto.PageResponse<>(content, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
-    public CohortDto.CohortResponse updateCohort(String actorId, String actorName, String cohortId,
-                                                CohortDto.UpdateCohortRequest request) {
+    public CohortResponseDto.CohortResponse updateCohort(String actorId, String actorName, String cohortId,
+                                                CohortRequestDto.UpdateCohortRequest request) {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
 
@@ -302,13 +303,13 @@ public class CohortService {
                 "Cohort deleted: " + cohort.getName(), null);
     }
 
-    public CohortDto.CohortResponse getCohortById(String cohortId) {
+    public CohortResponseDto.CohortResponse getCohortById(String cohortId) {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
         return toResponse(cohort);
     }
 
-    public CohortDto.CohortResponse toggleCohort(String actorId, String actorName, String cohortId) {
+    public CohortResponseDto.CohortResponse toggleCohort(String actorId, String actorName, String cohortId) {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
         cohort.setActive(!cohort.isActive());
@@ -320,11 +321,11 @@ public class CohortService {
     }
 
     // ── Dashboard Stats ──────────────────────────────────
-    public DashboardDto.AdminStats buildAdminStats() {
+    public DashboardResponseDto.AdminStats buildAdminStats() {
         return buildAdminStats(null);
     }
 
-    public DashboardDto.AdminStats buildAdminStats(String cohortId) {
+    public DashboardResponseDto.AdminStats buildAdminStats(String cohortId) {
         boolean scoped = cohortId != null && !cohortId.isBlank();
         List<User> students = scoped
                 ? userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT)
@@ -353,10 +354,10 @@ public class CohortService {
                 : attendanceRepository.countByStatus(Attendance.AttendanceStatus.EXCUSED);
 
         // Per-student all-time aggregates (single aggregation, no full-collection fetch)
-        Map<String, AnalyticsDto.StudentAttendanceStats> statsByStudent = aggregateStudentStats(scoped ? cohortId : null);
+        Map<String, AnalyticsResponseDto.StudentAttendanceStats> statsByStudent = aggregateStudentStats(scoped ? cohortId : null);
 
-        List<DashboardDto.BehaviourInsight> behaviourList = students.stream().map(student -> {
-            AnalyticsDto.StudentAttendanceStats s = statsByStudent.get(student.getId());
+        List<DashboardResponseDto.BehaviourInsight> behaviourList = students.stream().map(student -> {
+            AnalyticsResponseDto.StudentAttendanceStats s = statsByStudent.get(student.getId());
             long total = s != null ? s.getTotal() : 0;
             long pCount = s != null ? s.getPresent() : 0;
             long lCount = s != null ? s.getLate() : 0;
@@ -366,26 +367,26 @@ public class CohortService {
             double sRate = total > 0 ? (double)(pCount + lCount + eCount) / total * 100 : 100.0;
             double lRate = total > 0 ? (double) lCount / total * 100 : 0.0;
 
-            String tag = "GOOD_STANDING";
+            DashboardResponseDto.BehaviorTag tag = DashboardResponseDto.BehaviorTag.GOOD_STANDING;
             String text = "Regular attendance pattern";
 
             if (eCount >= 2) {
-                tag = "HIGH_EXCUSES";
+                tag = DashboardResponseDto.BehaviorTag.HIGH_EXCUSES;
                 text = eCount + " approved excuse requests on record";
             } else if (lRate >= 25) {
-                tag = "CHRONIC_LATE";
+                tag = DashboardResponseDto.BehaviorTag.CHRONIC_LATE;
                 text = "Frequent late arrival rate (" + Math.round(lRate) + "% late)";
             } else if (sRate < 75 && total > 0) {
-                tag = "CHRONIC_ABSENT";
+                tag = DashboardResponseDto.BehaviorTag.CHRONIC_ABSENT;
                 text = "At-risk attendance rate (" + Math.round(sRate) + "%)";
             } else if (sRate >= 90 && total >= 3) {
-                tag = "EXCELLENT";
+                tag = DashboardResponseDto.BehaviorTag.EXCELLENT;
                 text = "Excellent attendance and punctuality record";
             }
 
             String cName = student.getCohortId() != null ? cohortNameMap.getOrDefault(student.getCohortId(), "Unassigned") : "Unassigned";
 
-            return new DashboardDto.BehaviourInsight(
+            return new DashboardResponseDto.BehaviourInsight(
                     student.getId(), student.getName(), cName, (int) total, (int) pCount, (int) lCount, (int) aCount, (int) eCount,
                     sRate, lRate, tag, text
             );
@@ -401,7 +402,7 @@ public class CohortService {
                         "ts", l.getCreatedAt().toString()))
                 .collect(Collectors.toList());
 
-        return new DashboardDto.AdminStats(
+        return new DashboardResponseDto.AdminStats(
                 students.size(), (int) facilitators, activeCohorts.size(),
                 present, late, absent, excused, holidayToday, (int) totalExcusedAllTime, rate,
                 toResponses(activeCohorts),
@@ -414,7 +415,7 @@ public class CohortService {
      * Per-student all-time attendance counts via a single MongoDB aggregation,
      * replacing a full-collection fetch + per-student Java loops.
      */
-    private Map<String, AnalyticsDto.StudentAttendanceStats> aggregateStudentStats(String cohortId) {
+    private Map<String, AnalyticsResponseDto.StudentAttendanceStats> aggregateStudentStats(String cohortId) {
         List<AggregationOperation> ops = new ArrayList<>();
         Document matchDoc = new Document();
         if (cohortId != null && !cohortId.isBlank()) {
@@ -443,10 +444,10 @@ public class CohortService {
                         .append("excused", 1)
                         .append("holiday", 1)));
 
-        AggregationResults<AnalyticsDto.StudentAttendanceStats> results =
-                mongoTemplate.aggregate(Aggregation.newAggregation(ops), "attendance", AnalyticsDto.StudentAttendanceStats.class);
+        AggregationResults<AnalyticsResponseDto.StudentAttendanceStats> results =
+                mongoTemplate.aggregate(Aggregation.newAggregation(ops), "attendance", AnalyticsResponseDto.StudentAttendanceStats.class);
         return results.getMappedResults().stream()
-                .collect(Collectors.toMap(AnalyticsDto.StudentAttendanceStats::getStudentId, Function.identity()));
+                .collect(Collectors.toMap(AnalyticsResponseDto.StudentAttendanceStats::getStudentId, Function.identity()));
     }
 
     private static Document statusCond(String status) {
@@ -496,13 +497,13 @@ public class CohortService {
         return DayOfWeek.of(mongoDow - 1).name();
     }
 
-    public DashboardDto.FacilitatorStats buildFacilitatorStats(String facId) throws Exception {
+    public DashboardResponseDto.FacilitatorStats buildFacilitatorStats(String facId) throws Exception {
         return buildFacilitatorStats(facId, null, null, null, 0, 10);
     }
 
-    public DashboardDto.FacilitatorStats buildFacilitatorStats(String facId, String targetCohortId, String queryStr, LocalDate targetDate, int page, int size) throws Exception {
-        List<CohortDto.CohortResponse> myCohorts = getCohortsByFacilitator(facId);
-        List<String> assignedCohortIds = myCohorts.stream().map(CohortDto.CohortResponse::getId).collect(Collectors.toList());
+    public DashboardResponseDto.FacilitatorStats buildFacilitatorStats(String facId, String targetCohortId, String queryStr, LocalDate targetDate, int page, int size) throws Exception {
+        List<CohortResponseDto.CohortResponse> myCohorts = getCohortsByFacilitator(facId);
+        List<String> assignedCohortIds = myCohorts.stream().map(CohortResponseDto.CohortResponse::getId).collect(Collectors.toList());
 
         List<String> activeCohortIds;
         if (targetCohortId != null && !targetCohortId.isBlank()) {
@@ -572,7 +573,7 @@ public class CohortService {
 
         // Check for active QR
         boolean hasActiveQr = false;
-        QrDto.QrResponse activeSession = null;
+        QrResponseDto.QrResponse activeSession = null;
         List<QrSession> activeSessions = activeCohortIds.isEmpty() ? List.of()
                 : qrSessionRepository.findActiveSessionsByCohortIds(activeCohortIds);
         for (QrSession s : activeSessions) {
@@ -585,7 +586,7 @@ public class CohortService {
         Map<String, Cohort> cohortsById = cohortRepository.findAllById(activeCohortIds).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
 
-        List<AttendanceDto.AttendanceRecord> allRecords = myStudents.stream().map(s -> {
+        List<AttendanceResponseDto.AttendanceRecord> allRecords = myStudents.stream().map(s -> {
             Cohort c = s.getCohortId() != null ? cohortsById.get(s.getCohortId()) : null;
             Attendance a = attByStudent.get(s.getId());
             ExcuseRequest exc = excuseByStudent.get(s.getId());
@@ -595,7 +596,7 @@ public class CohortService {
                     : (a != null ? (a.getStatus() != null ? a.getStatus().name() : "ABSENT")
                                  : (exc != null ? "EXCUSED" : "ABSENT"));
 
-            return new AttendanceDto.AttendanceRecord(
+            return new AttendanceResponseDto.AttendanceRecord(
                     a != null ? a.getId() : null,
                     s.getId(),
                     s.getName(),
@@ -620,12 +621,12 @@ public class CohortService {
         int from = Math.min(safePage * safeSize, totalStudents);
         int to = Math.min(from + safeSize, totalStudents);
 
-        List<AttendanceDto.AttendanceRecord> pagedRecords = allRecords.subList(from, to);
+        List<AttendanceResponseDto.AttendanceRecord> pagedRecords = allRecords.subList(from, to);
 
-        AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord> pageResponse =
-                new AnalyticsDto.PageResponse<>(pagedRecords, safePage, safeSize, totalStudents, (int) Math.ceil((double) totalStudents / safeSize));
+        AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord> pageResponse =
+                new AnalyticsResponseDto.PageResponse<>(pagedRecords, safePage, safeSize, totalStudents, (int) Math.ceil((double) totalStudents / safeSize));
 
-        return new DashboardDto.FacilitatorStats(totalStudents, present, late, absent, excused, Math.round(rate * 10.0) / 10.0,
+        return new DashboardResponseDto.FacilitatorStats(totalStudents, present, late, absent, excused, Math.round(rate * 10.0) / 10.0,
                 hasActiveQr, isWeekend, activeSession, pagedRecords, pageResponse);
     }
 
@@ -640,7 +641,7 @@ public class CohortService {
         }
     }
 
-    public DashboardDto.StudentStats buildStudentStats(String studentId) {
+    public DashboardResponseDto.StudentStats buildStudentStats(String studentId) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
         String cohortId = student.getCohortId();
@@ -694,10 +695,10 @@ public class CohortService {
         boolean markedToday = todayRecord.isPresent();
         String todayStatus = markedToday ? todayRecord.get().getStatus().name() : null;
 
-        List<AttendanceDto.AttendanceRecord> recent = all.stream()
+        List<AttendanceResponseDto.AttendanceRecord> recent = all.stream()
                 .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
                 .limit(10)
-                .map(a -> new AttendanceDto.AttendanceRecord(
+                .map(a -> new AttendanceResponseDto.AttendanceRecord(
                         a.getId(), a.getStudentId(), student.getName(),
                         student.getRegistrationNumber(),
                         a.getCohortId(), null, a.getDate(), a.getMarkedAt(),
@@ -706,16 +707,16 @@ public class CohortService {
                 .collect(Collectors.toList());
 
         Device device = deviceRepository.findByStudentId(studentId).orElse(null);
-        DashboardDto.StudentStats.DeviceStatus deviceStatus = device != null
-                ? new DashboardDto.StudentStats.DeviceStatus(device.isLocked(), device.getFingerprint(), device.getRegisteredAt())
-                : new DashboardDto.StudentStats.DeviceStatus(false, null, null);
+        DashboardResponseDto.StudentStats.DeviceStatus deviceStatus = device != null
+                ? new DashboardResponseDto.StudentStats.DeviceStatus(device.isLocked(), device.getFingerprint(), device.getRegisteredAt())
+                : new DashboardResponseDto.StudentStats.DeviceStatus(false, null, null);
 
-        return new DashboardDto.StudentStats(
+        return new DashboardResponseDto.StudentStats(
                 totalDays, present, late, absent, excused, rate,
                 markedToday, todayStatus, recent, deviceStatus);
     }
 
-    private CohortDto.CohortResponse toResponse(Cohort c) {
+    private CohortResponseDto.CohortResponse toResponse(Cohort c) {
         return toResponses(List.of(c)).get(0);
     }
 }

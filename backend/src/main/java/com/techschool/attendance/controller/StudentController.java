@@ -1,6 +1,7 @@
 package com.techschool.attendance.controller;
 
-import com.techschool.attendance.dto.*;
+import com.techschool.attendance.dto.request.*;
+import com.techschool.attendance.dto.response.*;
 import com.techschool.attendance.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -27,22 +28,22 @@ public class StudentController {
     private final ExportService exportService;
 
     @PostMapping("/attendance/scan")
-    public ResponseEntity<QrDto.ScanResponse> scan(
+    public ResponseEntity<QrResponseDto.ScanResponse> scan(
             @AuthenticationPrincipal String studentId,
-            @Valid @RequestBody QrDto.ScanRequest request,
+            @Valid @RequestBody QrRequestDto.ScanRequest request,
             HttpServletRequest http) {
         return ResponseEntity.ok(
                 attendanceService.scanQr(studentId, request, http.getRemoteAddr()));
     }
 
     @GetMapping("/attendance/history")
-    public ResponseEntity<List<AttendanceDto.AttendanceRecord>> history(
+    public ResponseEntity<List<AttendanceResponseDto.AttendanceRecord>> history(
             @AuthenticationPrincipal String studentId) {
         return ResponseEntity.ok(attendanceService.getStudentHistory(studentId));
     }
 
     @GetMapping("/attendance/history/page")
-    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> historyPage(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord>> historyPage(
             @AuthenticationPrincipal String studentId,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size) {
@@ -50,13 +51,13 @@ public class StudentController {
     }
 
     @GetMapping("/attendance/analytics")
-    public ResponseEntity<AnalyticsDto.StudentAnalytics> myAnalytics(
+    public ResponseEntity<AnalyticsResponseDto.StudentAnalytics> myAnalytics(
             @AuthenticationPrincipal String studentId) {
         return ResponseEntity.ok(attendanceService.buildStudentAnalytics(studentId));
     }
 
     @GetMapping("/attendance/calendar")
-    public ResponseEntity<AnalyticsDto.CalendarMonth> myCalendar(
+    public ResponseEntity<AnalyticsResponseDto.CalendarMonth> myCalendar(
             @AuthenticationPrincipal String studentId,
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
@@ -73,10 +74,10 @@ public class StudentController {
             @RequestParam(required = false, defaultValue = "csv") String format) {
         LocalDate effStart = start != null ? start : LocalDate.now().minusMonths(1);
         LocalDate effEnd = end != null ? end : LocalDate.now();
-        List<AttendanceDto.AttendanceRecord> rows =
+        List<AttendanceResponseDto.AttendanceRecord> rows =
                 attendanceService.findStudentRecordsInRange(studentId, effStart, effEnd);
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (AttendanceDto.AttendanceRecord r : rows) {
+        for (AttendanceResponseDto.AttendanceRecord r : rows) {
             table.add(List.of(
                     r.getDate() != null ? r.getDate().toString() : "",
                     r.getStatus() != null ? r.getStatus() : "",
@@ -90,13 +91,13 @@ public class StudentController {
     }
 
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardDto.StudentStats> dashboard(
+    public ResponseEntity<DashboardResponseDto.StudentStats> dashboard(
             @AuthenticationPrincipal String studentId) {
         return ResponseEntity.ok(cohortService.buildStudentStats(studentId));
     }
 
     @PostMapping("/device/register")
-    public ResponseEntity<UserDto.UserResponse.DeviceInfo> registerOwnDevice(
+    public ResponseEntity<UserResponseDto.UserResponse.DeviceInfo> registerOwnDevice(
             @AuthenticationPrincipal String studentId,
             @RequestBody Map<String, String> body) {
         return ResponseEntity.ok(userService.registerDevice(
@@ -108,14 +109,14 @@ public class StudentController {
     // ── Excuse Requests ───────────────────────────────────
 
     @PostMapping("/excuse-request")
-    public ResponseEntity<ExcuseDto.Response> submitExcuseRequest(
+    public ResponseEntity<ExcuseResponseDto.Response> submitExcuseRequest(
             @AuthenticationPrincipal String studentId,
-            @Valid @RequestBody ExcuseDto.CreateRequest request) {
+            @Valid @RequestBody ExcuseRequestDto.CreateRequest request) {
         return ResponseEntity.status(201).body(excuseService.submitRequest(studentId, request));
     }
 
     @GetMapping("/excuse-request")
-    public ResponseEntity<List<ExcuseDto.Response>> getMyExcuseRequests(
+    public ResponseEntity<List<ExcuseResponseDto.Response>> getMyExcuseRequests(
             @AuthenticationPrincipal String studentId) {
         return ResponseEntity.ok(excuseService.getStudentRequests(studentId));
     }

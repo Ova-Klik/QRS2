@@ -1,14 +1,15 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.ExcuseDto;
+import com.techschool.attendance.dto.request.ExcuseRequestDto;
+import com.techschool.attendance.dto.response.ExcuseResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.Attendance;
-import com.techschool.attendance.model.AuditLog;
-import com.techschool.attendance.model.ExcuseRequest;
-import com.techschool.attendance.model.User;
-import com.techschool.attendance.repository.AttendanceRepository;
-import com.techschool.attendance.repository.ExcuseRequestRepository;
-import com.techschool.attendance.repository.UserRepository;
+import com.techschool.attendance.data.model.Attendance;
+import com.techschool.attendance.data.model.AuditLog;
+import com.techschool.attendance.data.model.ExcuseRequest;
+import com.techschool.attendance.data.model.User;
+import com.techschool.attendance.data.repository.AttendanceRepository;
+import com.techschool.attendance.data.repository.ExcuseRequestRepository;
+import com.techschool.attendance.data.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class ExcuseService {
     private final AttendanceRepository attendanceRepository;
     private final AuditService auditService;
 
-    public ExcuseDto.Response submitRequest(String studentId, ExcuseDto.CreateRequest request) {
+    public ExcuseResponseDto.Response submitRequest(String studentId, ExcuseRequestDto.CreateRequest request) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
 
@@ -56,8 +57,8 @@ public class ExcuseService {
         return toResponse(saved);
     }
 
-    public ExcuseDto.Response reviewRequest(String actorId, String actorName, String actorRole,
-                                             String requestId, ExcuseDto.ReviewRequest request) {
+    public ExcuseResponseDto.Response reviewRequest(String actorId, String actorName, String actorRole,
+                                             String requestId, ExcuseRequestDto.ReviewRequest request) {
         ExcuseRequest excuse = excuseRequestRepository.findById(requestId)
                 .orElseThrow(() -> AppException.notFound("Excuse request not found"));
 
@@ -97,18 +98,18 @@ public class ExcuseService {
         return toResponse(saved);
     }
 
-    public List<ExcuseDto.Response> getStudentRequests(String studentId) {
+    public List<ExcuseResponseDto.Response> getStudentRequests(String studentId) {
         return excuseRequestRepository.findByStudentIdOrderByCreatedAtDesc(studentId)
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    public List<ExcuseDto.Response> getCohortRequests(String cohortId) {
+    public List<ExcuseResponseDto.Response> getCohortRequests(String cohortId) {
         return excuseRequestRepository.findByCohortIdOrderByCreatedAtDesc(cohortId)
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    private ExcuseDto.Response toResponse(ExcuseRequest e) {
-        return new ExcuseDto.Response(
+    private ExcuseResponseDto.Response toResponse(ExcuseRequest e) {
+        return new ExcuseResponseDto.Response(
                 e.getId(), e.getStudentId(), e.getStudentName(),
                 e.getCohortId(), e.getReason(), e.getNumberOfDays(),
                 e.getStartDate(), e.getEndDate(), e.getCoverUpPlan(),

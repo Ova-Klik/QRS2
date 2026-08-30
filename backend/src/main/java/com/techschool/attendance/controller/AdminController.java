@@ -1,8 +1,9 @@
 package com.techschool.attendance.controller;
 
-import com.techschool.attendance.dto.*;
-import com.techschool.attendance.model.AuditLog;
-import com.techschool.attendance.model.User;
+import com.techschool.attendance.dto.request.*;
+import com.techschool.attendance.dto.response.*;
+import com.techschool.attendance.data.model.AuditLog;
+import com.techschool.attendance.data.model.User;
 import com.techschool.attendance.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,31 +33,31 @@ public class AdminController {
     // ── Users ──────────────────────────────────────────────
 
     @GetMapping("/users")
-    public ResponseEntity<List<UserDto.UserResponse>> listUsers(
+    public ResponseEntity<List<UserResponseDto.UserResponse>> listUsers(
             @RequestParam(required = false) String role) {
         User.Role r = (role != null) ? User.Role.valueOf(role.toUpperCase()) : User.Role.STUDENT;
         return ResponseEntity.ok(userService.getUsersByRole(r));
     }
 
     @GetMapping("/users/{id}")
-    public ResponseEntity<UserDto.UserResponse> getUser(@PathVariable String id) {
+    public ResponseEntity<UserResponseDto.UserResponse> getUser(@PathVariable String id) {
         return ResponseEntity.ok(userService.getById(id));
     }
 
     @PostMapping("/users")
-    public ResponseEntity<UserDto.UserResponse> createUser(
+    public ResponseEntity<UserResponseDto.UserResponse> createUser(
             @AuthenticationPrincipal String adminId,
-            @Valid @RequestBody UserDto.CreateUserRequest request) {
+            @Valid @RequestBody UserRequestDto.CreateUserRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.status(201).body(
                 userService.createUser(adminId, admin.getName(), "SUPER_ADMIN", request));
     }
 
     @PutMapping("/users/{id}")
-    public ResponseEntity<UserDto.UserResponse> updateUser(
+    public ResponseEntity<UserResponseDto.UserResponse> updateUser(
             @AuthenticationPrincipal String adminId,
             @PathVariable String id,
-            @RequestBody UserDto.UpdateUserRequest request) {
+            @RequestBody UserRequestDto.UpdateUserRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.ok(
                 userService.updateUser(adminId, admin.getName(), "SUPER_ADMIN", id, request));
@@ -65,7 +66,7 @@ public class AdminController {
     // ── Student Search, Management & Export ───────────────
 
     @GetMapping("/students/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse>> searchStudents(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<UserResponseDto.StudentAttendanceResponse>> searchStudents(
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false, defaultValue = "") String q,
             @RequestParam(required = false) LocalDate start,
@@ -108,13 +109,13 @@ public class AdminController {
     }
 
     @GetMapping("/cohorts/{id}/students")
-    public ResponseEntity<List<UserDto.UserResponse>> cohortStudents(@PathVariable String id) {
+    public ResponseEntity<List<UserResponseDto.UserResponse>> cohortStudents(@PathVariable String id) {
         return ResponseEntity.ok(userService.getStudentsByCohort(id));
     }
 
     /** Paginated + searchable + sortable student list scoped to a cohort. */
     @GetMapping("/cohorts/{id}/students/page")
-    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.UserResponse>> cohortStudentsPage(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse>> cohortStudentsPage(
             @PathVariable String id,
             @RequestParam(required = false, defaultValue = "") String q,
             @RequestParam(required = false, defaultValue = "0") int page,
@@ -129,7 +130,7 @@ public class AdminController {
     @PostMapping("/users/reset-password")
     public ResponseEntity<Void> resetPassword(
             @AuthenticationPrincipal String adminId,
-            @Valid @RequestBody AuthDto.ResetPasswordRequest request) {
+            @Valid @RequestBody AuthRequestDto.ResetPasswordRequest request) {
         authService.adminResetPassword(adminId, request);
         return ResponseEntity.ok().build();
     }
@@ -137,7 +138,7 @@ public class AdminController {
     // ── Devices ────────────────────────────────────────────
 
     @PostMapping("/devices/register")
-    public ResponseEntity<UserDto.UserResponse.DeviceInfo> registerDevice(
+    public ResponseEntity<UserResponseDto.UserResponse.DeviceInfo> registerDevice(
             @AuthenticationPrincipal String adminId,
             @RequestBody Map<String, String> body) {
         var admin = userService.getById(adminId);
@@ -149,7 +150,7 @@ public class AdminController {
     }
 
     @GetMapping("/devices/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<UserDto.UserResponse>> searchDevices(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse>> searchDevices(
             @RequestParam(required = false, defaultValue = "") String q,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "10") int size,
@@ -170,12 +171,12 @@ public class AdminController {
     // ── Cohorts ────────────────────────────────────────────
 
     @GetMapping("/cohorts")
-    public ResponseEntity<List<CohortDto.CohortResponse>> listCohorts() {
+    public ResponseEntity<List<CohortResponseDto.CohortResponse>> listCohorts() {
         return ResponseEntity.ok(cohortService.getAllCohorts());
     }
 
     @GetMapping("/cohorts/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<CohortDto.CohortResponse>> searchCohorts(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<CohortResponseDto.CohortResponse>> searchCohorts(
             @RequestParam(required = false, defaultValue = "") String q,
             @RequestParam(required = false, defaultValue = "ALL") String status,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
@@ -188,24 +189,24 @@ public class AdminController {
     }
 
     @GetMapping("/cohorts/{id}")
-    public ResponseEntity<CohortDto.CohortResponse> getCohort(@PathVariable String id) {
+    public ResponseEntity<CohortResponseDto.CohortResponse> getCohort(@PathVariable String id) {
         return ResponseEntity.ok(cohortService.getCohortById(id));
     }
 
     @PostMapping("/cohorts")
-    public ResponseEntity<CohortDto.CohortResponse> createCohort(
+    public ResponseEntity<CohortResponseDto.CohortResponse> createCohort(
             @AuthenticationPrincipal String adminId,
-            @Valid @RequestBody CohortDto.CreateCohortRequest request) {
+            @Valid @RequestBody CohortRequestDto.CreateCohortRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.status(201).body(
                 cohortService.createCohort(adminId, admin.getName(), request));
     }
 
     @PutMapping("/cohorts/{id}")
-    public ResponseEntity<CohortDto.CohortResponse> updateCohort(
+    public ResponseEntity<CohortResponseDto.CohortResponse> updateCohort(
             @AuthenticationPrincipal String adminId,
             @PathVariable String id,
-            @Valid @RequestBody CohortDto.UpdateCohortRequest request) {
+            @Valid @RequestBody CohortRequestDto.UpdateCohortRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.ok(cohortService.updateCohort(adminId, admin.getName(), id, request));
     }
@@ -220,7 +221,7 @@ public class AdminController {
     }
 
     @PatchMapping("/cohorts/{id}/toggle")
-    public ResponseEntity<CohortDto.CohortResponse> toggleCohort(
+    public ResponseEntity<CohortResponseDto.CohortResponse> toggleCohort(
             @AuthenticationPrincipal String adminId,
             @PathVariable String id) {
         var admin = userService.getById(adminId);
@@ -230,7 +231,7 @@ public class AdminController {
     // ── Audit Logs ─────────────────────────────────────────
 
     @GetMapping("/audit")
-    public ResponseEntity<AnalyticsDto.PageResponse<AuditLog>> getAuditLogs(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AuditLog>> getAuditLogs(
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String actorName,
             @RequestParam(required = false) String detail,
@@ -277,13 +278,13 @@ public class AdminController {
     // ── Analytics ──────────────────────────────────────────
 
     @GetMapping("/analytics/school")
-    public ResponseEntity<DashboardDto.AdminStats> getSchoolStats(
+    public ResponseEntity<DashboardResponseDto.AdminStats> getSchoolStats(
             @RequestParam(required = false) String cohortId) {
         return ResponseEntity.ok(cohortService.buildAdminStats(cohortId));
     }
 
     @GetMapping("/analytics/calendar")
-    public ResponseEntity<AnalyticsDto.CalendarMonth> getCalendarMonth(
+    public ResponseEntity<AnalyticsResponseDto.CalendarMonth> getCalendarMonth(
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
@@ -293,7 +294,7 @@ public class AdminController {
     }
 
     @GetMapping("/analytics/students/{studentId}")
-    public ResponseEntity<AnalyticsDto.StudentAnalytics> getStudentAnalytics(@PathVariable String studentId) {
+    public ResponseEntity<AnalyticsResponseDto.StudentAnalytics> getStudentAnalytics(@PathVariable String studentId) {
         return ResponseEntity.ok(attendanceService.buildStudentAnalytics(studentId));
     }
 
@@ -306,11 +307,11 @@ public class AdminController {
             @RequestParam(required = false, defaultValue = "csv") String format) {
         LocalDate effStart = start != null ? start : LocalDate.now().minusMonths(1);
         LocalDate effEnd = end != null ? end : LocalDate.now();
-        List<AttendanceDto.AttendanceRecord> rows =
+        List<AttendanceResponseDto.AttendanceRecord> rows =
                 attendanceService.findStudentRecordsInRange(studentId, effStart, effEnd);
 
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (AttendanceDto.AttendanceRecord r : rows) {
+        for (AttendanceResponseDto.AttendanceRecord r : rows) {
             table.add(List.of(
                     r.getStudentName() != null ? r.getStudentName() : "",
                     r.getCohortName() != null ? r.getCohortName() : "",
@@ -330,7 +331,7 @@ public class AdminController {
     public ResponseEntity<byte[]> exportStudentSummary(
             @PathVariable String studentId,
             @RequestParam(required = false, defaultValue = "csv") String format) {
-        AnalyticsDto.StudentAnalytics a = attendanceService.buildStudentSummaryExport(studentId);
+        AnalyticsResponseDto.StudentAnalytics a = attendanceService.buildStudentSummaryExport(studentId);
         List<List<Object>> table = new java.util.ArrayList<>();
         table.add(List.of(
                 a.getStudentName() != null ? a.getStudentName() : "",
@@ -357,7 +358,7 @@ public class AdminController {
     // ── Attendance Search & Export ────────────────────────
 
     @GetMapping("/attendance/search")
-    public ResponseEntity<AnalyticsDto.PageResponse<AttendanceDto.AttendanceRecord>> searchAttendance(
+    public ResponseEntity<AnalyticsResponseDto.PageResponse<AttendanceResponseDto.AttendanceRecord>> searchAttendance(
             @RequestParam(required = false) String cohortId,
             @RequestParam(required = false) LocalDate start,
             @RequestParam(required = false) LocalDate end,
@@ -378,11 +379,11 @@ public class AdminController {
         LocalDate[] range = attendanceService.resolveDateRange(start, end, lastNDays);
         LocalDate effStart = range[0];
         LocalDate effEnd = range[1];
-        List<AttendanceDto.AttendanceRecord> rows =
+        List<AttendanceResponseDto.AttendanceRecord> rows =
                 attendanceService.findRecordsInRange(cohortId, effStart, effEnd);
 
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (AttendanceDto.AttendanceRecord r : rows) {
+        for (AttendanceResponseDto.AttendanceRecord r : rows) {
             table.add(List.of(
                     r.getStudentName() != null ? r.getStudentName() : "",
                     r.getStudentId() != null ? r.getStudentId() : "",
@@ -405,9 +406,9 @@ public class AdminController {
             @PathVariable String cohortId,
             @RequestParam(required = false, defaultValue = "csv") String format,
             @AuthenticationPrincipal String adminId) {
-        List<AnalyticsDto.CohortExportRow> rows = attendanceService.buildCohortExportRows(cohortId);
+        List<AnalyticsResponseDto.CohortExportRow> rows = attendanceService.buildCohortExportRows(cohortId);
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (AnalyticsDto.CohortExportRow r : rows) {
+        for (AnalyticsResponseDto.CohortExportRow r : rows) {
             table.add(List.of(
                     r.getStudentName() != null ? r.getStudentName() : "",
                     r.getRegistrationNumber() != null ? r.getRegistrationNumber() : "",
@@ -431,30 +432,30 @@ public class AdminController {
     // ── Holidays ───────────────────────────────────────────
 
     @GetMapping("/holidays")
-    public ResponseEntity<List<HolidayDto.Response>> listHolidays() {
+    public ResponseEntity<List<HolidayResponseDto.Response>> listHolidays() {
         return ResponseEntity.ok(holidayService.getAll());
     }
 
     @PostMapping("/holidays")
-    public ResponseEntity<HolidayDto.Response> createHoliday(
+    public ResponseEntity<HolidayResponseDto.Response> createHoliday(
             @AuthenticationPrincipal String adminId,
-            @Valid @RequestBody HolidayDto.CreateRequest request) {
+            @Valid @RequestBody HolidayRequestDto.CreateRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.status(201).body(
                 holidayService.create(adminId, admin.getName(), request));
     }
 
     @PutMapping("/holidays/{id}")
-    public ResponseEntity<HolidayDto.Response> updateHoliday(
+    public ResponseEntity<HolidayResponseDto.Response> updateHoliday(
             @AuthenticationPrincipal String adminId,
             @PathVariable String id,
-            @RequestBody HolidayDto.UpdateRequest request) {
+            @RequestBody HolidayRequestDto.UpdateRequest request) {
         var admin = userService.getById(adminId);
         return ResponseEntity.ok(holidayService.update(adminId, admin.getName(), id, request));
     }
 
     @PatchMapping("/holidays/{id}/toggle")
-    public ResponseEntity<HolidayDto.Response> toggleHoliday(
+    public ResponseEntity<HolidayResponseDto.Response> toggleHoliday(
             @AuthenticationPrincipal String adminId,
             @PathVariable String id) {
         var admin = userService.getById(adminId);

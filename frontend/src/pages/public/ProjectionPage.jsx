@@ -188,7 +188,8 @@ export function ProjectionPage() {
 
   const remainingSeconds = liveRemaining
   const isExpired = session?.state === 'EXPIRED' || remainingSeconds <= 0
-  const mins = Math.floor(remainingSeconds / 60)
+  const hrs = Math.floor(remainingSeconds / 3600)
+  const mins = Math.floor((remainingSeconds % 3600) / 60)
   const secs = remainingSeconds % 60
 
   if (loading) {
@@ -341,7 +342,7 @@ export function ProjectionPage() {
               Remaining Session Duration
             </div>
             <div className="font-mono text-4xl font-bold" style={{ color: isExpired ? '#ef4444' : C.fg }}>
-              {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+              {String(hrs).padStart(2, '0')}:{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
             </div>
             <div className="text-[11px] mt-1" style={{ color: C.dim }}>
               Session auto-stops when countdown reaches 00:00

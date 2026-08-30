@@ -6,15 +6,16 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.AuditLog;
-import com.techschool.attendance.model.Cohort;
-import com.techschool.attendance.model.QrSession;
-import com.techschool.attendance.model.SystemSetting;
-import com.techschool.attendance.repository.CohortRepository;
-import com.techschool.attendance.repository.QrSessionRepository;
-import com.techschool.attendance.repository.SystemSettingRepository;
+import com.techschool.attendance.data.model.AuditLog;
+import com.techschool.attendance.data.model.Cohort;
+import com.techschool.attendance.data.model.QrSession;
+import com.techschool.attendance.data.model.SystemSetting;
+import com.techschool.attendance.data.repository.CohortRepository;
+import com.techschool.attendance.data.repository.QrSessionRepository;
+import com.techschool.attendance.data.repository.SystemSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,12 +48,12 @@ public class QrService {
     @Value("${app.attendance.timezone}")
     private String timezone;
 
-    public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
+    public QrResponseDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
             String cohortId, Integer durationMinutes) throws WriterException, IOException {
         return generateSession(facilitatorId, facilitatorName, cohortId, durationMinutes, null);
     }
 
-    public QrDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
+    public QrResponseDto.QrResponse generateSession(String facilitatorId, String facilitatorName,
             String cohortId, Integer durationMinutes, String origin) throws WriterException, IOException {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> AppException.notFound("Cohort not found"));
@@ -117,7 +118,7 @@ public class QrService {
         int refreshInterval = getRefreshIntervalSetting();
         boolean refreshEnabled = getRefreshEnabledSetting();
 
-        return new QrDto.QrResponse(
+        return new QrResponseDto.QrResponse(
                 saved.getId(), cohortId, cohort.getName(),
                 qrBase64, rollingPayload,
                 activeFrom.toInstant(), expiresAt.toInstant(),
@@ -125,11 +126,11 @@ public class QrService {
                 refreshInterval, refreshEnabled);
     }
 
-    public QrDto.QrResponse getActiveSession(String cohortId) throws WriterException, IOException {
+    public QrResponseDto.QrResponse getActiveSession(String cohortId) throws WriterException, IOException {
         return getActiveSession(cohortId, null);
     }
 
-    public QrDto.QrResponse getActiveSession(String cohortId, String origin) throws WriterException, IOException {
+    public QrResponseDto.QrResponse getActiveSession(String cohortId, String origin) throws WriterException, IOException {
         QrSession session = qrSessionRepository.findActiveSessionByCohortId(cohortId)
                 .orElseThrow(() -> AppException.notFound("No active QR session for this cohort"));
 
@@ -146,7 +147,7 @@ public class QrService {
         int refreshInterval = getRefreshIntervalSetting();
         boolean refreshEnabled = getRefreshEnabledSetting();
 
-        return new QrDto.QrResponse(
+        return new QrResponseDto.QrResponse(
                 session.getId(), cohortId, cohort.getName(),
                 qrBase64, rollingPayload,
                 session.getActiveFrom(), session.getExpiresAt(),
@@ -154,11 +155,11 @@ public class QrService {
                 refreshInterval, refreshEnabled);
     }
 
-    public QrDto.QrResponse getOrGeneratePublicSession(String cohortId) throws WriterException, IOException {
+    public QrResponseDto.QrResponse getOrGeneratePublicSession(String cohortId) throws WriterException, IOException {
         return getOrGeneratePublicSession(cohortId, null);
     }
 
-    public QrDto.QrResponse getOrGeneratePublicSession(String cohortId, String origin)
+    public QrResponseDto.QrResponse getOrGeneratePublicSession(String cohortId, String origin)
             throws WriterException, IOException {
         Optional<QrSession> existing = qrSessionRepository.findActiveSessionByCohortId(cohortId);
         if (existing.isPresent()) {
@@ -195,6 +196,14 @@ public class QrService {
         qrSessionRepository.save(session);
         auditService.log(actorId, actorName, "FACILITATOR",
                 AuditLog.ActionType.QR_EXPIRED, sessionId, null, "Session manually stopped", null);
+    }
+
+    public void incrementScanCount(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) return;
+        qrSessionRepository.findById(sessionId).ifPresent(session -> {
+            session.setScanCount(session.getScanCount() + 1);
+            qrSessionRepository.save(session);
+        });
     }
 
     public QrSession validateToken(String rawToken) {

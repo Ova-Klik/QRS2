@@ -1,10 +1,11 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AnalyticsDto;
-import com.techschool.attendance.dto.UserDto;
+import com.techschool.attendance.dto.response.AnalyticsResponseDto;
+import com.techschool.attendance.dto.request.UserRequestDto;
+import com.techschool.attendance.dto.response.UserResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.*;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.*;
+import com.techschool.attendance.data.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -49,8 +50,8 @@ public class UserService {
     @org.springframework.beans.factory.annotation.Value("${app.attendance.timezone:Africa/Lagos}")
     private String timezone;
 
-    public UserDto.UserResponse createUser(String actorId, String actorName, String actorRole,
-                                            UserDto.CreateUserRequest request) {
+    public UserResponseDto.UserResponse createUser(String actorId, String actorName, String actorRole,
+                                            UserRequestDto.CreateUserRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
@@ -72,12 +73,12 @@ public class UserService {
         return toResponse(saved);
     }
 
-    public List<UserDto.UserResponse> getUsersByRole(User.Role role) {
+    public List<UserResponseDto.UserResponse> getUsersByRole(User.Role role) {
         List<User> users = userRepository.findByRole(role);
         if (users.isEmpty()) return List.of();
         Map<String, Cohort> cohortsById = loadCohortsById(users);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(users);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent =
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent =
                 role == User.Role.STUDENT ? loadSummariesByStudent(users) : Map.of();
         return users.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
@@ -85,12 +86,12 @@ public class UserService {
     }
 
     // ── Student Search & Pagination ─────────────────────
-    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchStudents(String cohortId, String query,
+    public AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse> searchStudents(String cohortId, String query,
                                                                            int page, int size) {
         return searchStudents(cohortId, query, page, size, "name", "asc");
     }
 
-    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchStudents(String cohortId, String query,
+    public AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse> searchStudents(String cohortId, String query,
                                                                            int page, int size,
                                                                            String sort, String order) {
         int safeSize = Math.min(200, Math.max(1, size));
@@ -123,17 +124,17 @@ public class UserService {
         List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
         Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
 
-        List<UserDto.UserResponse> content = pageUsers.stream()
+        List<UserResponseDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
+        return new AnalyticsResponseDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
-    public AnalyticsDto.PageResponse<UserDto.UserResponse> searchDevices(
+    public AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse> searchDevices(
             String query, int page, int size, String sort, String order) {
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
@@ -157,17 +158,17 @@ public class UserService {
         List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
         Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
 
-        List<UserDto.UserResponse> content = pageUsers.stream()
+        List<UserResponseDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
+        return new AnalyticsResponseDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
-    public AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse> searchStudentsAdmin(
+    public AnalyticsResponseDto.PageResponse<UserResponseDto.StudentAttendanceResponse> searchStudentsAdmin(
             String cohortId, String query,
             LocalDate startDate, LocalDate endDate,
             String statusStr,
@@ -239,15 +240,15 @@ public class UserService {
         boolean sortByRate = "rate".equalsIgnoreCase(sort) || "attendancerate".equalsIgnoreCase(sort) || "attendance".equalsIgnoreCase(sort);
 
         List<User> pageUsers;
-        Map<String, UserDto.StudentAttendanceResponse> responsesByStudent;
+        Map<String, UserResponseDto.StudentAttendanceResponse> responsesByStudent;
 
         if (sortByRate) {
             List<User> allFiltered = mongoTemplate.find(Query.query(criteria), User.class);
             Map<String, Cohort> cohortsById = loadCohortsById(allFiltered);
             responsesByStudent = loadStudentAttendanceResponses(allFiltered, effStart, effEnd, cohortsById);
             allFiltered.sort((u1, u2) -> {
-                UserDto.StudentAttendanceResponse r1 = responsesByStudent.get(u1.getId());
-                UserDto.StudentAttendanceResponse r2 = responsesByStudent.get(u2.getId());
+                UserResponseDto.StudentAttendanceResponse r1 = responsesByStudent.get(u1.getId());
+                UserResponseDto.StudentAttendanceResponse r2 = responsesByStudent.get(u2.getId());
                 double rate1 = r1 != null ? r1.getAttendanceRate() : 0.0;
                 double rate2 = r2 != null ? r2.getAttendanceRate() : 0.0;
                 return asc ? Double.compare(rate1, rate2) : Double.compare(rate2, rate1);
@@ -268,16 +269,16 @@ public class UserService {
             responsesByStudent = loadStudentAttendanceResponses(pageUsers, effStart, effEnd, cohortsById);
         }
 
-        List<UserDto.StudentAttendanceResponse> content = pageUsers.stream()
+        List<UserResponseDto.StudentAttendanceResponse> content = pageUsers.stream()
                 .map(u -> responsesByStudent.get(u.getId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        return new AnalyticsDto.PageResponse<>(content, safePage, safeSize, (int) total,
+        return new AnalyticsResponseDto.PageResponse<>(content, safePage, safeSize, (int) total,
                 (int) Math.ceil((double) total / safeSize));
     }
 
-    private Map<String, UserDto.StudentAttendanceResponse> loadStudentAttendanceResponses(
+    private Map<String, UserResponseDto.StudentAttendanceResponse> loadStudentAttendanceResponses(
             List<User> students, LocalDate startDate, LocalDate endDate, Map<String, Cohort> cohortsById) {
         Set<String> ids = students.stream().map(User::getId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
@@ -301,7 +302,7 @@ public class UserService {
 
         LocalDate today = LocalDate.now(ZoneId.of(timezone));
 
-        Map<String, UserDto.StudentAttendanceResponse> out = new HashMap<>();
+        Map<String, UserResponseDto.StudentAttendanceResponse> out = new HashMap<>();
         for (User u : students) {
             List<Attendance> att = byStudent.getOrDefault(u.getId(), List.of());
             List<ExcuseRequest> stExcuses = excusesByStudent.getOrDefault(u.getId(), List.of());
@@ -357,7 +358,7 @@ public class UserService {
             Cohort c = u.getCohortId() != null ? cohortsById.get(u.getCohortId()) : null;
             String cohortName = c != null ? c.getName() : (u.getCohortId() != null ? u.getCohortId() : "—");
 
-            UserDto.StudentAttendanceResponse resp = new UserDto.StudentAttendanceResponse(
+            UserResponseDto.StudentAttendanceResponse resp = new UserResponseDto.StudentAttendanceResponse(
                     u.getId(),
                     u.getName(),
                     u.getRegistrationNumber(),
@@ -408,11 +409,11 @@ public class UserService {
     public ResponseEntity<byte[]> exportStudentsAdmin(String cohortId, String query,
                                                      LocalDate startDate, LocalDate endDate,
                                                      String status, String format, ExportService exportService) {
-        AnalyticsDto.PageResponse<UserDto.StudentAttendanceResponse> page =
+        AnalyticsResponseDto.PageResponse<UserResponseDto.StudentAttendanceResponse> page =
                 searchStudentsAdmin(cohortId, query, startDate, endDate, status, 0, 10000, "name", "asc");
 
         List<List<Object>> table = new java.util.ArrayList<>();
-        for (UserDto.StudentAttendanceResponse r : page.getContent()) {
+        for (UserResponseDto.StudentAttendanceResponse r : page.getContent()) {
             table.add(List.of(
                     r.getName() != null ? r.getName() : "",
                     r.getRegistrationNumber() != null ? r.getRegistrationNumber() : "",
@@ -449,7 +450,7 @@ public class UserService {
      * the already-batched summary map rather than one query per student.
      */
     private Comparator<User> comparatorFor(String sort, List<User> users, boolean asc,
-                                           Map<String, UserDto.UserResponse.AttendanceSummary> summaries) {
+                                           Map<String, UserResponseDto.UserResponse.AttendanceSummary> summaries) {
         String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
         Comparator<User> cmp;
         switch (sortKey) {
@@ -466,7 +467,7 @@ public class UserService {
             case "attendanceRate":
             case "attendance":
                 cmp = Comparator.comparing((User u) -> {
-                    UserDto.UserResponse.AttendanceSummary s = summaries.get(u.getId());
+                    UserResponseDto.UserResponse.AttendanceSummary s = summaries.get(u.getId());
                     return s != null ? s.getRate() : 0.0;
                 });
                 break;
@@ -495,12 +496,12 @@ public class UserService {
                 .collect(Collectors.toMap(Device::getStudentId, Function.identity(), (a, b) -> a));
     }
 
-    private Map<String, UserDto.UserResponse.AttendanceSummary> loadSummariesByStudent(List<User> users) {
+    private Map<String, UserResponseDto.UserResponse.AttendanceSummary> loadSummariesByStudent(List<User> users) {
         Set<String> ids = users.stream().map(User::getId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         if (ids.isEmpty()) return Map.of();
         List<Attendance> all = attendanceRepository.findByStudentIdIn(ids);
-        Map<String, UserDto.UserResponse.AttendanceSummary> out = new HashMap<>();
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> out = new HashMap<>();
         all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
             List<Attendance> validAtt = att.stream()
                     .filter(a -> a.getDate() != null && a.getDate().getDayOfWeek().getValue() < 6)
@@ -510,17 +511,17 @@ public class UserService {
             int absent = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
             int excused = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
             double rate = validAtt.size() > 0 ? (double) (present + late) / validAtt.size() * 100 : 0;
-            out.put(id, new UserDto.UserResponse.AttendanceSummary(validAtt.size(), present, late, absent, excused, rate));
+            out.put(id, new UserResponseDto.UserResponse.AttendanceSummary(validAtt.size(), present, late, absent, excused, rate));
         });
         return out;
     }
 
     /** Batched response builder — zero per-student queries. */
-    private UserDto.UserResponse toResponse(User user,
+    private UserResponseDto.UserResponse toResponse(User user,
                                             Map<String, Cohort> cohortsById,
                                             Map<String, Device> devicesByStudent,
-                                            Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent) {
-        UserDto.UserResponse resp = new UserDto.UserResponse();
+                                            Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent) {
+        UserResponseDto.UserResponse resp = new UserResponseDto.UserResponse();
         resp.setId(user.getId());
         resp.setName(user.getName());
         resp.setEmail(user.getEmail());
@@ -537,36 +538,36 @@ public class UserService {
 
         Device device = devicesByStudent.get(user.getId());
         if (device != null) {
-            resp.setDevice(new UserDto.UserResponse.DeviceInfo(
+            resp.setDevice(new UserResponseDto.UserResponse.DeviceInfo(
                     device.getId(), device.getFingerprint(), device.isLocked(), device.getRegisteredAt()));
         }
 
         if (user.getRole() == User.Role.STUDENT) {
-            UserDto.UserResponse.AttendanceSummary s = summariesByStudent.get(user.getId());
-            if (s == null) s = new UserDto.UserResponse.AttendanceSummary(0, 0, 0, 0, 0, 0.0);
+            UserResponseDto.UserResponse.AttendanceSummary s = summariesByStudent.get(user.getId());
+            if (s == null) s = new UserResponseDto.UserResponse.AttendanceSummary(0, 0, 0, 0, 0, 0.0);
             resp.setAttendanceSummary(s);
         }
         return resp;
     }
 
-    public List<UserDto.UserResponse> getStudentsByCohort(String cohortId) {
+    public List<UserResponseDto.UserResponse> getStudentsByCohort(String cohortId) {
         List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
         if (students.isEmpty()) return List.of();
         Map<String, Cohort> cohortsById = loadCohortsById(students);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(students);
-        Map<String, UserDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(students);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(students);
         return students.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
     }
 
-    public UserDto.UserResponse getById(String id) {
+    public UserResponseDto.UserResponse getById(String id) {
         return toResponse(userRepository.findById(id)
                 .orElseThrow(() -> AppException.notFound("User not found")));
     }
 
-    public UserDto.UserResponse updateUser(String actorId, String actorName, String actorRole,
-                                            String userId, UserDto.UpdateUserRequest request) {
+    public UserResponseDto.UserResponse updateUser(String actorId, String actorName, String actorRole,
+                                            String userId, UserRequestDto.UpdateUserRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -622,7 +623,7 @@ public class UserService {
     }
 
     // ── Device Management ────────────────────────────────
-    public UserDto.UserResponse.DeviceInfo registerDevice(String actorId, String actorName,
+    public UserResponseDto.UserResponse.DeviceInfo registerDevice(String actorId, String actorName,
                                                            String studentId, String fingerprint,
                                                            String userAgent) {
         User student = userRepository.findById(studentId)
@@ -643,7 +644,7 @@ public class UserService {
                 AuditLog.ActionType.DEVICE_REGISTERED, studentId, student.getName(),
                 "Device registered for " + student.getName(), null);
 
-        return new UserDto.UserResponse.DeviceInfo(
+        return new UserResponseDto.UserResponse.DeviceInfo(
                 saved.getId(), saved.getFingerprint(), saved.isLocked(), saved.getRegisteredAt());
     }
 
@@ -666,12 +667,12 @@ public class UserService {
     }
 
     // ── Helpers ──────────────────────────────────────────
-    public UserDto.UserResponse toResponse(User user) {
+    public UserResponseDto.UserResponse toResponse(User user) {
         return toResponse(user, false);
     }
 
-    public UserDto.UserResponse toResponse(User user, boolean includeAnalytics) {
-        UserDto.UserResponse resp = new UserDto.UserResponse();
+    public UserResponseDto.UserResponse toResponse(User user, boolean includeAnalytics) {
+        UserResponseDto.UserResponse resp = new UserResponseDto.UserResponse();
         resp.setId(user.getId());
         resp.setName(user.getName());
         resp.setEmail(user.getEmail());
@@ -688,14 +689,14 @@ public class UserService {
 
         // Device info
         deviceRepository.findByStudentId(user.getId()).ifPresent(d ->
-                resp.setDevice(new UserDto.UserResponse.DeviceInfo(
+                resp.setDevice(new UserResponseDto.UserResponse.DeviceInfo(
                         d.getId(), d.getFingerprint(), d.isLocked(), d.getRegisteredAt()))
         );
 
         // Attendance summary
         if (user.getRole() == User.Role.STUDENT) {
-            AnalyticsDto.StudentAnalytics analytics = attendanceService.buildStudentAnalytics(user.getId());
-            resp.setAttendanceSummary(new UserDto.UserResponse.AttendanceSummary(
+            AnalyticsResponseDto.StudentAnalytics analytics = attendanceService.buildStudentAnalytics(user.getId());
+            resp.setAttendanceSummary(new UserResponseDto.UserResponse.AttendanceSummary(
                     analytics.getTotalRecords(),
                     analytics.getPresent(),
                     analytics.getLate(),

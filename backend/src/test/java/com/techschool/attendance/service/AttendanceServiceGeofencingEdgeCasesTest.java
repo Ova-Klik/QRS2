@@ -1,12 +1,14 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.Device;
-import com.techschool.attendance.model.QrSession;
-import com.techschool.attendance.model.SystemSetting;
-import com.techschool.attendance.model.User;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.Device;
+import com.techschool.attendance.data.model.NetworkSettings;
+import com.techschool.attendance.data.model.QrSession;
+import com.techschool.attendance.data.model.SystemSetting;
+import com.techschool.attendance.data.model.User;
+import com.techschool.attendance.data.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -50,6 +52,8 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
     private HolidayService holidayService;
     @Mock
     private CohortRepository cohortRepository;
+    @Mock
+    private NetworkSettingsService networkSettingsService;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -91,18 +95,27 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         mockDefaults();
     }
 
+    private NetworkSettings createSettings(boolean enforceGeo) {
+        return NetworkSettings.builder()
+                .id("default")
+                .enforceNetwork(false)
+                .enforceGeolocation(enforceGeo)
+                .schoolLatitude(SCHOOL_LAT)
+                .schoolLongitude(SCHOOL_LNG)
+                .allowedRadiusMeters(DEFAULT_RADIUS_METERS)
+                .build();
+    }
+
     private void mockDefaults() {
         when(userRepository.findById("student-geo-001")).thenReturn(Optional.of(testStudent));
         when(attendanceRepository.existsByStudentIdAndDate(eq("student-geo-001"), any(LocalDate.class))).thenReturn(false);
         when(qrService.validateToken("GEO_TOKEN_123")).thenReturn(testSession);
         when(deviceRepository.findByStudentId("student-geo-001")).thenReturn(Optional.of(testDevice));
-        when(systemSettingRepository.findByKey("school_latitude")).thenReturn(Optional.of(new SystemSetting(null, "school_latitude", String.valueOf(SCHOOL_LAT), null)));
-        when(systemSettingRepository.findByKey("school_longitude")).thenReturn(Optional.of(new SystemSetting(null, "school_longitude", String.valueOf(SCHOOL_LNG), null)));
-        when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", String.valueOf((int) DEFAULT_RADIUS_METERS), null)));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
     }
 
-    private QrDto.ScanRequest buildScanRequest(Double lat, Double lng, Double accuracy) {
-        QrDto.ScanRequest req = new QrDto.ScanRequest();
+    private QrRequestDto.ScanRequest buildScanRequest(Double lat, Double lng, Double accuracy) {
+        QrRequestDto.ScanRequest req = new QrRequestDto.ScanRequest();
         req.setToken("GEO_TOKEN_123");
         req.setDeviceFingerprint("fp-geo-001");
         req.setLatitude(lat);
@@ -118,11 +131,11 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Should succeed without location when geofence_enforce=false and fallback=false")
         void testDisabledGeofence_MissingCoordinates_Succeeds() {
-            when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(new SystemSetting(null, "geofence_enforce", "false", null)));
+            when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(false));
             when(systemSettingRepository.findByKey("geofence_fallback_enabled")).thenReturn(Optional.of(new SystemSetting(null, "geofence_fallback_enabled", "false", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(null, null, null);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(null, null, null);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
 
             assertNotNull(response);
             assertTrue(response.isSuccess());
@@ -132,12 +145,12 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Should succeed even if coordinates are far outside when geofencing is disabled")
         void testDisabledGeofence_FarCoordinates_Succeeds() {
-            when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(new SystemSetting(null, "geofence_enforce", "false", null)));
+            when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(false));
             when(systemSettingRepository.findByKey("geofence_fallback_enabled")).thenReturn(Optional.of(new SystemSetting(null, "geofence_fallback_enabled", "false", null)));
 
             // 500km away
-            QrDto.ScanRequest request = buildScanRequest(10.0, 10.0, 5.0);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(10.0, 10.0, 5.0);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
 
             assertTrue(response.isSuccess());
         }
@@ -149,13 +162,13 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
 
         @BeforeEach
         void enableGeofence() {
-            when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(new SystemSetting(null, "geofence_enforce", "true", null)));
+            when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
         }
 
         @Test
         @DisplayName("Edge Case 1: Both latitude and longitude null -> Throws 400 Bad Request")
         void testBothCoordinatesNull_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(null, null, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(null, null, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Location coordinates are required"));
         }
@@ -163,7 +176,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 2: Latitude provided but longitude is null -> Throws 400 Bad Request")
         void testLatitudeOnly_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, null, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, null, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Location coordinates are required"));
         }
@@ -171,7 +184,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 3: Longitude provided but latitude is null -> Throws 400 Bad Request")
         void testLongitudeOnly_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(null, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(null, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Location coordinates are required"));
         }
@@ -179,7 +192,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 4: Null Island Coordinates (0.0, 0.0) -> Throws 400 Invalid Coordinates")
         void testNullIslandCoordinates_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(0.0, 0.0, 5.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(0.0, 0.0, 5.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Invalid location coordinates received"));
         }
@@ -187,7 +200,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 5: Out of bounds positive Latitude (> 90.0) -> Throws 400 Invalid Coordinates")
         void testLatitudeAbove90_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(90.1, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(90.1, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Invalid location coordinates received"));
         }
@@ -195,7 +208,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 6: Out of bounds negative Latitude (< -90.0) -> Throws 400 Invalid Coordinates")
         void testLatitudeBelowMinus90_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(-90.1, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(-90.1, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Invalid location coordinates received"));
         }
@@ -203,7 +216,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 7: Out of bounds positive Longitude (> 180.0) -> Throws 400 Invalid Coordinates")
         void testLongitudeAbove180_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, 180.1, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, 180.1, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Invalid location coordinates received"));
         }
@@ -211,7 +224,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 8: Out of bounds negative Longitude (< -180.0) -> Throws 400 Invalid Coordinates")
         void testLongitudeBelowMinus180_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, -180.1, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, -180.1, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Invalid location coordinates received"));
         }
@@ -220,7 +233,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @DisplayName("Edge Case 9: Accuracy value is extremely high (> maxThreshold 3000m) -> Throws 400 Poor Accuracy")
         void testExcessiveAccuracyUncertainty_ThrowsBadRequest() {
             // maxRadius = 150m, threshold = max(3000, 1500) = 3000m. accuracy = 3500m
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 3500.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 3500.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Your location accuracy (3500m) is too low"));
         }
@@ -228,24 +241,24 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Edge Case 10: Accuracy value is null but coordinates are valid -> Passes accuracy check and succeeds")
         void testNullAccuracy_ValidCoordinates_Succeeds() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, null);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, null);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
             assertTrue(response.isSuccess());
         }
 
         @Test
         @DisplayName("Edge Case 11: Negative accuracy value -> Passes accuracy threshold check and evaluates distance")
         void testNegativeAccuracy_SucceedsIfInsideGeofence() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, -5.0);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, -5.0);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
             assertTrue(response.isSuccess());
         }
 
         @Test
         @DisplayName("Edge Case 12: Student exactly at center (0m distance) -> Succeeds")
         void testExactCenterCoordinates_Succeeds() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 5.0);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 5.0);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
             assertTrue(response.isSuccess());
         }
 
@@ -254,8 +267,8 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testInsideRadius_100MetersAway_Succeeds() {
             // ~100m north of center (6.5244 + ~0.0009 deg)
             double lat100m = SCHOOL_LAT + 0.0009;
-            QrDto.ScanRequest request = buildScanRequest(lat100m, SCHOOL_LNG, 10.0);
-            QrDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
+            QrRequestDto.ScanRequest request = buildScanRequest(lat100m, SCHOOL_LNG, 10.0);
+            QrResponseDto.ScanResponse response = attendanceService.scanQr("student-geo-001", request, "127.0.0.1");
             assertTrue(response.isSuccess());
         }
 
@@ -264,7 +277,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testOutsideRadius_160MetersAway_ThrowsForbidden() {
             // ~160m north of center (6.5244 + ~0.00144 deg)
             double lat160m = SCHOOL_LAT + 0.00144;
-            QrDto.ScanRequest request = buildScanRequest(lat160m, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(lat160m, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("outside the allowed attendance location"));
         }
@@ -277,10 +290,10 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("When geofence_enforce=false BUT geofence_fallback_enabled=true, location enforcement must still execute")
         void testFallbackEnabled_EnforcesLocation() {
-            when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(new SystemSetting(null, "geofence_enforce", "false", null)));
+            when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(false));
             when(systemSettingRepository.findByKey("geofence_fallback_enabled")).thenReturn(Optional.of(new SystemSetting(null, "geofence_fallback_enabled", "true", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(null, null, null);
+            QrRequestDto.ScanRequest request = buildScanRequest(null, null, null);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertTrue(ex.getMessage().contains("Location coordinates are required"));
         }
@@ -292,7 +305,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
 
         @BeforeEach
         void enableGeofence() {
-            when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(new SystemSetting(null, "geofence_enforce", "true", null)));
+            when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
         }
 
         @Test
@@ -300,7 +313,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testMalformedSchoolLatitude_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_latitude")).thenReturn(Optional.of(new SystemSetting(null, "school_latitude", "INVALID_LAT", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("misconfigured"));
@@ -311,7 +324,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testMalformedRadiusSetting_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", "NOT_A_NUMBER", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("misconfigured"));
@@ -322,7 +335,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testNegativeRadiusSetting_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", "-50", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 5.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 5.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("radius") || ex.getMessage().contains("misconfigured"));
@@ -333,7 +346,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testZeroRadiusSetting_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", "0", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT + 0.00005, SCHOOL_LNG, 5.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT + 0.00005, SCHOOL_LNG, 5.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("radius") || ex.getMessage().contains("misconfigured"));
@@ -344,7 +357,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testNaNRadiusSetting_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", "NaN", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
         }
@@ -354,7 +367,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testInfinityRadiusSetting_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(new SystemSetting(null, "school_geofence_radius_meters", "Infinity", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
         }
@@ -364,7 +377,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testNonNumericLatitude_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_latitude")).thenReturn(Optional.of(new SystemSetting(null, "school_latitude", "abc", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
         }
@@ -374,7 +387,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         void testNonNumericLongitude_ThrowsBadRequest() {
             when(systemSettingRepository.findByKey("school_longitude")).thenReturn(Optional.of(new SystemSetting(null, "school_longitude", "not_a_number", null)));
 
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
         }
@@ -382,7 +395,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("NaN latitude from GPS -> Throws 400 Invalid Coordinates")
         void testNaNGPSLatitude_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(Double.NaN, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(Double.NaN, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("Invalid location coordinates"));
@@ -391,7 +404,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("NaN longitude from GPS -> Throws 400 Invalid Coordinates")
         void testNaNGPSLongitude_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, Double.NaN, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, Double.NaN, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("Invalid location coordinates"));
@@ -400,7 +413,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Infinite latitude from GPS -> Throws 400 Invalid Coordinates")
         void testInfiniteGPSLatitude_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(Double.POSITIVE_INFINITY, SCHOOL_LNG, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(Double.POSITIVE_INFINITY, SCHOOL_LNG, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("Invalid location coordinates"));
@@ -409,7 +422,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Infinite longitude from GPS -> Throws 400 Invalid Coordinates")
         void testInfiniteGPSLongitude_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, Double.NEGATIVE_INFINITY, 10.0);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, Double.NEGATIVE_INFINITY, 10.0);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("Invalid location coordinates"));
@@ -418,7 +431,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("NaN accuracy from GPS -> Throws 400 Invalid Accuracy")
         void testNaNAccuracy_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, Double.NaN);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, Double.NaN);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("accuracy"));
@@ -427,7 +440,7 @@ public class AttendanceServiceGeofencingEdgeCasesTest {
         @Test
         @DisplayName("Infinity accuracy from GPS -> Throws 400 Invalid Accuracy")
         void testInfinityAccuracy_ThrowsBadRequest() {
-            QrDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, Double.POSITIVE_INFINITY);
+            QrRequestDto.ScanRequest request = buildScanRequest(SCHOOL_LAT, SCHOOL_LNG, Double.POSITIVE_INFINITY);
             AppException ex = assertThrows(AppException.class, () -> attendanceService.scanQr("student-geo-001", request, "127.0.0.1"));
             assertEquals(400, ex.getStatus().value());
             assertTrue(ex.getMessage().contains("accuracy"));

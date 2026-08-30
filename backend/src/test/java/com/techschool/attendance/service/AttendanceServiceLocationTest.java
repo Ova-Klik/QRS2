@@ -1,15 +1,17 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.Device;
-import com.techschool.attendance.model.QrSession;
-import com.techschool.attendance.model.SystemSetting;
-import com.techschool.attendance.model.User;
-import com.techschool.attendance.repository.AttendanceRepository;
-import com.techschool.attendance.repository.DeviceRepository;
-import com.techschool.attendance.repository.SystemSettingRepository;
-import com.techschool.attendance.repository.UserRepository;
+import com.techschool.attendance.data.model.Device;
+import com.techschool.attendance.data.model.NetworkSettings;
+import com.techschool.attendance.data.model.QrSession;
+import com.techschool.attendance.data.model.SystemSetting;
+import com.techschool.attendance.data.model.User;
+import com.techschool.attendance.data.repository.AttendanceRepository;
+import com.techschool.attendance.data.repository.DeviceRepository;
+import com.techschool.attendance.data.repository.SystemSettingRepository;
+import com.techschool.attendance.data.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +48,10 @@ class AttendanceServiceLocationTest {
     @Mock
     private HolidayService holidayService;
     @Mock
-    private com.techschool.attendance.repository.CohortRepository cohortRepository;
+    private com.techschool.attendance.data.repository.CohortRepository cohortRepository;
+
+    @Mock
+    private NetworkSettingsService networkSettingsService;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -88,26 +93,30 @@ class AttendanceServiceLocationTest {
         when(deviceRepository.findByStudentId("student-123")).thenReturn(Optional.of(testDevice));
     }
 
-    private SystemSetting createSetting(String key, String value) {
-        return new SystemSetting(null, key, value, null);
+    private NetworkSettings createSettings(boolean enforceGeo) {
+        return NetworkSettings.builder()
+                .id("default")
+                .enforceNetwork(false)
+                .enforceGeolocation(enforceGeo)
+                .schoolLatitude(6.5244)
+                .schoolLongitude(3.3792)
+                .allowedRadiusMeters(150.0)
+                .build();
     }
 
     @Test
     void testScanWithGeofenceEnforced_InsideGeofence_Succeeds() {
         mockCommonSuccess();
-        when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(createSetting("geofence_enforce", "true")));
-        when(systemSettingRepository.findByKey("school_latitude")).thenReturn(Optional.of(createSetting("school_latitude", "6.5244")));
-        when(systemSettingRepository.findByKey("school_longitude")).thenReturn(Optional.of(createSetting("school_longitude", "3.3792")));
-        when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(createSetting("school_geofence_radius_meters", "150")));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
 
-        QrDto.ScanRequest request = new QrDto.ScanRequest();
+        QrRequestDto.ScanRequest request = new QrRequestDto.ScanRequest();
         request.setToken("VALID123");
         request.setDeviceFingerprint("fp-123");
         request.setLatitude(6.5244);
         request.setLongitude(3.3792);
         request.setAccuracy(10.0);
 
-        QrDto.ScanResponse response = attendanceService.scanQr("student-123", request, "127.0.0.1");
+        QrResponseDto.ScanResponse response = attendanceService.scanQr("student-123", request, "127.0.0.1");
 
         assertTrue(response.isSuccess());
         verify(attendanceRepository, times(1)).save(any());
@@ -116,12 +125,9 @@ class AttendanceServiceLocationTest {
     @Test
     void testScanWithGeofenceEnforced_OutsideGeofence_ThrowsForbiddenWithDistance() {
         mockCommonSuccess();
-        when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(createSetting("geofence_enforce", "true")));
-        when(systemSettingRepository.findByKey("school_latitude")).thenReturn(Optional.of(createSetting("school_latitude", "6.5244")));
-        when(systemSettingRepository.findByKey("school_longitude")).thenReturn(Optional.of(createSetting("school_longitude", "3.3792")));
-        when(systemSettingRepository.findByKey("school_geofence_radius_meters")).thenReturn(Optional.of(createSetting("school_geofence_radius_meters", "150")));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
 
-        QrDto.ScanRequest request = new QrDto.ScanRequest();
+        QrRequestDto.ScanRequest request = new QrRequestDto.ScanRequest();
         request.setToken("VALID123");
         request.setDeviceFingerprint("fp-123");
         // Far away coordinates (~100km away)
@@ -140,9 +146,9 @@ class AttendanceServiceLocationTest {
     @Test
     void testScanWithGeofenceEnforced_MissingCoordinates_ThrowsBadRequest() {
         mockCommonSuccess();
-        when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(createSetting("geofence_enforce", "true")));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
 
-        QrDto.ScanRequest request = new QrDto.ScanRequest();
+        QrRequestDto.ScanRequest request = new QrRequestDto.ScanRequest();
         request.setToken("VALID123");
         request.setDeviceFingerprint("fp-123");
         request.setLatitude(null);
@@ -158,9 +164,9 @@ class AttendanceServiceLocationTest {
     @Test
     void testScanWithGeofenceEnforced_InvalidCoordinates_ThrowsBadRequest() {
         mockCommonSuccess();
-        when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(createSetting("geofence_enforce", "true")));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(true));
 
-        QrDto.ScanRequest request = new QrDto.ScanRequest();
+        QrRequestDto.ScanRequest request = new QrRequestDto.ScanRequest();
         request.setToken("VALID123");
         request.setDeviceFingerprint("fp-123");
         request.setLatitude(0.0);
@@ -176,16 +182,15 @@ class AttendanceServiceLocationTest {
     @Test
     void testScanWithGeofenceDisabled_NoLocationRequired() {
         mockCommonSuccess();
-        when(systemSettingRepository.findByKey("geofence_enforce")).thenReturn(Optional.of(createSetting("geofence_enforce", "false")));
-        when(systemSettingRepository.findByKey("geofence_fallback_enabled")).thenReturn(Optional.of(createSetting("geofence_fallback_enabled", "false")));
+        when(networkSettingsService.getSettingsEntity()).thenReturn(createSettings(false));
 
-        QrDto.ScanRequest request = new QrDto.ScanRequest();
+        QrRequestDto.ScanRequest request = new QrRequestDto.ScanRequest();
         request.setToken("VALID123");
         request.setDeviceFingerprint("fp-123");
         request.setLatitude(null);
         request.setLongitude(null);
 
-        QrDto.ScanResponse response = attendanceService.scanQr("student-123", request, "127.0.0.1");
+        QrResponseDto.ScanResponse response = attendanceService.scanQr("student-123", request, "127.0.0.1");
 
         assertTrue(response.isSuccess());
         verify(attendanceRepository, times(1)).save(any());

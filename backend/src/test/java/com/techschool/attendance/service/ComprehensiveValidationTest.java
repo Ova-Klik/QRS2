@@ -1,10 +1,12 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AuthDto;
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.AuthRequestDto;
+import com.techschool.attendance.dto.response.AuthResponseDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.*;
-import com.techschool.attendance.repository.*;
+import com.techschool.attendance.data.model.*;
+import com.techschool.attendance.data.repository.*;
 import com.techschool.attendance.security.JwtUtils;
 import com.techschool.attendance.service.mail.MailService;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,8 +93,8 @@ public class ComprehensiveValidationTest {
             when(holidayService.isHoliday(any(LocalDate.class), eq("c1"))).thenReturn(false);
         }
 
-        private QrDto.ScanRequest buildRequest() {
-            QrDto.ScanRequest req = new QrDto.ScanRequest();
+        private QrRequestDto.ScanRequest buildRequest() {
+            QrRequestDto.ScanRequest req = new QrRequestDto.ScanRequest();
             req.setToken("TOKEN123");
             req.setDeviceFingerprint("fp1");
             return req;
@@ -102,20 +104,16 @@ public class ComprehensiveValidationTest {
         @DisplayName("Before start time (06:30) -> REJECTED")
         void testBeforeStartTime_Rejected() {
             ReflectionTestUtils.setField(attendanceService, "timezone", "Africa/Lagos");
-            QrDto.ScanRequest req = buildRequest();
+            QrRequestDto.ScanRequest req = buildRequest();
             assertNotNull(attendanceService);
-        }
 
             // We test via time zone manipulation instead
             // When scanning at 6:30 AM, the time window check should reject
             // Since we can't easily mock time, we test the logic path:
             // The time window is always checked now (no bypass for < 07:00)
             // We verify by checking the method always validates
-            QrDto.ScanRequest req = buildRequest();
-
             // If somehow time is before 07:00, it should be rejected
             // This test validates the code path exists
-            assertNotNull(attendanceService);
         }
 
         @Test
@@ -161,8 +159,8 @@ public class ComprehensiveValidationTest {
             fullstack.setActive(true);
         }
 
-        private AuthDto.RegisterStudentRequest buildRequest(String cohortName) {
-            AuthDto.RegisterStudentRequest req = new AuthDto.RegisterStudentRequest();
+        private AuthRequestDto.RegisterStudentRequest buildRequest(String cohortName) {
+            AuthRequestDto.RegisterStudentRequest req = new AuthRequestDto.RegisterStudentRequest();
             req.setName("Test User");
             req.setEmail("test@example.com");
             req.setPhone("+2348000000000");
@@ -183,7 +181,7 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.LoginResponse resp = authService.registerStudent(buildRequest("Cohort 29"), "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Cohort 29"), "127.0.0.1");
             assertNotNull(resp);
             assertEquals("cohort-29-id", resp.getCohortId());
         }
@@ -200,7 +198,7 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.LoginResponse resp = authService.registerStudent(buildRequest("Fullstack Web Dev"), "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Fullstack Web Dev"), "127.0.0.1");
             assertNotNull(resp);
             assertEquals("fullstack-id", resp.getCohortId());
         }
@@ -217,7 +215,7 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.LoginResponse resp = authService.registerStudent(buildRequest("cohort 29"), "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("cohort 29"), "127.0.0.1");
             assertNotNull(resp);
             assertEquals("cohort-29-id", resp.getCohortId());
         }
@@ -234,7 +232,7 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.LoginResponse resp = authService.registerStudent(buildRequest("cohort-29-id"), "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("cohort-29-id"), "127.0.0.1");
             assertNotNull(resp);
             assertEquals("cohort-29-id", resp.getCohortId());
         }
@@ -284,14 +282,14 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.RegisterStudentRequest req = new AuthDto.RegisterStudentRequest();
+            AuthRequestDto.RegisterStudentRequest req = new AuthRequestDto.RegisterStudentRequest();
             req.setName("Test User");
             req.setEmail("test@example.com");
             req.setPhone("+2348000000000");
             req.setPassword("Password123");
             req.setCohortNumber("Cohort 1");
 
-            AuthDto.LoginResponse resp = authService.registerStudent(req, "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(req, "127.0.0.1");
 
             assertNull(resp.getToken(), "Token must be null for unverified users, not the string 'null'");
             assertEquals("new-id", resp.getUserId());
@@ -309,13 +307,13 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthDto.RegisterFacilitatorRequest req = new AuthDto.RegisterFacilitatorRequest();
+            AuthRequestDto.RegisterFacilitatorRequest req = new AuthRequestDto.RegisterFacilitatorRequest();
             req.setName("Facilitator User");
             req.setEmail("fac@example.com");
             req.setPhone("+2348000000001");
             req.setPassword("Password123");
 
-            AuthDto.LoginResponse resp = authService.registerFacilitator(req, "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerFacilitator(req, "127.0.0.1");
 
             assertNull(resp.getToken(), "Token must be null for unverified facilitators");
             assertEquals("fac-id", resp.getUserId());
@@ -411,7 +409,7 @@ public class ComprehensiveValidationTest {
 
             when(qrSessionRepository.findActiveSessionByCohortId("c1")).thenReturn(Optional.of(activeSession));
 
-            QrDto.QrResponse resp = qrService.getOrGeneratePublicSession("c1");
+            QrResponseDto.QrResponse resp = qrService.getOrGeneratePublicSession("c1");
             assertNotNull(resp);
             assertEquals("active-1", resp.getSessionId());
         }
@@ -493,10 +491,10 @@ public class ComprehensiveValidationTest {
                         mock(SystemSettingRepository.class),
                         mock(QrService.class),
                         mock(AuditService.class),
-                        mock(AuthService.class),
                         mock(HolidayService.class),
                         mock(ExcuseRequestRepository.class),
-                        mock(AuditLogRepository.class)
+                        mock(AuditLogRepository.class),
+                        mock(NetworkSettingsService.class)
                 );
             } catch (Exception e) {
                 throw new RuntimeException(e);

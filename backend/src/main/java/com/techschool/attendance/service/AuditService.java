@@ -1,8 +1,8 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AnalyticsDto;
-import com.techschool.attendance.model.AuditLog;
-import com.techschool.attendance.repository.AuditLogRepository;
+import com.techschool.attendance.dto.response.AnalyticsResponseDto;
+import com.techschool.attendance.data.model.AuditLog;
+import com.techschool.attendance.data.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -68,7 +68,7 @@ public class AuditService {
     }
 
     /** Filterable, paginated audit trail. Dates are yyyy-MM-dd (UTC). */
-    public AnalyticsDto.PageResponse<AuditLog> getLogs(String action, String actorName, String detail,
+    public AnalyticsResponseDto.PageResponse<AuditLog> getLogs(String action, String actorName, String detail,
                                                        String from, String to, int page, int size,
                                                        String sort, String order) {
         Query query = new Query();
@@ -100,7 +100,7 @@ public class AuditService {
         query.skip((long) safePage * safeSize).limit(safeSize);
 
         List<AuditLog> logs = mongoTemplate.find(query, AuditLog.class);
-        return new AnalyticsDto.PageResponse<>(logs, safePage, safeSize, total,
+        return new AnalyticsResponseDto.PageResponse<>(logs, safePage, safeSize, total,
                 (int) Math.ceil((double) total / safeSize));
     }
 

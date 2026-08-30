@@ -1,11 +1,12 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.AuthDto;
+import com.techschool.attendance.dto.request.AuthRequestDto;
+import com.techschool.attendance.dto.response.AuthResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.Cohort;
-import com.techschool.attendance.model.User;
-import com.techschool.attendance.repository.CohortRepository;
-import com.techschool.attendance.repository.UserRepository;
+import com.techschool.attendance.data.model.Cohort;
+import com.techschool.attendance.data.model.User;
+import com.techschool.attendance.data.repository.CohortRepository;
+import com.techschool.attendance.data.repository.UserRepository;
 import com.techschool.attendance.security.JwtUtils;
 import com.techschool.attendance.service.mail.MailService;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +74,7 @@ class AuthServiceMailTest {
 
     @Test
     void testRegisterStudentTriggersVerificationEmail() {
-        AuthDto.RegisterStudentRequest request = new AuthDto.RegisterStudentRequest();
+        AuthRequestDto.RegisterStudentRequest request = new AuthRequestDto.RegisterStudentRequest();
         request.setName("Alice Smith");
         request.setEmail("alice@example.com");
         request.setPhone("+234 800 000 0000");
@@ -89,7 +90,7 @@ class AuthServiceMailTest {
             return u;
         });
 
-        AuthDto.LoginResponse response = authService.registerStudent(request, "127.0.0.1");
+        AuthResponseDto.LoginResponse response = authService.registerStudent(request, "127.0.0.1");
 
         assertNotNull(response);
         assertEquals("alice@example.com", response.getEmail());
@@ -111,7 +112,7 @@ class AuthServiceMailTest {
 
     @Test
     void testLoginRejectsUnverifiedEmail() {
-        AuthDto.LoginRequest request = new AuthDto.LoginRequest();
+        AuthRequestDto.LoginRequest request = new AuthRequestDto.LoginRequest();
         request.setEmail("alice@example.com");
         request.setPassword("Password123");
 
@@ -131,7 +132,7 @@ class AuthServiceMailTest {
 
         when(userRepository.findByVerificationToken(validToken)).thenReturn(Optional.of(sampleStudent));
 
-        AuthDto.MessageResponse response = authService.verifyEmail(validToken);
+        AuthResponseDto.MessageResponse response = authService.verifyEmail(validToken);
 
         assertNotNull(response);
         assertTrue(response.getMessage().contains("verified successfully"));
@@ -155,13 +156,13 @@ class AuthServiceMailTest {
 
     @Test
     void testForgotPasswordTriggersResetEmail() {
-        AuthDto.ForgotPasswordRequest request = new AuthDto.ForgotPasswordRequest();
+        AuthRequestDto.ForgotPasswordRequest request = new AuthRequestDto.ForgotPasswordRequest();
         request.setEmail("alice@example.com");
 
         sampleStudent.setEmailVerified(true);
         when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(sampleStudent));
 
-        AuthDto.MessageResponse response = authService.forgotPassword(request);
+        AuthResponseDto.MessageResponse response = authService.forgotPassword(request);
 
         assertNotNull(response);
         verify(userRepository, times(1)).save(sampleStudent);
@@ -187,11 +188,11 @@ class AuthServiceMailTest {
         when(userRepository.findByPasswordResetToken(resetToken)).thenReturn(Optional.of(sampleStudent));
         when(passwordEncoder.encode("NewSecret123")).thenReturn("encoded_new_secret");
 
-        AuthDto.ResetPasswordWithTokenRequest request = new AuthDto.ResetPasswordWithTokenRequest();
+        AuthRequestDto.ResetPasswordWithTokenRequest request = new AuthRequestDto.ResetPasswordWithTokenRequest();
         request.setToken(resetToken);
         request.setNewPassword("NewSecret123");
 
-        AuthDto.MessageResponse response = authService.resetPasswordWithToken(request);
+        AuthResponseDto.MessageResponse response = authService.resetPasswordWithToken(request);
 
         assertNotNull(response);
         assertTrue(response.getMessage().contains("reset successfully"));
@@ -206,11 +207,82 @@ class AuthServiceMailTest {
         String usedToken = "already-used-token";
         when(userRepository.findByPasswordResetToken(usedToken)).thenReturn(Optional.empty());
 
-        AuthDto.ResetPasswordWithTokenRequest request = new AuthDto.ResetPasswordWithTokenRequest();
+        AuthRequestDto.ResetPasswordWithTokenRequest request = new AuthRequestDto.ResetPasswordWithTokenRequest();
         request.setToken(usedToken);
         request.setNewPassword("NewSecret123");
 
         AppException ex = assertThrows(AppException.class, () -> authService.resetPasswordWithToken(request));
         assertTrue(ex.getMessage().contains("Invalid or expired"));
+    }
+
+    // ── Login Tests ─────────────────────────────────────
+
+    @Test
+    void testSuccessfulLogin_validCredentials_returnsTokenAndUserInfo() {
+        User admin = new User();
+        admin.setId("admin-123");
+        admin.setName("Super Admin");
+        admin.setEmail("admin@techschool.edu");
+        admin.setPasswordHash("hashed_admin_pass");
+        admin.setRole(User.Role.SUPER_ADMIN);
+        admin.setActive(true);
+        admin.setEmailVerified(true);
+
+        when(userRepository.findByEmail("admin@techschool.edu")).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("Admin@1234", "hashed_admin_pass")).thenReturn(true);
+        when(jwtUtils.generateToken("admin-123", "admin@techschool.edu", "SUPER_ADMIN")).thenReturn("mocked-jwt-token-xyz");
+
+        AuthRequestDto.LoginRequest request = new AuthRequestDto.LoginRequest();
+        request.setEmail("admin@techschool.edu");
+        request.setPassword("Admin@1234");
+
+        AuthResponseDto.LoginResponse response = authService.login(request, "127.0.0.1");
+
+        assertNotNull(response);
+        assertEquals("mocked-jwt-token-xyz", response.getToken());
+        assertEquals("admin-123", response.getUserId());
+        assertEquals("Super Admin", response.getName());
+        assertEquals("admin@techschool.edu", response.getEmail());
+        assertEquals("SUPER_ADMIN", response.getRole());
+    }
+
+    @Test
+    void testLogin_invalidPassword_throwsUnauthorized() {
+        sampleStudent.setEmailVerified(true);
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(sampleStudent));
+        when(passwordEncoder.matches("WrongPass", "encoded_pass")).thenReturn(false);
+
+        AuthRequestDto.LoginRequest request = new AuthRequestDto.LoginRequest();
+        request.setEmail("alice@example.com");
+        request.setPassword("WrongPass");
+
+        AppException ex = assertThrows(AppException.class, () -> authService.login(request, "127.0.0.1"));
+        assertTrue(ex.getMessage().contains("Invalid email or password"));
+    }
+
+    @Test
+    void testLogin_unverifiedEmail_throwsUnauthorized() {
+        sampleStudent.setEmailVerified(false);
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(sampleStudent));
+
+        AuthRequestDto.LoginRequest request = new AuthRequestDto.LoginRequest();
+        request.setEmail("alice@example.com");
+        request.setPassword("Password123");
+
+        AppException ex = assertThrows(AppException.class, () -> authService.login(request, "127.0.0.1"));
+        assertTrue(ex.getMessage().contains("Email is not verified"));
+    }
+
+    @Test
+    void testLogin_deactivatedAccount_throwsUnauthorized() {
+        sampleStudent.setActive(false);
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(sampleStudent));
+
+        AuthRequestDto.LoginRequest request = new AuthRequestDto.LoginRequest();
+        request.setEmail("alice@example.com");
+        request.setPassword("Password123");
+
+        AppException ex = assertThrows(AppException.class, () -> authService.login(request, "127.0.0.1"));
+        assertTrue(ex.getMessage().contains("Account is deactivated"));
     }
 }

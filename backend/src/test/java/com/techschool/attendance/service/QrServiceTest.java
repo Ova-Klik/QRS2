@@ -1,13 +1,14 @@
 package com.techschool.attendance.service;
 
-import com.techschool.attendance.dto.QrDto;
+import com.techschool.attendance.dto.request.QrRequestDto;
+import com.techschool.attendance.dto.response.QrResponseDto;
 import com.techschool.attendance.exception.AppException;
-import com.techschool.attendance.model.Cohort;
-import com.techschool.attendance.model.QrSession;
-import com.techschool.attendance.model.SystemSetting;
-import com.techschool.attendance.repository.CohortRepository;
-import com.techschool.attendance.repository.QrSessionRepository;
-import com.techschool.attendance.repository.SystemSettingRepository;
+import com.techschool.attendance.data.model.Cohort;
+import com.techschool.attendance.data.model.QrSession;
+import com.techschool.attendance.data.model.SystemSetting;
+import com.techschool.attendance.data.repository.CohortRepository;
+import com.techschool.attendance.data.repository.QrSessionRepository;
+import com.techschool.attendance.data.repository.SystemSettingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,7 +77,7 @@ class QrServiceTest {
         when(qrSessionRepository.findFirstByCohortId("cohort-1")).thenReturn(Optional.of(existingSession));
         when(qrSessionRepository.save(any(QrSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        QrDto.QrResponse response = qrService.generateSession("fac-1", "Facilitator One", "cohort-1", 30);
+        QrResponseDto.QrResponse response = qrService.generateSession("fac-1", "Facilitator One", "cohort-1", 30);
 
         assertNotNull(response);
         assertEquals("existing-session-id", response.getSessionId());
@@ -101,7 +102,7 @@ class QrServiceTest {
             return s;
         });
 
-        QrDto.QrResponse response = qrService.generateSession("fac-1", "Facilitator One", "cohort-2", 60);
+        QrResponseDto.QrResponse response = qrService.generateSession("fac-1", "Facilitator One", "cohort-2", 60);
 
         assertNotNull(response);
         assertEquals("new-session-id", response.getSessionId());
@@ -161,5 +162,19 @@ class QrServiceTest {
 
         verify(qrSessionRepository, times(1)).save(expired1);
         verify(qrSessionRepository, times(1)).deleteByExpiresAtBefore(any(Instant.class));
+    }
+
+    @Test
+    void testIncrementScanCount_PersistsToRepository() {
+        QrSession session = new QrSession();
+        session.setId("session-to-inc");
+        session.setScanCount(4);
+
+        when(qrSessionRepository.findById("session-to-inc")).thenReturn(Optional.of(session));
+
+        qrService.incrementScanCount("session-to-inc");
+
+        assertEquals(5, session.getScanCount());
+        verify(qrSessionRepository, times(1)).save(session);
     }
 }
