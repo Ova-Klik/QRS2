@@ -238,14 +238,54 @@ public class ComprehensiveValidationTest {
         }
 
         @Test
-        @DisplayName("Invalid cohort name -> throws not found")
+        @DisplayName("Numeric cohort number '29' should match cohort named 'Cohort 29'")
+        void testNumericCohortNumber_MatchesCohortPrefixName() {
+            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
+            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
+            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                u.setId("new-id");
+                return u;
+            });
+
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("29"), "127.0.0.1");
+            assertNotNull(resp);
+            assertEquals("cohort-29-id", resp.getCohortId());
+        }
+
+        @Test
+        @DisplayName("Cohort 33 input matching DB cohort named '33'")
+        void testCohortPrefixInput_MatchesNumericDBName() {
+            Cohort cohort33 = new Cohort();
+            cohort33.setId("c33-id");
+            cohort33.setName("33");
+            cohort33.setActive(true);
+
+            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
+            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort33));
+            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                u.setId("new-id");
+                return u;
+            });
+
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Cohort 33"), "127.0.0.1");
+            assertNotNull(resp);
+            assertEquals("c33-id", resp.getCohortId());
+        }
+
+        @Test
+        @DisplayName("Invalid cohort name -> throws clean not found exception message without duplicated 'Cohort'")
         void testInvalidCohortName_ThrowsNotFound() {
             when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
             when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
 
             AppException ex = assertThrows(AppException.class, () ->
-                    authService.registerStudent(buildRequest("Nonexistent Cohort"), "127.0.0.1"));
-            assertTrue(ex.getMessage().contains("not found"));
+                    authService.registerStudent(buildRequest("Cohort 999"), "127.0.0.1"));
+            assertEquals("Cohort 999 not found or inactive", ex.getMessage());
+            assertFalse(ex.getMessage().contains("Cohort Cohort"));
         }
     }
 

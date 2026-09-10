@@ -110,7 +110,7 @@ export default function RegisterPage() {
           <Select label="Cohort" value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)}>
             <option value="">Select a cohort</option>
             {cohorts.map(c => (
-              <option key={c._id || c.id} value={c.name}>{c.name}</option>
+              <option key={c._id || c.id} value={c.id || c._id || c.name}>{c.name}</option>
             ))}
           </Select>
           <Input label="Password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />

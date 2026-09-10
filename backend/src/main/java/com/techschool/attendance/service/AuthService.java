@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -68,18 +69,35 @@ public class AuthService {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
 
-        // Resolve cohort by name or ID (supports "Cohort 29", "Fullstack Web Dev", or raw cohort ID)
+        // Resolve cohort by ID, name, or normalized number (supports "Cohort 29", "29", "Fullstack Web Dev", or raw cohort ID)
         String cohortInput = request.getCohortNumber().trim();
-        Cohort cohort = cohortRepository.findByActive(true).stream()
-                .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
+        List<Cohort> activeCohorts = cohortRepository.findByActive(true);
+
+        java.util.function.Function<String, String> normalizeCohortStr = s -> {
+            if (s == null) return "";
+            String str = s.trim();
+            if (str.toLowerCase().startsWith("cohort ")) {
+                str = str.substring(7).trim();
+            }
+            return str;
+        };
+
+        String normInput = normalizeCohortStr.apply(cohortInput);
+
+        Cohort cohort = activeCohorts.stream()
+                .filter(c -> c.getId() != null && c.getId().equals(cohortInput))
                 .findFirst()
-                .orElseGet(() -> cohortRepository.findByActive(true).stream()
-                        .filter(c -> c.getId() != null && c.getId().equals(cohortInput))
+                .orElseGet(() -> activeCohorts.stream()
+                        .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
                         .findFirst()
-                        .orElse(null));
+                        .orElseGet(() -> activeCohorts.stream()
+                                .filter(c -> c.getName() != null && normalizeCohortStr.apply(c.getName()).equalsIgnoreCase(normInput))
+                                .findFirst()
+                                .orElse(null)));
 
         if (cohort == null) {
-            throw AppException.notFound("Cohort '" + request.getCohortNumber() + "' not found or inactive");
+            String displayVal = cohortInput.toLowerCase().startsWith("cohort") ? cohortInput : "Cohort " + cohortInput;
+            throw AppException.notFound(displayVal + " not found or inactive");
         }
 
         User user = new User();
