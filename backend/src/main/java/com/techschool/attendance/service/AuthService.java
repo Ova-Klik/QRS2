@@ -69,35 +69,49 @@ public class AuthService {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
 
-        // Resolve cohort by ID, name, or normalized number (supports "Cohort 29", "29", "Fullstack Web Dev", or raw cohort ID)
-        String cohortInput = request.getCohortNumber().trim();
-        List<Cohort> activeCohorts = cohortRepository.findByActive(true);
+        // Standardized cohort resolution: Prefer cohortId, fallback to cohortNumber
+        String inputVal = (request.getCohortId() != null && !request.getCohortId().isBlank())
+                ? request.getCohortId().trim()
+                : (request.getCohortNumber() != null ? request.getCohortNumber().trim() : null);
 
-        java.util.function.Function<String, String> normalizeCohortStr = s -> {
-            if (s == null) return "";
-            String str = s.trim();
-            if (str.toLowerCase().startsWith("cohort ")) {
-                str = str.substring(7).trim();
-            }
-            return str;
-        };
+        if (inputVal == null || inputVal.isBlank()) {
+            throw AppException.badRequest("Please select a cohort");
+        }
 
-        String normInput = normalizeCohortStr.apply(cohortInput);
+        // 1. Primary lookup: Find cohort by ID
+        Cohort cohort = cohortRepository.findById(inputVal).orElse(null);
 
-        Cohort cohort = activeCohorts.stream()
-                .filter(c -> c.getId() != null && c.getId().equals(cohortInput))
-                .findFirst()
-                .orElseGet(() -> activeCohorts.stream()
-                        .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
-                        .findFirst()
-                        .orElseGet(() -> activeCohorts.stream()
-                                .filter(c -> c.getName() != null && normalizeCohortStr.apply(c.getName()).equalsIgnoreCase(normInput))
-                                .findFirst()
-                                .orElse(null)));
-
+        // 2. Fallback: Search all cohorts by exact name or normalized cohort number
         if (cohort == null) {
-            String displayVal = cohortInput.toLowerCase().startsWith("cohort") ? cohortInput : "Cohort " + cohortInput;
-            throw AppException.notFound(displayVal + " not found or inactive");
+            String cohortInput = inputVal;
+            List<Cohort> allCohorts = cohortRepository.findAll();
+            java.util.function.Function<String, String> normalizeCohortStr = s -> {
+                if (s == null) return "";
+                String str = s.trim();
+                if (str.toLowerCase().startsWith("cohort ")) {
+                    str = str.substring(7).trim();
+                }
+                return str;
+            };
+
+            String normInput = normalizeCohortStr.apply(cohortInput);
+
+            cohort = allCohorts.stream()
+                    .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
+                    .findFirst()
+                    .orElseGet(() -> allCohorts.stream()
+                            .filter(c -> c.getName() != null && normalizeCohortStr.apply(c.getName()).equalsIgnoreCase(normInput))
+                            .findFirst()
+                            .orElse(null));
+        }
+
+        // 3. Validation: Check existence and active status cleanly
+        if (cohort == null) {
+            throw AppException.notFound("Selected cohort not found.");
+        }
+
+        if (!cohort.isActive()) {
+            throw AppException.badRequest("Selected cohort is currently inactive.");
         }
 
         User user = new User();

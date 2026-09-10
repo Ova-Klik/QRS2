@@ -159,72 +159,21 @@ public class ComprehensiveValidationTest {
             fullstack.setActive(true);
         }
 
-        private AuthRequestDto.RegisterStudentRequest buildRequest(String cohortName) {
+        private AuthRequestDto.RegisterStudentRequest buildRequest(String cohortValue) {
             AuthRequestDto.RegisterStudentRequest req = new AuthRequestDto.RegisterStudentRequest();
             req.setName("Test User");
             req.setEmail("test@example.com");
             req.setPhone("+2348000000000");
             req.setPassword("Password123");
-            req.setCohortNumber(cohortName);
+            req.setCohortId(cohortValue);
             return req;
         }
 
         @Test
-        @DisplayName("'Cohort 29' should match cohort named 'Cohort 29' without duplicating 'cohort'")
-        void testCohortName_Cohort29_MatchesCorrectly() {
+        @DisplayName("Valid active cohort ID (Cohort 29) -> Registration succeeds")
+        void testValidActiveCohortId_Cohort29_Succeeds() {
             when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
-            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
-                User u = inv.getArgument(0);
-                u.setId("new-id");
-                return u;
-            });
-
-            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Cohort 29"), "127.0.0.1");
-            assertNotNull(resp);
-            assertEquals("cohort-29-id", resp.getCohortId());
-        }
-
-        @Test
-        @DisplayName("'Fullstack Web Dev' should match cohort named 'Fullstack Web Dev'")
-        void testCohortName_FullstackWebDev_MatchesCorrectly() {
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
-            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
-                User u = inv.getArgument(0);
-                u.setId("new-id");
-                return u;
-            });
-
-            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Fullstack Web Dev"), "127.0.0.1");
-            assertNotNull(resp);
-            assertEquals("fullstack-id", resp.getCohortId());
-        }
-
-        @Test
-        @DisplayName("Case-insensitive cohort name matching")
-        void testCaseInsensitiveMatch() {
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
-            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
-                User u = inv.getArgument(0);
-                u.setId("new-id");
-                return u;
-            });
-
-            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("cohort 29"), "127.0.0.1");
-            assertNotNull(resp);
-            assertEquals("cohort-29-id", resp.getCohortId());
-        }
-
-        @Test
-        @DisplayName("Cohort ID matching as fallback")
-        void testCohortIdMatch() {
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
+            when(cohortRepository.findById("cohort-29-id")).thenReturn(Optional.of(cohort29));
             when(passwordEncoder.encode("Password123")).thenReturn("encoded");
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
                 User u = inv.getArgument(0);
@@ -238,32 +187,15 @@ public class ComprehensiveValidationTest {
         }
 
         @Test
-        @DisplayName("Numeric cohort number '29' should match cohort named 'Cohort 29'")
-        void testNumericCohortNumber_MatchesCohortPrefixName() {
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
-            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
-                User u = inv.getArgument(0);
-                u.setId("new-id");
-                return u;
-            });
-
-            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("29"), "127.0.0.1");
-            assertNotNull(resp);
-            assertEquals("cohort-29-id", resp.getCohortId());
-        }
-
-        @Test
-        @DisplayName("Cohort 33 input matching DB cohort named '33'")
-        void testCohortPrefixInput_MatchesNumericDBName() {
+        @DisplayName("Valid active cohort ID (Cohort 33) -> Registration succeeds")
+        void testValidActiveCohortId_Cohort33_Succeeds() {
             Cohort cohort33 = new Cohort();
-            cohort33.setId("c33-id");
-            cohort33.setName("33");
+            cohort33.setId("6aa29212f03755e9ecbd8747");
+            cohort33.setName("Cohort 33");
             cohort33.setActive(true);
 
             when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort33));
+            when(cohortRepository.findById("6aa29212f03755e9ecbd8747")).thenReturn(Optional.of(cohort33));
             when(passwordEncoder.encode("Password123")).thenReturn("encoded");
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
                 User u = inv.getArgument(0);
@@ -271,21 +203,62 @@ public class ComprehensiveValidationTest {
                 return u;
             });
 
-            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("Cohort 33"), "127.0.0.1");
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(buildRequest("6aa29212f03755e9ecbd8747"), "127.0.0.1");
             assertNotNull(resp);
-            assertEquals("c33-id", resp.getCohortId());
+            assertEquals("6aa29212f03755e9ecbd8747", resp.getCohortId());
         }
 
         @Test
-        @DisplayName("Invalid cohort name -> throws clean not found exception message without duplicated 'Cohort'")
-        void testInvalidCohortName_ThrowsNotFound() {
+        @DisplayName("Invalid cohort ID -> throws 'Selected cohort not found.'")
+        void testInvalidCohortId_ThrowsNotFound() {
             when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(cohortRepository.findByActive(true)).thenReturn(List.of(cohort29, fullstack));
+            when(cohortRepository.findById("nonexistent-id")).thenReturn(Optional.empty());
+            when(cohortRepository.findAll()).thenReturn(List.of(cohort29, fullstack));
 
             AppException ex = assertThrows(AppException.class, () ->
-                    authService.registerStudent(buildRequest("Cohort 999"), "127.0.0.1"));
-            assertEquals("Cohort 999 not found or inactive", ex.getMessage());
-            assertFalse(ex.getMessage().contains("Cohort Cohort"));
+                    authService.registerStudent(buildRequest("nonexistent-id"), "127.0.0.1"));
+            assertEquals("Selected cohort not found.", ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("Existing inactive cohort -> throws 'Selected cohort is currently inactive.'")
+        void testInactiveCohort_ThrowsInactiveError() {
+            Cohort inactiveCohort = new Cohort();
+            inactiveCohort.setId("inactive-id");
+            inactiveCohort.setName("Inactive Cohort");
+            inactiveCohort.setActive(false);
+
+            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
+            when(cohortRepository.findById("inactive-id")).thenReturn(Optional.of(inactiveCohort));
+
+            AppException ex = assertThrows(AppException.class, () ->
+                    authService.registerStudent(buildRequest("inactive-id"), "127.0.0.1"));
+            assertEquals("Selected cohort is currently inactive.", ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("Fallback name matching for legacy request using 'Cohort 29'")
+        void testCohortName_FallbackMatching() {
+            AuthRequestDto.RegisterStudentRequest req = new AuthRequestDto.RegisterStudentRequest();
+            req.setName("Test User");
+            req.setEmail("test@example.com");
+            req.setPhone("+2348000000000");
+            req.setPassword("Password123");
+            req.setCohortNumber("Cohort 29");
+
+            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
+            when(cohortRepository.findById("Cohort 29")).thenReturn(Optional.empty());
+            when(cohortRepository.findAll()).thenReturn(List.of(cohort29, fullstack));
+            when(passwordEncoder.encode("Password123")).thenReturn("encoded");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                u.setId("new-id");
+                return u;
+            });
+
+            AuthResponseDto.LoginResponse resp = authService.registerStudent(req, "127.0.0.1");
+            assertNotNull(resp);
+            assertEquals("cohort-29-id", resp.getCohortId());
         }
     }
 

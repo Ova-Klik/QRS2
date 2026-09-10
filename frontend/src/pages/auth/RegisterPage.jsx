@@ -10,7 +10,7 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams()
   const { dark, toggle } = useTheme()
   const [cohorts, setCohorts] = useState([])
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '', cohortNumber: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '', cohortId: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -23,6 +23,11 @@ export default function RegisterPage() {
   useEffect(() => {
     const qrs = searchParams.get('qrs')
     if (qrs) localStorage.setItem('qrs_scan_token', qrs)
+
+    const paramCohortId = searchParams.get('cohortId') || searchParams.get('cohort')
+    if (paramCohortId) {
+      setForm(p => ({ ...p, cohortId: paramCohortId }))
+    }
   }, [searchParams])
 
   const handleSubmit = async e => {
@@ -33,7 +38,7 @@ export default function RegisterPage() {
     }
     if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
-    if (!form.cohortNumber.trim()) { setError('Please select your cohort'); return }
+    if (!form.cohortId.trim()) { setError('Please select your cohort'); return }
     setLoading(true)
     try {
       const payload = {
@@ -41,7 +46,7 @@ export default function RegisterPage() {
         email: form.email,
         phone: form.phone,
         password: form.password,
-        cohortNumber: form.cohortNumber.trim()
+        cohortId: form.cohortId.trim()
       }
 
       const { data } = await authApi.registerStudent(payload)
@@ -107,10 +112,10 @@ export default function RegisterPage() {
           <Input label="Full Name" placeholder="e.g. Ada Okafor" value={form.name} onChange={e => update('name', e.target.value)} />
           <Input label="Email address" type="email" placeholder="you@example.com" value={form.email} onChange={e => update('email', e.target.value)} />
           <Input label="Phone Number" type="tel" placeholder="+234 800 000 0000" value={form.phone} onChange={e => update('phone', e.target.value)} />
-          <Select label="Cohort" value={form.cohortNumber} onChange={e => update('cohortNumber', e.target.value)}>
+          <Select label="Cohort" value={form.cohortId} onChange={e => update('cohortId', e.target.value)}>
             <option value="">Select a cohort</option>
             {cohorts.map(c => (
-              <option key={c._id || c.id} value={c.id || c._id || c.name}>{c.name}</option>
+              <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
             ))}
           </Select>
           <Input label="Password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />
