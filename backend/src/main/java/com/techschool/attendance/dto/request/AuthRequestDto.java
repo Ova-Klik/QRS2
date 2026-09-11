@@ -33,6 +33,7 @@ public class AuthRequestDto {
     public static class VerifyEmailRequest {
         @NotBlank
         private String token;
+        private String email;
     }
 
     @Data

@@ -47,10 +47,10 @@ class MailServiceTest {
 
     @Test
     void testEmailTemplateServiceVerificationUrl() {
-        String html = emailTemplateService.buildVerificationEmailHtml("John Doe", "test-token-123");
+        String html = emailTemplateService.buildVerificationEmailHtml("john@example.com", "John Doe", "test-token-123");
         assertNotNull(html);
         assertTrue(html.contains("Welcome, John Doe!"));
-        assertTrue(html.contains("https://qrsattendance.netlify.app/verify-email?token=test-token-123"));
+        assertTrue(html.contains("https://qrsattendance.netlify.app/verify-email?email=john%40example.com&token=test-token-123"));
         assertTrue(html.contains("Verify Email Address"));
     }
 

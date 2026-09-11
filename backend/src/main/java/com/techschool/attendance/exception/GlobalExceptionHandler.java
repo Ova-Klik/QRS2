@@ -41,12 +41,14 @@ public class GlobalExceptionHandler {
             String field = ((FieldError) err).getField();
             errors.put(field, err.getDefaultMessage());
         });
-        return ResponseEntity.badRequest().body(Map.of(
-                "status", 400,
-                "error", "Validation Failed",
-                "fields", errors,
-                "timestamp", Instant.now().toString()
-        ));
+        String summary = errors.values().stream().findFirst().orElse("Invalid request data");
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("error", "Validation Failed");
+        body.put("message", summary);
+        body.put("fields", errors);
+        body.put("timestamp", Instant.now().toString());
+        return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

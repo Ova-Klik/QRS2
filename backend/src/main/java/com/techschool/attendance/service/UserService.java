@@ -51,7 +51,7 @@ public class UserService {
     private String timezone;
 
     public UserResponseDto.UserResponse createUser(String actorId, String actorName, String actorRole,
-                                            UserRequestDto.CreateUserRequest request) {
+            UserRequestDto.CreateUserRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw AppException.conflict("Email already registered: " + request.getEmail());
         }
@@ -75,11 +75,13 @@ public class UserService {
 
     public List<UserResponseDto.UserResponse> getUsersByRole(User.Role role) {
         List<User> users = userRepository.findByRole(role);
-        if (users.isEmpty()) return List.of();
+        if (users.isEmpty())
+            return List.of();
         Map<String, Cohort> cohortsById = loadCohortsById(users);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(users);
-        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent =
-                role == User.Role.STUDENT ? loadSummariesByStudent(users) : Map.of();
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = role == User.Role.STUDENT
+                ? loadSummariesByStudent(users)
+                : Map.of();
         return users.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
@@ -87,13 +89,13 @@ public class UserService {
 
     // ── Student Search & Pagination ─────────────────────
     public AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse> searchStudents(String cohortId, String query,
-                                                                           int page, int size) {
+            int page, int size) {
         return searchStudents(cohortId, query, page, size, "name", "asc");
     }
 
     public AnalyticsResponseDto.PageResponse<UserResponseDto.UserResponse> searchStudents(String cohortId, String query,
-                                                                           int page, int size,
-                                                                           String sort, String order) {
+            int page, int size,
+            String sort, String order) {
         int safeSize = Math.min(200, Math.max(1, size));
         int safePage = Math.max(0, page);
 
@@ -103,28 +105,32 @@ public class UserService {
         }
         if (query != null && !query.trim().isEmpty()) {
             String q = query.trim();
-            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q),
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
             criteria.andOperator(new Criteria().orOperator(
                     Criteria.where("name").regex(regex),
                     Criteria.where("email").regex(regex),
-                    Criteria.where("registrationNumber").regex(regex)
-            ));
+                    Criteria.where("registrationNumber").regex(regex)));
         }
 
         long total = mongoTemplate.count(Query.query(criteria), User.class);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
         String sortProp = "name";
-        if ("email".equalsIgnoreCase(sort)) sortProp = "email";
-        else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort)) sortProp = "registrationNumber";
+        if ("email".equalsIgnoreCase(sort))
+            sortProp = "email";
+        else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort))
+            sortProp = "registrationNumber";
 
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
+        Pageable pageable = PageRequest.of(safePage, safeSize,
+                Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
         Query pageQuery = Query.query(criteria).with(pageable);
 
         List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
         Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
-        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(
+                pageUsers);
 
         List<UserResponseDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
@@ -142,23 +148,25 @@ public class UserService {
         Criteria criteria = Criteria.where("role").is(User.Role.STUDENT);
         if (query != null && !query.trim().isEmpty()) {
             String q = query.trim();
-            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q),
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
             criteria.andOperator(new Criteria().orOperator(
                     Criteria.where("name").regex(regex),
-                    Criteria.where("email").regex(regex)
-            ));
+                    Criteria.where("email").regex(regex)));
         }
 
         long total = mongoTemplate.count(Query.query(criteria), User.class);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, "name"));
+        Pageable pageable = PageRequest.of(safePage, safeSize,
+                Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, "name"));
         Query pageQuery = Query.query(criteria).with(pageable);
 
         List<User> pageUsers = mongoTemplate.find(pageQuery, User.class);
         Map<String, Cohort> cohortsById = loadCohortsById(pageUsers);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(pageUsers);
-        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(pageUsers);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(
+                pageUsers);
 
         List<UserResponseDto.UserResponse> content = pageUsers.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
@@ -186,12 +194,12 @@ public class UserService {
 
         if (query != null && !query.trim().isEmpty()) {
             String q = query.trim();
-            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q), java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern regex = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(q),
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
             criteria.andOperator(new Criteria().orOperator(
                     Criteria.where("name").regex(regex),
                     Criteria.where("email").regex(regex),
-                    Criteria.where("registrationNumber").regex(regex)
-            ));
+                    Criteria.where("registrationNumber").regex(regex)));
         }
 
         final LocalDate effStart = startDate;
@@ -207,9 +215,11 @@ public class UserService {
                     .collect(Collectors.toMap(Attendance::getStudentId, Function.identity(), (a, b) -> a));
 
             List<ExcuseRequest> excuses = excuseRepository.findActiveExcusesOnOrBefore(targetDate).stream()
-                    .filter(e -> e.getStartDate() != null && !targetDate.isBefore(e.getStartDate()) && !targetDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
+                    .filter(e -> e.getStartDate() != null && !targetDate.isBefore(e.getStartDate())
+                            && !targetDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)))
                     .collect(Collectors.toList());
-            Set<String> excusedStudentIds = excuses.stream().map(ExcuseRequest::getStudentId).collect(Collectors.toSet());
+            Set<String> excusedStudentIds = excuses.stream().map(ExcuseRequest::getStudentId)
+                    .collect(Collectors.toSet());
 
             Query candidateQuery = Query.query(criteria);
             candidateQuery.fields().include("_id");
@@ -217,9 +227,11 @@ public class UserService {
 
             for (User u : candidates) {
                 Attendance a = attByStudent.get(u.getId());
-                boolean hasExcuse = excusedStudentIds.contains(u.getId()) || (a != null && a.getStatus() == Attendance.AttendanceStatus.EXCUSED);
+                boolean hasExcuse = excusedStudentIds.contains(u.getId())
+                        || (a != null && a.getStatus() == Attendance.AttendanceStatus.EXCUSED);
 
-                if ("PRESENT".equals(s) && a != null && (a.getStatus() == Attendance.AttendanceStatus.PRESENT || a.getStatus() == Attendance.AttendanceStatus.LATE)) {
+                if ("PRESENT".equals(s) && a != null && (a.getStatus() == Attendance.AttendanceStatus.PRESENT
+                        || a.getStatus() == Attendance.AttendanceStatus.LATE)) {
                     matchingIds.add(u.getId());
                 } else if ("EARLY".equals(s) && a != null && a.getStatus() == Attendance.AttendanceStatus.PRESENT) {
                     matchingIds.add(u.getId());
@@ -237,7 +249,8 @@ public class UserService {
         long total = mongoTemplate.count(Query.query(criteria), User.class);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
-        boolean sortByRate = "rate".equalsIgnoreCase(sort) || "attendancerate".equalsIgnoreCase(sort) || "attendance".equalsIgnoreCase(sort);
+        boolean sortByRate = "rate".equalsIgnoreCase(sort) || "attendancerate".equalsIgnoreCase(sort)
+                || "attendance".equalsIgnoreCase(sort);
 
         List<User> pageUsers;
         Map<String, UserResponseDto.StudentAttendanceResponse> responsesByStudent;
@@ -258,10 +271,13 @@ public class UserService {
             pageUsers = allFiltered.subList(from, to);
         } else {
             String sortProp = "name";
-            if ("email".equalsIgnoreCase(sort)) sortProp = "email";
-            else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort)) sortProp = "registrationNumber";
+            if ("email".equalsIgnoreCase(sort))
+                sortProp = "email";
+            else if ("registrationnumber".equalsIgnoreCase(sort) || "registration".equalsIgnoreCase(sort))
+                sortProp = "registrationNumber";
 
-            Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
+            Pageable pageable = PageRequest.of(safePage, safeSize,
+                    Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, sortProp));
             Query pageQuery = Query.query(criteria).with(pageable);
 
             pageUsers = mongoTemplate.find(pageQuery, User.class);
@@ -282,7 +298,8 @@ public class UserService {
             List<User> students, LocalDate startDate, LocalDate endDate, Map<String, Cohort> cohortsById) {
         Set<String> ids = students.stream().map(User::getId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        if (ids.isEmpty()) return Map.of();
+        if (ids.isEmpty())
+            return Map.of();
 
         List<Attendance> all;
         if (startDate != null && endDate != null) {
@@ -295,7 +312,8 @@ public class UserService {
                 .collect(Collectors.groupingBy(Attendance::getStudentId));
 
         List<ExcuseRequest> excuses = excuseRepository.findByStudentIdIn(ids).stream()
-                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED || e.getStatus() == ExcuseRequest.Status.APPROVED)
+                .filter(e -> e.getStatus() == ExcuseRequest.Status.ACCEPTED
+                        || e.getStatus() == ExcuseRequest.Status.APPROVED)
                 .collect(Collectors.toList());
         Map<String, List<ExcuseRequest>> excusesByStudent = excuses.stream()
                 .collect(Collectors.groupingBy(ExcuseRequest::getStudentId));
@@ -311,10 +329,13 @@ public class UserService {
             LocalDate effEnd = endDate;
             if (effStart == null || effEnd == null) {
                 LocalDate creationDate = u.getCreatedAt() != null
-                        ? ZonedDateTime.ofInstant(u.getCreatedAt(), ZoneId.of(timezone)).toLocalDate() : today;
-                LocalDate earliestAtt = att.stream().map(Attendance::getDate).filter(Objects::nonNull).min(LocalDate::compareTo).orElse(creationDate);
+                        ? ZonedDateTime.ofInstant(u.getCreatedAt(), ZoneId.of(timezone)).toLocalDate()
+                        : today;
+                LocalDate earliestAtt = att.stream().map(Attendance::getDate).filter(Objects::nonNull)
+                        .min(LocalDate::compareTo).orElse(creationDate);
                 effStart = creationDate.isBefore(earliestAtt) ? creationDate : earliestAtt;
-                if (effStart.isAfter(today)) effStart = today;
+                if (effStart.isAfter(today))
+                    effStart = today;
                 effEnd = today;
             }
 
@@ -324,19 +345,26 @@ public class UserService {
 
             int present = 0, late = 0, absent = 0, excused = 0, holiday = 0, totalDays = 0;
             for (LocalDate d = effStart; !d.isAfter(effEnd); d = d.plusDays(1)) {
-                if (!holidayService.isSchoolDay(d, holidays)) continue;
+                if (!holidayService.isSchoolDay(d, holidays))
+                    continue;
                 totalDays++;
                 final LocalDate currDate = d;
                 Attendance a = attMap.get(d);
                 boolean isExcused = stExcuses.stream().anyMatch(e -> e.getStartDate() != null &&
-                        !currDate.isBefore(e.getStartDate()) && !currDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)));
+                        !currDate.isBefore(e.getStartDate())
+                        && !currDate.isAfter(e.getStartDate().plusDays(Math.max(1, e.getNumberOfDays()) - 1)));
 
                 if (a != null) {
-                    if (a.getStatus() == Attendance.AttendanceStatus.PRESENT) present++;
-                    else if (a.getStatus() == Attendance.AttendanceStatus.LATE) late++;
-                    else if (a.getStatus() == Attendance.AttendanceStatus.EXCUSED) excused++;
-                    else if (a.getStatus() == Attendance.AttendanceStatus.HOLIDAY) holiday++;
-                    else absent++;
+                    if (a.getStatus() == Attendance.AttendanceStatus.PRESENT)
+                        present++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.LATE)
+                        late++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.EXCUSED)
+                        excused++;
+                    else if (a.getStatus() == Attendance.AttendanceStatus.HOLIDAY)
+                        holiday++;
+                    else
+                        absent++;
                 } else if (isExcused) {
                     excused++;
                 } else {
@@ -375,8 +403,7 @@ public class UserService {
                     rating,
                     lastDate,
                     u.isActive(),
-                    u.getCreatedAt()
-            );
+                    u.getCreatedAt());
             out.put(u.getId(), resp);
         }
         return out;
@@ -407,10 +434,10 @@ public class UserService {
     }
 
     public ResponseEntity<byte[]> exportStudentsAdmin(String cohortId, String query,
-                                                     LocalDate startDate, LocalDate endDate,
-                                                     String status, String format, ExportService exportService) {
-        AnalyticsResponseDto.PageResponse<UserResponseDto.StudentAttendanceResponse> page =
-                searchStudentsAdmin(cohortId, query, startDate, endDate, status, 0, 10000, "name", "asc");
+            LocalDate startDate, LocalDate endDate,
+            String status, String format, ExportService exportService) {
+        AnalyticsResponseDto.PageResponse<UserResponseDto.StudentAttendanceResponse> page = searchStudentsAdmin(
+                cohortId, query, startDate, endDate, status, 0, 10000, "name", "asc");
 
         List<List<Object>> table = new java.util.ArrayList<>();
         for (UserResponseDto.StudentAttendanceResponse r : page.getContent()) {
@@ -427,15 +454,13 @@ public class UserService {
                     String.valueOf(r.getHolidayCount()),
                     String.valueOf(r.getTotalAttendanceDays()),
                     r.getRating() != null ? r.getRating() : "",
-                    r.getLastAttendanceDate() != null ? r.getLastAttendanceDate().toString() : "N/A"
-            ));
+                    r.getLastAttendanceDate() != null ? r.getLastAttendanceDate().toString() : "N/A"));
         }
 
         List<String> headers = List.of(
                 "Student Name", "Registration No", "Email", "Cohort",
                 "Attendance %", "Present Days", "Absent Days", "Excused Days",
-                "Late Days", "Holiday Count", "Total Days", "Rating", "Last Attendance Date"
-        );
+                "Late Days", "Holiday Count", "Total Days", "Rating", "Last Attendance Date");
 
         String baseName = "students_attendance";
         if (cohortId != null && !cohortId.isBlank()) {
@@ -450,7 +475,7 @@ public class UserService {
      * the already-batched summary map rather than one query per student.
      */
     private Comparator<User> comparatorFor(String sort, List<User> users, boolean asc,
-                                           Map<String, UserResponseDto.UserResponse.AttendanceSummary> summaries) {
+            Map<String, UserResponseDto.UserResponse.AttendanceSummary> summaries) {
         String sortKey = sort == null ? "name" : sort.toLowerCase().trim();
         Comparator<User> cmp;
         switch (sortKey) {
@@ -483,7 +508,8 @@ public class UserService {
     private Map<String, Cohort> loadCohortsById(List<User> users) {
         Set<String> ids = users.stream().map(User::getCohortId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        if (ids.isEmpty()) return Map.of();
+        if (ids.isEmpty())
+            return Map.of();
         return cohortRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(Cohort::getId, Function.identity(), (a, b) -> a));
     }
@@ -491,7 +517,8 @@ public class UserService {
     private Map<String, Device> loadDevicesByStudent(List<User> users) {
         Set<String> ids = users.stream().map(User::getId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        if (ids.isEmpty()) return Map.of();
+        if (ids.isEmpty())
+            return Map.of();
         return deviceRepository.findByStudentIdIn(ids).stream()
                 .collect(Collectors.toMap(Device::getStudentId, Function.identity(), (a, b) -> a));
     }
@@ -499,28 +526,33 @@ public class UserService {
     private Map<String, UserResponseDto.UserResponse.AttendanceSummary> loadSummariesByStudent(List<User> users) {
         Set<String> ids = users.stream().map(User::getId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        if (ids.isEmpty()) return Map.of();
+        if (ids.isEmpty())
+            return Map.of();
         List<Attendance> all = attendanceRepository.findByStudentIdIn(ids);
         Map<String, UserResponseDto.UserResponse.AttendanceSummary> out = new HashMap<>();
         all.stream().collect(Collectors.groupingBy(Attendance::getStudentId)).forEach((id, att) -> {
             List<Attendance> validAtt = att.stream()
                     .filter(a -> a.getDate() != null && a.getDate().getDayOfWeek().getValue() < 6)
                     .collect(Collectors.toList());
-            int present = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT).count();
+            int present = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.PRESENT)
+                    .count();
             int late = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.LATE).count();
-            int absent = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT).count();
-            int excused = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED).count();
+            int absent = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.ABSENT)
+                    .count();
+            int excused = (int) validAtt.stream().filter(a -> a.getStatus() == Attendance.AttendanceStatus.EXCUSED)
+                    .count();
             double rate = validAtt.size() > 0 ? (double) (present + late) / validAtt.size() * 100 : 0;
-            out.put(id, new UserResponseDto.UserResponse.AttendanceSummary(validAtt.size(), present, late, absent, excused, rate));
+            out.put(id, new UserResponseDto.UserResponse.AttendanceSummary(validAtt.size(), present, late, absent,
+                    excused, rate));
         });
         return out;
     }
 
     /** Batched response builder — zero per-student queries. */
     private UserResponseDto.UserResponse toResponse(User user,
-                                            Map<String, Cohort> cohortsById,
-                                            Map<String, Device> devicesByStudent,
-                                            Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent) {
+            Map<String, Cohort> cohortsById,
+            Map<String, Device> devicesByStudent,
+            Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent) {
         UserResponseDto.UserResponse resp = new UserResponseDto.UserResponse();
         resp.setId(user.getId());
         resp.setName(user.getName());
@@ -534,7 +566,8 @@ public class UserService {
         resp.setAssignedCohortIds(user.getAssignedCohortIds());
         resp.setActive(user.isActive());
         resp.setCreatedAt(user.getCreatedAt());
-        resp.setBiometricRegistered(user.getWebAuthnCredentialId() != null && !user.getWebAuthnCredentialId().isEmpty());
+        resp.setBiometricRegistered(
+                user.getWebAuthnCredentialId() != null && !user.getWebAuthnCredentialId().isEmpty());
 
         Device device = devicesByStudent.get(user.getId());
         if (device != null) {
@@ -544,7 +577,8 @@ public class UserService {
 
         if (user.getRole() == User.Role.STUDENT) {
             UserResponseDto.UserResponse.AttendanceSummary s = summariesByStudent.get(user.getId());
-            if (s == null) s = new UserResponseDto.UserResponse.AttendanceSummary(0, 0, 0, 0, 0, 0.0);
+            if (s == null)
+                s = new UserResponseDto.UserResponse.AttendanceSummary(0, 0, 0, 0, 0, 0.0);
             resp.setAttendanceSummary(s);
         }
         return resp;
@@ -552,10 +586,12 @@ public class UserService {
 
     public List<UserResponseDto.UserResponse> getStudentsByCohort(String cohortId) {
         List<User> students = userRepository.findByCohortIdAndRole(cohortId, User.Role.STUDENT);
-        if (students.isEmpty()) return List.of();
+        if (students.isEmpty())
+            return List.of();
         Map<String, Cohort> cohortsById = loadCohortsById(students);
         Map<String, Device> devicesByStudent = loadDevicesByStudent(students);
-        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(students);
+        Map<String, UserResponseDto.UserResponse.AttendanceSummary> summariesByStudent = loadSummariesByStudent(
+                students);
         return students.stream()
                 .map(u -> toResponse(u, cohortsById, devicesByStudent, summariesByStudent))
                 .collect(Collectors.toList());
@@ -567,7 +603,7 @@ public class UserService {
     }
 
     public UserResponseDto.UserResponse updateUser(String actorId, String actorName, String actorRole,
-                                            String userId, UserRequestDto.UpdateUserRequest request) {
+            String userId, UserRequestDto.UpdateUserRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -591,8 +627,10 @@ public class UserService {
             user.setPhone(request.getPhone().trim());
         }
 
-        if (request.getCohortId() != null) user.setCohortId(request.getCohortId());
-        if (request.getRegistrationNumber() != null) user.setRegistrationNumber(request.getRegistrationNumber());
+        if (request.getCohortId() != null)
+            user.setCohortId(request.getCohortId());
+        if (request.getRegistrationNumber() != null)
+            user.setRegistrationNumber(request.getRegistrationNumber());
 
         if (request.getAssignedCohortIds() != null) {
             user.setAssignedCohortIds(request.getAssignedCohortIds());
@@ -613,19 +651,22 @@ public class UserService {
             }
         }
 
-        if (request.getActive() != null) user.setActive(request.getActive());
+        if (request.getActive() != null)
+            user.setActive(request.getActive());
         User saved = userRepository.save(user);
 
         auditService.log(actorId, actorName, actorRole,
                 AuditLog.ActionType.USER_UPDATED, userId, user.getName(),
-                (user.getRole() == User.Role.FACILITATOR ? "Facilitator" : "User") + " profile updated: " + user.getName(), null);
+                (user.getRole() == User.Role.FACILITATOR ? "Facilitator" : "User") + " profile updated: "
+                        + user.getName(),
+                null);
         return toResponse(saved);
     }
 
     // ── Device Management ────────────────────────────────
     public UserResponseDto.UserResponse.DeviceInfo registerDevice(String actorId, String actorName,
-                                                           String studentId, String fingerprint,
-                                                           String userAgent) {
+            String studentId, String fingerprint,
+            String userAgent) {
         User student = userRepository.findById(studentId)
                 .orElseThrow(() -> AppException.notFound("Student not found"));
 
@@ -680,18 +721,19 @@ public class UserService {
         resp.setRole(user.getRole().name());
         resp.setCohortId(user.getCohortId());
         resp.setCohortName(user.getCohortId() != null
-                ? cohortRepository.findById(user.getCohortId()).map(Cohort::getName).orElse(null) : null);
+                ? cohortRepository.findById(user.getCohortId()).map(Cohort::getName).orElse(null)
+                : null);
         resp.setRegistrationNumber(user.getRegistrationNumber());
         resp.setAssignedCohortIds(user.getAssignedCohortIds());
         resp.setActive(user.isActive());
         resp.setCreatedAt(user.getCreatedAt());
-        resp.setBiometricRegistered(user.getWebAuthnCredentialId() != null && !user.getWebAuthnCredentialId().isEmpty());
+        resp.setBiometricRegistered(
+                user.getWebAuthnCredentialId() != null && !user.getWebAuthnCredentialId().isEmpty());
 
         // Device info
-        deviceRepository.findByStudentId(user.getId()).ifPresent(d ->
-                resp.setDevice(new UserResponseDto.UserResponse.DeviceInfo(
-                        d.getId(), d.getFingerprint(), d.isLocked(), d.getRegisteredAt()))
-        );
+        deviceRepository.findByStudentId(user.getId())
+                .ifPresent(d -> resp.setDevice(new UserResponseDto.UserResponse.DeviceInfo(
+                        d.getId(), d.getFingerprint(), d.isLocked(), d.getRegisteredAt())));
 
         // Attendance summary
         if (user.getRole() == User.Role.STUDENT) {
@@ -712,18 +754,19 @@ public class UserService {
 
     // ── Network & System Settings ───────────────────────
     private static final String[] NETWORK_KEYS = {
-        "school_name", "school_address", "school_email", "school_website",
-        "school_wifi_ssid", "school_ip_range", "network_enforce",
-        "qr_window_start", "qr_window_end", "late_threshold",
-        "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_enforce", "geofence_fallback_enabled",
-        "qr_refresh_interval", "qr_refresh_enabled"
+            "school_name", "school_address", "school_email", "school_website",
+            "school_wifi_ssid", "school_ip_range", "network_enforce",
+            "qr_window_start", "qr_window_end", "late_threshold",
+            "school_latitude", "school_longitude", "school_geofence_radius_meters", "geofence_enforce",
+            "geofence_fallback_enabled",
+            "qr_refresh_interval", "qr_refresh_enabled"
     };
     private static final String[] NETWORK_DEFAULTS = {
-        "Tech School", "Lagos, Nigeria", "admin@techschool.edu.ng", "https://techschool.edu.ng",
-        "TechSchool-WiFi", "192.168.1.0/24", "false",
-        "07:00", "12:00", "08:31",
-        "6.5244", "3.3792", "150", "false", "true",
-        "15", "true"
+            "Tech School", "Lagos, Nigeria", "admin@techschool.edu.ng", "https://techschool.edu.ng",
+            "TechSchool-WiFi", "192.168.1.0/24", "false",
+            "07:00", "12:00", "08:31",
+            "6.5244", "3.3792", "150", "false", "true",
+            "15", "true"
     };
 
     public Map<String, String> getNetworkSettings() {

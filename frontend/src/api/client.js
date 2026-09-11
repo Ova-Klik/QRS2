@@ -66,6 +66,54 @@ api.interceptors.response.use(
 
 export default api
 
+// Extract a safe, human-readable error message from an API failure.
+// Tries, in order: response.data.message, response.data.error, per-field
+// validation messages, response.data as plain text, then a status-code
+// specific safe fallback, and finally a fully generic fallback.
+export function getErrorMessage(err) {
+  if (!err || !err.response) {
+    if (err && err.request) {
+      return 'Network error. Please check your connection and try again.'
+    }
+    return 'Something went wrong. Please try again.'
+  }
+
+  const data = err.response.data
+
+  if (data) {
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return data.message.trim()
+    }
+    if (data.fields && typeof data.fields === 'object') {
+      const messages = Object.entries(data.fields).map(([field, msg]) => `${field}: ${msg}`)
+      if (messages.length) return messages.join('. ')
+    }
+    if (typeof data.error === 'string' && data.error.trim()) {
+      return data.error.trim()
+    }
+    if (typeof data === 'string' && data.trim()) {
+      return data.trim()
+    }
+  }
+
+  switch (err.response.status) {
+    case 400: return 'Invalid request details. Please review your information and try again.'
+    case 401: return 'Authentication required. Please sign in again.'
+    case 403: return 'You are not allowed to perform this action.'
+    case 404: return 'The requested resource was not found.'
+    case 409: return 'This record already exists. Please use a different email or phone number.'
+    case 500: return 'Registration could not be completed. Please try again later.'
+    default: return 'Registration failed. Please try again.'
+  }
+}
+
+// Format a registration failure for display on the registration pages.
+export function registrationErrorMessage(err) {
+  const message = getErrorMessage(err)
+  if (message.startsWith('Registration')) return message
+  return `Registration failed: ${message}`
+}
+
 // Trigger a browser download for an export blob response.
 export function downloadBlob(res, fallbackName = 'download') {
   const disposition = res.headers?.['content-disposition'] || ''
@@ -90,7 +138,7 @@ export const authApi = {
   changePassword:     (body)            => api.post('/auth/change-password', body),
   registerStudent:    (body)            => api.post('/auth/register/student', body),
   registerFacilitator:(body)            => api.post('/auth/register/facilitator', body),
-  verifyEmail:        (token)           => api.post('/auth/verify-email', { token }),
+  verifyEmail:        (token, email)    => api.post('/auth/verify-email', { token, ...(email ? { email } : {}) }),
   resendVerification: (email)           => api.post('/auth/resend-verification', { email }),
   forgotPassword:     (email)           => api.post('/auth/forgot-password', { email }),
   resetPassword:      (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),

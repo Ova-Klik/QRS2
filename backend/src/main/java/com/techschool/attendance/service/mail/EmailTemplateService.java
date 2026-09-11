@@ -4,6 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 @Slf4j
 @Service
 public class EmailTemplateService {
@@ -12,9 +15,20 @@ public class EmailTemplateService {
     private String appFrontendUrl;
 
     public String buildVerificationEmailHtml(String recipientName, String token) {
+        return buildVerificationEmailHtml(null, recipientName, token);
+    }
+
+    public String buildVerificationEmailHtml(String recipientEmail, String recipientName, String token) {
         String baseUrl = cleanUrl(appFrontendUrl);
         log.info("Constructing verification email link using base frontend URL: {}", baseUrl);
-        String verifyUrl = baseUrl + "/verify-email?token=" + token;
+        String encodedToken = (token != null) ? URLEncoder.encode(token.trim(), StandardCharsets.UTF_8) : "";
+        String verifyUrl;
+        if (recipientEmail != null && !recipientEmail.isBlank()) {
+            String encodedEmail = URLEncoder.encode(recipientEmail.trim(), StandardCharsets.UTF_8);
+            verifyUrl = baseUrl + "/verify-email?email=" + encodedEmail + "&token=" + encodedToken;
+        } else {
+            verifyUrl = baseUrl + "/verify-email?token=" + encodedToken;
+        }
         String name = (recipientName != null && !recipientName.isBlank()) ? recipientName.trim() : "User";
 
         String template = """

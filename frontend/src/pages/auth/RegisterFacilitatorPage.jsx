@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
-import { authApi } from '../../api/client'
+import { authApi, registrationErrorMessage } from '../../api/client'
 import { useTheme } from '../../context/ThemeContext'
 import { Input, Button, Alert } from '../../components/common/UI'
 import toast from 'react-hot-toast'
@@ -37,7 +37,7 @@ export default function RegisterFacilitatorPage() {
       if (scanToken) localStorage.removeItem('qrs_scan_token')
       navigate('/facilitator')
     } catch (err) {
-      setError(err.response?.data?.message || 'Facilitator registration failed')
+      setError(registrationErrorMessage(err))
     } finally {
       setLoading(false)
     }
