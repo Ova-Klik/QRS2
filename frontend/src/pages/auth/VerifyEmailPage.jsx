@@ -8,35 +8,26 @@ import { Input, Button, Alert } from '../../components/common/UI'
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
-  const emailParam = searchParams.get('email')
   const navigate = useNavigate()
   const { dark, toggle } = useTheme()
   const { settings } = useSchool()
 
   const [status, setStatus] = useState('verifying') // verifying | success | error
   const [message, setMessage] = useState('')
-  const [resendEmail, setResendEmail] = useState(emailParam || '')
+  const [resendEmail, setResendEmail] = useState('')
   const [resending, setResending] = useState(false)
   const [resendMessage, setResendMessage] = useState('')
   const [resendError, setResendError] = useState('')
 
   useEffect(() => {
-    if (emailParam && !resendEmail) {
-      setResendEmail(emailParam)
-    }
-
     if (!token) {
       setStatus('error')
-      if (emailParam) {
-        setMessage(`Verification link sent! Please check your email (${emailParam}) and click the verification link.`)
-      } else {
-        setMessage('No verification token provided in URL.')
-      }
+      setMessage('No verification token provided in URL.')
       return
     }
 
     let isMounted = true
-    authApi.verifyEmail(token, emailParam)
+    authApi.verifyEmail(token)
       .then(res => {
         if (!isMounted) return
         setStatus('success')
@@ -49,7 +40,7 @@ export default function VerifyEmailPage() {
       })
 
     return () => { isMounted = false }
-  }, [token, emailParam])
+  }, [token])
 
   const handleResend = async (e) => {
     e.preventDefault()

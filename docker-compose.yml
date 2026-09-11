@@ -56,13 +56,6 @@ services:
       QR_WINDOW_END: ${QR_WINDOW_END:-23:59}
       LATE_THRESHOLD: ${LATE_THRESHOLD:-23:59}
       SEED_DATA: ${SEED_DATA:-true}
-      BREVO_SMTP_HOST: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
-      BREVO_SMTP_PORT: ${BREVO_SMTP_PORT:-587}
-      BREVO_SMTP_USERNAME: ${BREVO_SMTP_USERNAME:-your-brevo-smtp-username}
-      BREVO_SMTP_PASSWORD: ${BREVO_SMTP_PASSWORD:-your-brevo-smtp-key}
-      BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL:-noreply@qrsattendance.com}
-      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-QRAttendance}
-      APP_FRONTEND_URL: ${APP_FRONTEND_URL:-http://localhost}
     depends_on:
       mongodb:
         condition: service_healthy

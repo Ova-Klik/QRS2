@@ -45,8 +45,7 @@ public class AuthService {
         }
 
         if (!user.isEmailVerified()) {
-            throw AppException
-                    .unauthorized("Email is not verified. Please check your inbox or request a new verification link.");
+            throw AppException.unauthorized("Email is not verified. Please check your inbox or request a new verification link.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -59,15 +58,15 @@ public class AuthService {
 
         return new AuthResponseDto.LoginResponse(
                 token, user.getId(), user.getName(),
-                user.getEmail(), user.getRole().name(), user.getCohortId());
+                user.getEmail(), user.getRole().name(), user.getCohortId()
+        );
     }
 
     // ── Self-Registration ────────────────────────────────
 
-    public AuthResponseDto.LoginResponse registerStudent(AuthRequestDto.RegisterStudentRequest request,
-            String ipAddress) {
+    public AuthResponseDto.LoginResponse registerStudent(AuthRequestDto.RegisterStudentRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw AppException.conflict("An account with this email already exists.");
+            throw AppException.conflict("Email already registered: " + request.getEmail());
         }
 
         // Standardized cohort resolution: Prefer cohortId, fallback to cohortNumber
@@ -87,8 +86,7 @@ public class AuthService {
             String cohortInput = inputVal;
             List<Cohort> allCohorts = cohortRepository.findAll();
             java.util.function.Function<String, String> normalizeCohortStr = s -> {
-                if (s == null)
-                    return "";
+                if (s == null) return "";
                 String str = s.trim();
                 if (str.toLowerCase().startsWith("cohort ")) {
                     str = str.substring(7).trim();
@@ -102,8 +100,7 @@ public class AuthService {
                     .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cohortInput))
                     .findFirst()
                     .orElseGet(() -> allCohorts.stream()
-                            .filter(c -> c.getName() != null
-                                    && normalizeCohortStr.apply(c.getName()).equalsIgnoreCase(normInput))
+                            .filter(c -> c.getName() != null && normalizeCohortStr.apply(c.getName()).equalsIgnoreCase(normInput))
                             .findFirst()
                             .orElse(null));
         }
@@ -113,11 +110,9 @@ public class AuthService {
             throw AppException.notFound("Selected cohort not found.");
         }
 
-        // TODO:Fix this clause
-
-        // if (!cohort.isActive()) {
-        // throw AppException.badRequest("Selected cohort is currently inactive.");
-        // }
+        if (!cohort.isActive()) {
+            throw AppException.badRequest("Selected cohort is currently inactive.");
+        }
 
         User user = new User();
         user.setName(request.getName());
@@ -139,8 +134,7 @@ public class AuthService {
         try {
             mailService.sendVerificationEmail(saved.getEmail(), saved.getName(), vToken);
         } catch (Exception e) {
-            log.error("Failed to send verification email during student registration for {}: {}", saved.getEmail(),
-                    e.getMessage());
+            log.error("Failed to send verification email during student registration for {}: {}", saved.getEmail(), e.getMessage());
         }
 
         auditService.log(saved.getId(), saved.getName(), "STUDENT",
@@ -149,13 +143,13 @@ public class AuthService {
 
         return new AuthResponseDto.LoginResponse(
                 null, saved.getId(), saved.getName(),
-                saved.getEmail(), saved.getRole().name(), saved.getCohortId());
+                saved.getEmail(), saved.getRole().name(), saved.getCohortId()
+        );
     }
 
-    public AuthResponseDto.LoginResponse registerFacilitator(AuthRequestDto.RegisterFacilitatorRequest request,
-            String ipAddress) {
+    public AuthResponseDto.LoginResponse registerFacilitator(AuthRequestDto.RegisterFacilitatorRequest request, String ipAddress) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw AppException.conflict("An account with this email already exists.");
+            throw AppException.conflict("Email already registered: " + request.getEmail());
         }
 
         User user = new User();
@@ -177,8 +171,7 @@ public class AuthService {
         try {
             mailService.sendVerificationEmail(saved.getEmail(), saved.getName(), vToken);
         } catch (Exception e) {
-            log.error("Failed to send verification email during facilitator registration for {}: {}", saved.getEmail(),
-                    e.getMessage());
+            log.error("Failed to send verification email during facilitator registration for {}: {}", saved.getEmail(), e.getMessage());
         }
 
         auditService.log(saved.getId(), saved.getName(), "FACILITATOR",
@@ -187,7 +180,8 @@ public class AuthService {
 
         return new AuthResponseDto.LoginResponse(
                 null, saved.getId(), saved.getName(),
-                saved.getEmail(), saved.getRole().name(), null);
+                saved.getEmail(), saved.getRole().name(), null
+        );
     }
 
     // ── Email Verification & Resend ───────────────────────
@@ -257,12 +251,10 @@ public class AuthService {
             }
         }
 
-        return new AuthResponseDto.MessageResponse(
-                "If an account exists with that email, a password reset link has been sent.");
+        return new AuthResponseDto.MessageResponse("If an account exists with that email, a password reset link has been sent.");
     }
 
-    public AuthResponseDto.MessageResponse resetPasswordWithToken(
-            AuthRequestDto.ResetPasswordWithTokenRequest request) {
+    public AuthResponseDto.MessageResponse resetPasswordWithToken(AuthRequestDto.ResetPasswordWithTokenRequest request) {
         if (request.getToken() == null || request.getToken().isBlank()) {
             throw AppException.badRequest("Password reset token is required");
         }
@@ -271,8 +263,7 @@ public class AuthService {
                 .orElseThrow(() -> AppException.badRequest("Invalid or expired password reset token"));
 
         if (user.getPasswordResetTokenExpiry() == null || user.getPasswordResetTokenExpiry().isBefore(Instant.now())) {
-            throw AppException
-                    .badRequest("Password reset token has expired. Please request a new password reset link.");
+            throw AppException.badRequest("Password reset token has expired. Please request a new password reset link.");
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
@@ -285,8 +276,7 @@ public class AuthService {
                 AuditLog.ActionType.PASSWORD_RESET, user.getId(), user.getName(),
                 "Password reset successfully via email token", null);
 
-        return new AuthResponseDto.MessageResponse(
-                "Your password has been reset successfully. You can now log in with your new password.");
+        return new AuthResponseDto.MessageResponse("Your password has been reset successfully. You can now log in with your new password.");
     }
 
     // ── WebAuthn Biometric ───────────────────────────────
@@ -317,8 +307,7 @@ public class AuthService {
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
         if (user.getWebAuthnCredentialId() == null) {
-            throw AppException
-                    .badRequest("No biometric credential registered. Please register your fingerprint first.");
+            throw AppException.badRequest("No biometric credential registered. Please register your fingerprint first.");
         }
 
         if (!user.getWebAuthnCredentialId().equals(request.getCredentialId())) {

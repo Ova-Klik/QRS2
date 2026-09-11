@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
-import { authApi, registrationErrorMessage } from '../../api/client'
+import { authApi } from '../../api/client'
 import { useTheme } from '../../context/ThemeContext'
 import { Input, Select, Button, Alert } from '../../components/common/UI'
 import toast from 'react-hot-toast'
@@ -68,7 +68,7 @@ export default function RegisterPage() {
       if (scanToken) localStorage.removeItem('qrs_scan_token')
       navigate('/student')
     } catch (err) {
-      setError(registrationErrorMessage(err))
+      setError(err.response?.data?.message || 'Student registration failed')
     } finally {
       setLoading(false)
     }
