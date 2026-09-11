@@ -44,9 +44,10 @@ public class AuthService {
             throw AppException.unauthorized("Account is deactivated. Contact admin.");
         }
 
-        if (!user.isEmailVerified()) {
-            throw AppException.unauthorized("Email is not verified. Please check your inbox or request a new verification link.");
-        }
+        // Email verification bypassed for quick registration access
+        // if (!user.isEmailVerified()) {
+        //     throw AppException.unauthorized("Email is not verified. Please check your inbox or request a new verification link.");
+        // }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw AppException.unauthorized("Invalid email or password");
@@ -75,7 +76,7 @@ public class AuthService {
                 : (request.getCohortNumber() != null ? request.getCohortNumber().trim() : null);
 
         if (inputVal == null || inputVal.isBlank()) {
-            throw AppException.badRequest("Please select a cohort");
+            throw AppException.badRequest("Cohort Selection is required.");
         }
 
         // 1. Primary lookup: Find cohort by ID
@@ -110,10 +111,6 @@ public class AuthService {
             throw AppException.notFound("Selected cohort not found.");
         }
 
-        if (!cohort.isActive()) {
-            throw AppException.badRequest("Selected cohort is currently inactive.");
-        }
-
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
@@ -122,27 +119,18 @@ public class AuthService {
         user.setRole(User.Role.STUDENT);
         user.setCohortId(cohort.getId());
         user.setActive(true);
-        user.setEmailVerified(false);
-
-        String vToken = generateSecureToken();
-        user.setVerificationToken(vToken);
-        user.setVerificationTokenExpiry(Instant.now().plus(24, ChronoUnit.HOURS));
+        user.setEmailVerified(true);
 
         User saved = userRepository.save(user);
 
-        // Send verification email via MailService abstraction
-        try {
-            mailService.sendVerificationEmail(saved.getEmail(), saved.getName(), vToken);
-        } catch (Exception e) {
-            log.error("Failed to send verification email during student registration for {}: {}", saved.getEmail(), e.getMessage());
-        }
+        String token = jwtUtils.generateToken(saved.getId(), saved.getEmail(), saved.getRole().name());
 
         auditService.log(saved.getId(), saved.getName(), "STUDENT",
                 AuditLog.ActionType.USER_CREATED, saved.getId(), saved.getName(),
                 "Self-registration as student in " + cohort.getName(), ipAddress);
 
         return new AuthResponseDto.LoginResponse(
-                null, saved.getId(), saved.getName(),
+                token, saved.getId(), saved.getName(),
                 saved.getEmail(), saved.getRole().name(), saved.getCohortId()
         );
     }
@@ -159,27 +147,18 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(User.Role.FACILITATOR);
         user.setActive(true);
-        user.setEmailVerified(false);
-
-        String vToken = generateSecureToken();
-        user.setVerificationToken(vToken);
-        user.setVerificationTokenExpiry(Instant.now().plus(24, ChronoUnit.HOURS));
+        user.setEmailVerified(true);
 
         User saved = userRepository.save(user);
 
-        // Send verification email via MailService abstraction
-        try {
-            mailService.sendVerificationEmail(saved.getEmail(), saved.getName(), vToken);
-        } catch (Exception e) {
-            log.error("Failed to send verification email during facilitator registration for {}: {}", saved.getEmail(), e.getMessage());
-        }
+        String token = jwtUtils.generateToken(saved.getId(), saved.getEmail(), saved.getRole().name());
 
         auditService.log(saved.getId(), saved.getName(), "FACILITATOR",
                 AuditLog.ActionType.USER_CREATED, saved.getId(), saved.getName(),
                 "Self-registration as facilitator", ipAddress);
 
         return new AuthResponseDto.LoginResponse(
-                null, saved.getId(), saved.getName(),
+                token, saved.getId(), saved.getName(),
                 saved.getEmail(), saved.getRole().name(), null
         );
     }
