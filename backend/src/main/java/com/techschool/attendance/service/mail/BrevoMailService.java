@@ -50,6 +50,10 @@ public class BrevoMailService implements MailService {
             log.error("Failed to send email: recipient email address is empty");
             throw AppException.badRequest("Recipient email address cannot be empty");
         }
+        if (fromEmail == null || fromEmail.isBlank()) {
+            log.error("Failed to send email: BREVO_FROM_EMAIL is not configured");
+            throw AppException.internalServerError("Email service is not configured");
+        }
 
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();

@@ -20,12 +20,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,17 +71,19 @@ class AuthServiceMailTest {
     }
 
     @Test
-    void testRegisterStudentTriggersVerificationEmail() {
+    void testRegisterStudentCreatesVerifiedAccountWithoutEmailDependency() {
         AuthRequestDto.RegisterStudentRequest request = new AuthRequestDto.RegisterStudentRequest();
         request.setName("Alice Smith");
         request.setEmail("alice@example.com");
         request.setPhone("+234 800 000 0000");
         request.setPassword("Password123");
-        request.setCohortNumber("Cohort 29");
+        request.setCohortId("cohort-29-id");
 
         when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
-        when(cohortRepository.findByActive(true)).thenReturn(List.of(sampleCohort));
+        when(cohortRepository.findById("cohort-29-id")).thenReturn(Optional.of(sampleCohort));
         when(passwordEncoder.encode("Password123")).thenReturn("encoded_pass");
+        when(jwtUtils.generateToken("generated-user-id", "alice@example.com", "STUDENT"))
+            .thenReturn("jwt-token");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
             u.setId("generated-user-id");
@@ -94,20 +94,9 @@ class AuthServiceMailTest {
 
         assertNotNull(response);
         assertEquals("alice@example.com", response.getEmail());
-        assertNull(response.getToken()); // Unverified registration returns null token
-
-        // Verify MailService.sendVerificationEmail was called with correct recipient
-        ArgumentCaptor<String> emailCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> nameCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
-
-        verify(mailService, times(1)).sendVerificationEmail(
-                emailCaptor.capture(), nameCaptor.capture(), tokenCaptor.capture());
-
-        assertEquals("alice@example.com", emailCaptor.getValue());
-        assertEquals("Alice Smith", nameCaptor.getValue());
-        assertNotNull(tokenCaptor.getValue());
-        assertFalse(tokenCaptor.getValue().isBlank());
+        assertEquals("generated-user-id", response.getUserId());
+        assertEquals("jwt-token", response.getToken());
+        verifyNoInteractions(mailService);
     }
 
     @Test

@@ -100,4 +100,15 @@ class MailServiceTest {
         assertThrows(AppException.class, () ->
                 brevoMailService.sendVerificationEmail("", "User Test", "token-xyz"));
     }
+
+    @Test
+    void testMissingSenderConfigurationThrowsSafeAppException() {
+        ReflectionTestUtils.setField(brevoMailService, "fromEmail", "");
+
+        AppException ex = assertThrows(AppException.class, () ->
+                brevoMailService.sendVerificationEmail("user@example.com", "User Test", "token-xyz"));
+
+        assertEquals("Email service is not configured", ex.getMessage());
+        verifyNoInteractions(javaMailSender);
+    }
 }

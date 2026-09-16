@@ -7,9 +7,9 @@ services:
     dockerfilePath: ./Dockerfile.render
     envVars:
       - key: SPRING_DATA_MONGODB_URI
-        value: mongodb+srv://olaomovictor1_db_user:MongoDbPassword@qrs2.jns1ejm.mongodb.net/qrs_db?retryWrites=true&w=majority&authSource=admin
+        sync: false
       - key: JWT_SECRET
-        value: 74fbcbe8c50925d6e570c3d802d4c318687c97b527a0eeddf440e93469f08423716549a035d4d99b654c86a32cfbfeddb5b9cb6d17ea51cc0cffc4958e35cb75
+        sync: false
       - key: JWT_EXPIRY_MS
         value: "86400000"
       - key: ALLOWED_ORIGINS
@@ -22,6 +22,18 @@ services:
         value: "12:00"
       - key: LATE_THRESHOLD
         value: "08:31"
+      - key: BREVO_SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: BREVO_SMTP_PORT
+        value: "587"
+      - key: BREVO_SMTP_USERNAME
+        sync: false
+      - key: BREVO_SMTP_PASSWORD
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: BREVO_FROM_NAME
+        value: QRAttendance
 
 databases:
   - name: qrs-mongo

@@ -110,6 +110,9 @@ public class AuthService {
         if (cohort == null) {
             throw AppException.notFound("Selected cohort not found.");
         }
+        if (!cohort.isActive()) {
+            throw AppException.badRequest("Selected cohort is currently inactive.");
+        }
 
         User user = new User();
         user.setName(request.getName());
