@@ -29,7 +29,7 @@ public class NetworkSettingsVerificationTest {
     @InjectMocks
     private NetworkSettingsService networkSettingsService;
 
-    private AttendanceService attendanceService;
+    private AttendanceCheckInService attendanceCheckInService;
 
     // Campus coordinates (Lagos): 6.5244 N, 3.3792 E, 150m allowed radius
     private final double campusLat = 6.5244;
@@ -38,10 +38,7 @@ public class NetworkSettingsVerificationTest {
 
     @BeforeEach
     void setUp() {
-        attendanceService = new AttendanceService(
-                null, null, null, null, null, null, null, null, null, null,
-                networkSettingsService
-        );
+        attendanceCheckInService = new AttendanceCheckInService(networkSettingsService);
     }
 
     private NetworkSettings createSettings(boolean enforceWifi, boolean enforceGeo, List<String> ssids, String ipRange) {
@@ -68,7 +65,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("Campus-WiFi-2"); // Match second SSID
         req.setClientIP("192.168.1.55");
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "192.168.1.55");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "192.168.1.55");
         assertEquals("WIFI", method);
     }
 
@@ -84,7 +81,7 @@ public class NetworkSettingsVerificationTest {
         req.setLongitude(campusLng);
         req.setAccuracy(10.0);
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "10.0.0.5");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5");
         assertEquals("GEOLOCATION", method);
     }
 
@@ -100,7 +97,7 @@ public class NetworkSettingsVerificationTest {
         req.setLatitude(6.6000);
         req.setLongitude(3.4000);
 
-        assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "10.0.0.5"));
+        assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5"));
     }
 
     // ── Branch 2: WiFi Enforced Only ─────────────────────
@@ -114,7 +111,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("Campus-WiFi-1");
         req.setClientIP("192.168.1.10");
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "192.168.1.10");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "192.168.1.10");
         assertEquals("WIFI", method);
     }
 
@@ -128,7 +125,7 @@ public class NetworkSettingsVerificationTest {
         req.setClientIP("10.0.0.5"); // IP mismatch
         req.setLatitude(campusLat);  // Valid GPS provided, but geo is disabled
 
-        assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "10.0.0.5"));
+        assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5"));
     }
 
     // ── Branch 3: Geolocation Enforced Only ──────────────
@@ -143,7 +140,7 @@ public class NetworkSettingsVerificationTest {
         req.setLongitude(campusLng);
         req.setAccuracy(5.0);
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "10.0.0.5");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5");
         assertEquals("GEOLOCATION", method);
     }
 
@@ -155,7 +152,7 @@ public class NetworkSettingsVerificationTest {
         QrRequestDto.ScanRequest req = new QrRequestDto.ScanRequest();
         // Latitude & Longitude null
 
-        AppException ex = assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "10.0.0.5"));
+        AppException ex = assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5"));
         assertTrue(ex.getMessage().contains("Location coordinates are required"));
     }
 
@@ -167,7 +164,7 @@ public class NetworkSettingsVerificationTest {
         when(networkSettingsRepository.findById("default")).thenReturn(Optional.of(settings));
 
         QrRequestDto.ScanRequest req = new QrRequestDto.ScanRequest();
-        String method = attendanceService.verifyCheckIn(req, "student1", "10.0.0.5");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "10.0.0.5");
         assertEquals("UNVERIFIED", method);
     }
 
@@ -182,7 +179,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("Campus-WiFi-1");
         req.setClientIP("172.16.0.5"); // Wrong IP range
 
-        assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "172.16.0.5"));
+        assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "172.16.0.5"));
     }
 
     @Test
@@ -194,7 +191,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("WrongSSID");
         req.setClientIP("192.168.1.50");
 
-        assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "192.168.1.50"));
+        assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "192.168.1.50"));
     }
 
     @Test
@@ -206,7 +203,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("BuildingB-WiFi");
         req.setClientIP("192.168.1.99");
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "192.168.1.99");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "192.168.1.99");
         assertEquals("WIFI", method);
     }
 
@@ -219,7 +216,7 @@ public class NetworkSettingsVerificationTest {
         req.setNetworkSSID("SomeSSID");
         req.setClientIP("192.168.1.10");
 
-        assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "192.168.1.10"));
+        assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "192.168.1.10"));
     }
 
     // ── Haversine Boundary Tests ─────────────────────────
@@ -235,7 +232,7 @@ public class NetworkSettingsVerificationTest {
         req.setLatitude(campusLat + 0.0009); // ~100 meters away
         req.setLongitude(campusLng);
 
-        String method = attendanceService.verifyCheckIn(req, "student1", "127.0.0.1");
+        String method = attendanceCheckInService.verifyCheckIn(req, "student1", "127.0.0.1");
         assertEquals("GEOLOCATION", method);
     }
 
@@ -250,7 +247,7 @@ public class NetworkSettingsVerificationTest {
         req.setLatitude(campusLat + 0.0045);
         req.setLongitude(campusLng);
 
-        AppException ex = assertThrows(AppException.class, () -> attendanceService.verifyCheckIn(req, "student1", "127.0.0.1"));
+        AppException ex = assertThrows(AppException.class, () -> attendanceCheckInService.verifyCheckIn(req, "student1", "127.0.0.1"));
         assertTrue(ex.getMessage().contains("outside the allowed attendance location"));
     }
 }

@@ -41,9 +41,19 @@ public class AttendanceServiceFixesTest {
     @Mock private ExcuseRequestRepository excuseRepository;
     @Mock private AuditLogRepository auditLogRepository;
     @Mock private NetworkSettingsService networkSettingsService;
+    @Mock private AttendanceScanService attendanceScanService;
+    @Mock private AttendanceCheckInService attendanceCheckInService;
+    @Mock private AttendanceAnalyticsService attendanceAnalyticsService;
+    @Mock private AttendanceFacilitatorReportService attendanceFacilitatorReportService;
+    @Mock private AttendanceManualAttendanceService attendanceManualAttendanceService;
+    @Mock private AttendanceExportService attendanceExportService;
+    @Mock private AttendanceMarkingService attendanceMarkingService;
 
     @InjectMocks
     private AttendanceService attendanceService;
+
+    @InjectMocks
+    private AttendanceAnalyticsService analyticsService;
 
     private User student;
     private QrSession session;
@@ -52,9 +62,7 @@ public class AttendanceServiceFixesTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(attendanceService, "timezone", "Africa/Lagos");
-        ReflectionTestUtils.setField(attendanceService, "windowStartDefault", "00:00");
-        ReflectionTestUtils.setField(attendanceService, "windowEndDefault", "23:59");
-        ReflectionTestUtils.setField(attendanceService, "lateThreshold", "08:31");
+        ReflectionTestUtils.setField(analyticsService, "timezone", "Africa/Lagos");
 
         student = new User();
         student.setId("s100");
@@ -84,23 +92,20 @@ public class AttendanceServiceFixesTest {
     }
 
     @Test
-    @DisplayName("Fix #2: QR scan count increment is saved via qrService.incrementScanCount")
-    void testScanQr_IncrementsAndPersistsScanCount() {
-        // Mock network settings to allow check-in without network enforcement
-        NetworkSettings netSettings = new NetworkSettings();
-        netSettings.setEnforceNetwork(false);
-        netSettings.setEnforceGeolocation(false);
-        when(networkSettingsService.getSettingsEntity()).thenReturn(netSettings);
-
+    @DisplayName("Fix #2: scanQr delegates to the dedicated attendance scan service")
+    void testScanQr_DelegatesToScanService() {
         QrRequestDto.ScanRequest req = new QrRequestDto.ScanRequest();
         req.setToken("TOKEN-100");
         req.setDeviceFingerprint("fp100");
 
+        QrResponseDto.ScanResponse expected = new QrResponseDto.ScanResponse(true,
+                "Attendance marked: present", Attendance.AttendanceStatus.PRESENT, Instant.now(), "UNVERIFIED");
+        when(attendanceScanService.scanQr("s100", req, "127.0.0.1")).thenReturn(expected);
+
         QrResponseDto.ScanResponse resp = attendanceService.scanQr("s100", req, "127.0.0.1");
 
-        assertNotNull(resp);
-        assertTrue(resp.isSuccess());
-        verify(qrService, times(1)).incrementScanCount("sess-100");
+        assertEquals(expected, resp);
+        verify(attendanceScanService, times(1)).scanQr("s100", req, "127.0.0.1");
     }
 
     @Test
@@ -114,7 +119,7 @@ public class AttendanceServiceFixesTest {
         when(attendanceRepository.findByStudentIdOrderByDateAsc("s100")).thenReturn(List.of());
         when(excuseRepository.findByStudentIdOrderByCreatedAtDesc("s100")).thenReturn(List.of());
 
-        AnalyticsResponseDto.StudentAnalytics analytics = attendanceService.buildStudentAnalytics("s100");
+        AnalyticsResponseDto.StudentAnalytics analytics = analyticsService.buildStudentAnalytics("s100");
 
         assertNotNull(analytics);
         assertEquals("s100", analytics.getStudentId());
@@ -140,16 +145,15 @@ public class AttendanceServiceFixesTest {
     void testExportPublicProjectionReport_DelegatesCorrectly() {
         ExportService mockExportService = mock(ExportService.class);
         org.springframework.http.ResponseEntity<byte[]> mockResp = org.springframework.http.ResponseEntity.ok(new byte[]{1, 2, 3});
-        when(mockExportService.export(anyList(), anyList(), anyString(), anyString())).thenReturn(mockResp);
-
-        when(userRepository.findByCohortIdIn(anyList())).thenReturn(List.of());
+        when(attendanceExportService.exportPublicProjectionReport("c100", LocalDate.now(), "xlsx", "127.0.0.1", mockExportService))
+            .thenReturn(mockResp);
 
         org.springframework.http.ResponseEntity<byte[]> resp = attendanceService.exportPublicProjectionReport(
                 "c100", LocalDate.now(), "xlsx", "127.0.0.1", mockExportService);
 
         assertNotNull(resp);
         assertEquals(200, resp.getStatusCodeValue());
-        // Verify exportPublicProjectionReport no longer runs an extra auditLogRepository.count query itself
-        verify(auditLogRepository, times(1)).countByTargetIdAndActionAndCreatedAtBetween(eq("c100"), any(), any(), any());
+        verify(attendanceExportService).exportPublicProjectionReport(
+            "c100", LocalDate.now(), "xlsx", "127.0.0.1", mockExportService);
     }
 }
