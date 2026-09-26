@@ -51,9 +51,9 @@ public class ComprehensiveValidationTest {
         @Mock private CohortRepository cohortRepository;
         @Mock private ExcuseRequestRepository excuseRepository;
         @Mock private AuditLogRepository auditLogRepository;
+        @Mock private NetworkSettingsService networkSettingsService;
 
-        @InjectMocks
-        private AttendanceService attendanceService;
+        private AttendanceScanService attendanceService;
 
         private User student;
         private QrSession session;
@@ -61,6 +61,11 @@ public class ComprehensiveValidationTest {
 
         @BeforeEach
         void setUp() {
+            attendanceService = new AttendanceScanService(
+                    attendanceRepository, userRepository, cohortRepository,
+                    systemSettingRepository, qrService, auditService, holidayService,
+                    new AttendanceCheckInService(networkSettingsService),
+                    new AttendanceDeviceService(deviceRepository));
             ReflectionTestUtils.setField(attendanceService, "timezone", "Africa/Lagos");
             ReflectionTestUtils.setField(attendanceService, "windowStartDefault", "07:00");
             ReflectionTestUtils.setField(attendanceService, "windowEndDefault", "18:00");
@@ -479,39 +484,15 @@ public class ComprehensiveValidationTest {
 
         private double invokeHaversine(double lat1, double lon1, double lat2, double lon2) {
             try {
-                java.lang.reflect.Method method = AttendanceService.class.getDeclaredMethod(
+                java.lang.reflect.Method method = AttendanceCheckInService.class.getDeclaredMethod(
                         "calculateHaversineDistanceMeters", double.class, double.class, double.class, double.class);
                 method.setAccessible(true);
-                // Need an instance - create one with minimal mocks
-                AttendanceService service = createMinimalService();
+                AttendanceCheckInService service = new AttendanceCheckInService(mock(NetworkSettingsService.class));
                 return (double) method.invoke(service, lat1, lon1, lat2, lon2);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
 
-        private AttendanceService createMinimalService() {
-            // Create a minimal AttendanceService for testing the private method
-            try {
-                var constructor = AttendanceService.class.getDeclaredConstructors()[0];
-                constructor.setAccessible(true);
-                // We only need the method to be callable; mocks aren't needed for Haversine
-                return (AttendanceService) constructor.newInstance(
-                        mock(AttendanceRepository.class),
-                        mock(UserRepository.class),
-                        mock(CohortRepository.class),
-                        mock(DeviceRepository.class),
-                        mock(SystemSettingRepository.class),
-                        mock(QrService.class),
-                        mock(AuditService.class),
-                        mock(HolidayService.class),
-                        mock(ExcuseRequestRepository.class),
-                        mock(AuditLogRepository.class),
-                        mock(NetworkSettingsService.class)
-                );
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 }

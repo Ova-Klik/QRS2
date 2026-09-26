@@ -28,7 +28,12 @@ public class AttendanceServiceCidrTest {
     private NetworkSettingsService networkSettingsService;
 
     @InjectMocks
-    private AttendanceService attendanceService;
+    private AttendanceCheckInService attendanceCheckInService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        attendanceCheckInService = new AttendanceCheckInService(networkSettingsService);
+    }
 
     private NetworkSettings createSettings(String ipRange) {
         return NetworkSettings.builder()
@@ -54,15 +59,15 @@ public class AttendanceServiceCidrTest {
         when(networkSettingsService.getSettingsEntity()).thenReturn(settings);
 
         // Valid IP inside /24 range -> PASS
-        String resultPass = attendanceService.verifyCheckIn(createRequest("192.168.1.42"), "student1", "192.168.1.42");
+        String resultPass = attendanceCheckInService.verifyCheckIn(createRequest("192.168.1.42"), "student1", "192.168.1.42");
         assertEquals("WIFI", resultPass);
 
         // IPs starting with '192.168.1' prefix that previously bypassed naive string matching -> REJECT
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("192.168.100.5"), "student1", "192.168.100.5"));
+                attendanceCheckInService.verifyCheckIn(createRequest("192.168.100.5"), "student1", "192.168.100.5"));
 
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("192.168.19.1"), "student1", "192.168.19.1"));
+                attendanceCheckInService.verifyCheckIn(createRequest("192.168.19.1"), "student1", "192.168.19.1"));
     }
 
     @Test
@@ -72,12 +77,12 @@ public class AttendanceServiceCidrTest {
         when(networkSettingsService.getSettingsEntity()).thenReturn(settings);
 
         // Inside /16 range -> PASS
-        String resultPass = attendanceService.verifyCheckIn(createRequest("10.1.250.55"), "student1", "10.1.250.55");
+        String resultPass = attendanceCheckInService.verifyCheckIn(createRequest("10.1.250.55"), "student1", "10.1.250.55");
         assertEquals("WIFI", resultPass);
 
         // Outside /16 range -> REJECT
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("10.2.0.1"), "student1", "10.2.0.1"));
+                attendanceCheckInService.verifyCheckIn(createRequest("10.2.0.1"), "student1", "10.2.0.1"));
     }
 
     @Test
@@ -87,17 +92,17 @@ public class AttendanceServiceCidrTest {
         NetworkSettings settingsExact = createSettings("192.168.1.50");
         when(networkSettingsService.getSettingsEntity()).thenReturn(settingsExact);
 
-        assertEquals("WIFI", attendanceService.verifyCheckIn(createRequest("192.168.1.50"), "student1", "192.168.1.50"));
+        assertEquals("WIFI", attendanceCheckInService.verifyCheckIn(createRequest("192.168.1.50"), "student1", "192.168.1.50"));
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("192.168.1.51"), "student1", "192.168.1.51"));
+                attendanceCheckInService.verifyCheckIn(createRequest("192.168.1.51"), "student1", "192.168.1.51"));
 
         // Test with explicit /32
         NetworkSettings settings32 = createSettings("192.168.1.50/32");
         when(networkSettingsService.getSettingsEntity()).thenReturn(settings32);
 
-        assertEquals("WIFI", attendanceService.verifyCheckIn(createRequest("192.168.1.50"), "student1", "192.168.1.50"));
+        assertEquals("WIFI", attendanceCheckInService.verifyCheckIn(createRequest("192.168.1.50"), "student1", "192.168.1.50"));
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("192.168.1.51"), "student1", "192.168.1.51"));
+                attendanceCheckInService.verifyCheckIn(createRequest("192.168.1.51"), "student1", "192.168.1.51"));
     }
 
     @Test
@@ -108,6 +113,6 @@ public class AttendanceServiceCidrTest {
 
         // IPv6 address against IPv4 subnet range -> REJECT (no exception thrown)
         assertThrows(AppException.class, () ->
-                attendanceService.verifyCheckIn(createRequest("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), "student1", "2001:0db8:85a3:0000:0000:8a2e:0370:7334"));
+                attendanceCheckInService.verifyCheckIn(createRequest("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), "student1", "2001:0db8:85a3:0000:0000:8a2e:0370:7334"));
     }
 }

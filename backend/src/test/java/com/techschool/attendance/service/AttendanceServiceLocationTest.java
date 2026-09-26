@@ -53,8 +53,7 @@ class AttendanceServiceLocationTest {
     @Mock
     private NetworkSettingsService networkSettingsService;
 
-    @InjectMocks
-    private AttendanceService attendanceService;
+    private AttendanceScanService attendanceService;
 
     private User testStudent;
     private QrSession testSession;
@@ -62,6 +61,11 @@ class AttendanceServiceLocationTest {
 
     @BeforeEach
     void setUp() {
+        attendanceService = new AttendanceScanService(
+            attendanceRepository, userRepository, cohortRepository,
+            systemSettingRepository, qrService, auditService, holidayService,
+            new AttendanceCheckInService(networkSettingsService),
+            new AttendanceDeviceService(deviceRepository));
         ReflectionTestUtils.setField(attendanceService, "timezone", "Africa/Lagos");
         ReflectionTestUtils.setField(attendanceService, "windowStartDefault", "00:00");
         ReflectionTestUtils.setField(attendanceService, "windowEndDefault", "23:59");
